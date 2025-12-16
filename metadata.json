@@ -1,0 +1,5 @@
+{
+  "name": "RIPS Auditoría Pro",
+  "description": "Una aplicación avanzada de auditoría de salud para procesar archivos RIPS y maestros CUPS. Incluye persistencia de datos local (simulando un servidor), visualización de KPIs, control de metas y generación de reportes detallados.",
+  "requestFramePermissions": []
+}
