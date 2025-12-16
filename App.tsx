@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { read, utils, writeFile } from 'xlsx';
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine, LabelList, Legend
 } from 'recharts';
 import { 
   Upload, FileText, Database, Trash2, Save, Download, 
   Activity, Users, TrendingUp, AlertTriangle, CheckCircle, Server,
-  BarChart3, UserCheck, FileJson
+  BarChart3, UserCheck, FileJson, Sun, Moon, ChevronLeft, ChevronRight, Calendar, Stethoscope, FileSpreadsheet, FileWarning, X
 } from 'lucide-react';
 import { 
   normalizeId, parseDateFromLine, TIPOS_SERVICIOS_DEFAULT, 
@@ -14,12 +14,19 @@ import {
 } from './utils/logic';
 import { 
   ServiceTypeMeta, RipsRecord, UserRecord, MaestroCupItem, 
-  ProcessingStats, ChartDataPoint, RankingCupsItem, RankingPatientItem 
+  ProcessingStats, ChartDataPoint, RankingCupsItem, RankingPatientItem, DuplicateItem 
 } from './types';
 import { StorageService } from './services/storageService';
 
 function App() {
   // --- State ---
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    if (typeof window !== 'undefined') {
+      return (localStorage.getItem('theme') as 'light' | 'dark') || 'dark';
+    }
+    return 'dark';
+  });
+
   const [scale, setScale] = useState<number>(1);
   const [metas, setMetas] = useState<ServiceTypeMeta[]>(
     TIPOS_SERVICIOS_DEFAULT.map(t => ({ type: t, monthlyGoal: 0, active: true }))
@@ -32,6 +39,24 @@ function App() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<{type: 'success' | 'error' | 'info', text: string} | null>(null);
+  
+  // Modal State
+  const [showDuplicates, setShowDuplicates] = useState(false);
+
+  // Pagination State
+  const [pagePat, setPagePat] = useState(1);
+  const [pageCup, setPageCup] = useState(1);
+  const ITEMS_PER_PAGE = 20;
+
+  // --- Theme Effect ---
+  useEffect(() => {
+    const root = window.document.documentElement;
+    root.classList.remove('light', 'dark');
+    root.classList.add(theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => setTheme(prev => prev === 'dark' ? 'light' : 'dark');
 
   // --- Persistence ---
   useEffect(() => {
@@ -60,6 +85,12 @@ function App() {
     };
     initData();
   }, []);
+
+  // Reset pagination when data changes
+  useEffect(() => {
+    setPagePat(1);
+    setPageCup(1);
+  }, [registros]);
 
   // Save config when changed
   useEffect(() => {
@@ -128,41 +159,89 @@ function App() {
       const newRegistros: RipsRecord[] = [];
       const newUsuariosMap = new Map<string, UserRecord>(usuariosMap); 
 
-      const rxSec = /°----\s*ARCHIVO-([A-ZÁÉÍÓÚÑ_ ]+)\s*----°\|/i;
+      // Fallback para detectar sección por nombre de archivo
+      const getSectionFromFilename = (name: string) => {
+        const n = name.toUpperCase();
+        if (n.startsWith("US")) return "USUARIOS";
+        if (n.startsWith("AC") || n.startsWith("AP") || n.startsWith("AM") || n.startsWith("AT")) return "SERVICIOS"; // Generic
+        return "";
+      };
 
       for (let i = 0; i < ripsFiles.length; i++) {
-        const txt = await ripsFiles[i].text();
+        const file = ripsFiles[i];
+        const txt = await file.text();
         const lines = txt.split(/\r?\n/);
-        let section = "";
+        
+        let section = getSectionFromFilename(file.name);
 
         for (const raw of lines) {
           const l = raw.trim();
           if (!l) continue;
 
-          const ms = l.match(rxSec);
-          if (ms) {
-            section = ms[1].trim().toUpperCase();
-            continue;
+          const upperLine = l.toUpperCase();
+          
+          // --- Detección de Sección por Encabezado ---
+          // Detectar palabras clave explícitas
+          if (upperLine.includes("USUARIOS") && (upperLine.includes("*") || upperLine.includes("°") || upperLine.includes("-"))) {
+             section = "USUARIOS";
+             continue;
+          }
+          if (upperLine.includes("CONSULTAS") || upperLine.includes("PROCEDIMIENTOS") || upperLine.includes("MEDICAMENTOS") || upperLine.includes("OTROS SERVICIOS")) {
+             section = "SERVICIOS"; 
+             continue;
           }
 
-          if (l.indexOf("|") === -1) continue;
+          // --- Detección Inteligente de Separador (Coma o Pipe) ---
+          let parts: string[] = [];
+          
+          // Prioridad: Si tiene comas y parece CSV (más de 3 columnas), usa coma.
+          // Limpiamos el pipe final si existe (ej: "dato,|")
+          if (l.includes(',') && (l.match(/,/g) || []).length >= 3) {
+             // Split por coma, trim y eliminar pipe final de cada elemento si existe
+             parts = l.split(',').map(x => x.trim().replace(/[|]$/, '')); 
+          } else if (l.includes('|')) {
+             parts = l.split('|').map(x => x.trim());
+          } else {
+             continue;
+          }
 
-          const parts = l.split("|").map(x => x.trim());
           if (parts.length < 2) continue;
 
-          // USUARIOS
+          // --- Heurística de Contenido (Auto-Detectar USUARIOS) ---
+          // Si la sección no está clara, pero la línea tiene estructura de Usuario (Fecha + Sexo)
+          if (section !== "USUARIOS") {
+            const hasDate = /\d{4}-\d{2}-\d{2}|\d{2}\/\d{2}\/\d{4}/.test(l);
+            const hasSex = /\b(M|F)\b/i.test(l);
+            // Si tiene fecha y sexo, forzamos tratamiento como USUARIO
+            if (hasDate && hasSex) {
+              section = "USUARIOS";
+            }
+          }
+
+          // --- Procesar USUARIOS ---
           if (section.includes("USUARIOS")) {
-             const idCand = parts.find(p => /^(?:CC|TI|RC|CE|PA|PE|CN|MS)?-?\d{4,20}$/i.test(p)) || parts[1] || "";
+             // Estructura RIPS US: Tipo, ID, Cod, TipoUs, Apellido, Nombre... o similar.
+             // Normalmente el ID está en la posición 1 (segunda columna).
+             let idCand = parts[1];
+             
+             // Si parts[1] no parece un número, buscamos en toda la línea algo que parezca un documento
+             if (!idCand || !/^\d+$/.test(idCand)) {
+                idCand = parts.find(p => /^(?:CC|TI|RC|CE|PA|PE|CN|MS)?-?\d{3,20}$/i.test(p)) || "";
+             }
+
              const id = normalizeId(idCand);
-             if (!id) continue;
+             
+             // Si no hay ID válido, saltamos
+             if (!id || id.length < 3) continue;
 
              const sexo = (parts.find(p => /^(M|F)$/i.test(p)) || "").toUpperCase();
              const fnac = (parts.find(p => /^\d{4}-\d{2}-\d{2}$/.test(p) || /^\d{2}\/\d{2}\/\d{4}$/.test(p)) || "");
              
-             // Extract Name Heuristics
-             const posiblesNombre = parts.filter(p => /[A-Za-zÁÉÍÓÚÑ]/.test(p) && !/^(M|F)$/i.test(p) && !/^\d/.test(p));
+             // Heurística para nombre: busca partes de texto alfabético que no sean códigos
+             const posiblesNombre = parts.filter(p => /[A-Za-zÁÉÍÓÚÑ]/.test(p) && !/^(M|F)$/i.test(p) && !/^\d+$/.test(p) && p.length > 2);
              const nombre = posiblesNombre.slice(0, 4).join(" ");
 
+             // Guardamos/Actualizamos usuario
              const prev = newUsuariosMap.get(id) || { id, sexo: "", fnac: "", nombre: "" };
              newUsuariosMap.set(id, {
                id,
@@ -173,7 +252,8 @@ function App() {
              continue;
           }
 
-          // PROCEDIMIENTOS / OTROS
+          // --- Procesar SERVICIOS / OTROS ---
+          // Busca código CUPS de 6 dígitos
           const mC = l.match(/\b\d{6}\b/);
           if (!mC) continue;
           const cups = mC[0];
@@ -199,7 +279,7 @@ function App() {
 
       setRegistros(newRegistros);
       setUsuariosMap(newUsuariosMap);
-      setMessage({ type: 'success', text: `Procesado: ${newRegistros.length} registros.` });
+      setMessage({ type: 'success', text: `Procesado: ${newRegistros.length} registros y ${newUsuariosMap.size} pacientes.` });
 
     } catch (e) {
       console.error(e);
@@ -211,37 +291,78 @@ function App() {
 
   // --- Calculations ---
 
-  const { stats, chartData, rankingCUPS, rankingPacientes } = useMemo(() => {
+  const { stats, chartData, rankingCUPS, rankingPacientes, duplicatesList } = useMemo(() => {
     // Filter active services
     const activeTypes = new Set(metas.filter(m => m.active).map(m => m.type));
     const filteredRegistros = registros.filter(r => activeTypes.has(r.tipo));
 
     // Stats
     const totalActivities = filteredRegistros.length;
-    const uniquePatients = new Set(filteredRegistros.map(r => r.paciente));
     
-    // Counts
+    // Counts & Tracking
     const typeCount: Record<string, number> = {};
     const cupsCount: Record<string, {count: number, name: string, type: string}> = {};
     const cupsPacCount: Record<string, Record<string, number>> = {};
-    const pacCount: Record<string, {count: number, cupsCounts: Record<string, number>}> = {};
+    const pacCount: Record<string, number> = {};
+    
+    // Tracking details for visual lists (CHANGED: Use Array instead of Set for history to match totals)
+    const pacMeta: Record<string, { dates: string[], cups: string[] }> = {};
+    const cupsPacDates: Record<string, Record<string, Set<string>>> = {}; // Still use Set for this specific meta view logic if needed, but lets align.
+
+    // Duplicates Tracking
+    // Key: Paciente|CUPS|Fecha -> Count
+    const duplicateMap = new Map<string, { count: number, record: RipsRecord }>();
 
     filteredRegistros.forEach(r => {
-      // Type Aggregation
+      // 1. Detect Duplicates
+      const dupKey = `${r.paciente}|${r.cups}|${r.fecha}`;
+      const currDup = duplicateMap.get(dupKey);
+      if (currDup) {
+        currDup.count++;
+      } else {
+        duplicateMap.set(dupKey, { count: 1, record: r });
+      }
+
+      // 2. Type Aggregation
       typeCount[r.tipo] = (typeCount[r.tipo] || 0) + 1;
 
-      // CUPS Aggregation
+      // 3. CUPS Aggregation
       if (!cupsCount[r.cups]) cupsCount[r.cups] = { count: 0, name: r.nombre, type: r.tipo };
       cupsCount[r.cups].count++;
 
-      // CUPS Patient Aggregation (for top patient per cups)
+      // 4. CUPS Patient Aggregation (for top patient per cups)
       if(!cupsPacCount[r.cups]) cupsPacCount[r.cups] = {};
       cupsPacCount[r.cups][r.paciente] = (cupsPacCount[r.cups][r.paciente] || 0) + 1;
 
-      // Patient Aggregation
-      if (!pacCount[r.paciente]) pacCount[r.paciente] = { count: 0, cupsCounts: {} };
-      pacCount[r.paciente].count++;
-      pacCount[r.paciente].cupsCounts[r.cups] = (pacCount[r.paciente].cupsCounts[r.cups] || 0) + 1;
+      // Track dates for CUPS + Patient combination (Top Patient Stats)
+      if(!cupsPacDates[r.cups]) cupsPacDates[r.cups] = {};
+      if(!cupsPacDates[r.cups][r.paciente]) cupsPacDates[r.cups][r.paciente] = new Set();
+      cupsPacDates[r.cups][r.paciente].add(r.fecha);
+
+      // 5. Patient Aggregation
+      pacCount[r.paciente] = (pacCount[r.paciente] || 0) + 1;
+      
+      // Track details per patient (ALL Occurrences)
+      if(!pacMeta[r.paciente]) pacMeta[r.paciente] = { dates: [], cups: [] };
+      pacMeta[r.paciente].dates.push(r.fecha);
+      pacMeta[r.paciente].cups.push(r.cups);
+    });
+
+    // Process Duplicates List
+    const duplicatesList: DuplicateItem[] = [];
+    duplicateMap.forEach((val, key) => {
+      if (val.count > 1) {
+        const u = usuariosMap.get(val.record.paciente);
+        duplicatesList.push({
+          id: key,
+          paciente: val.record.paciente,
+          nombre_paciente: u?.nombre || "NO REGISTRADO",
+          cups: val.record.cups,
+          nombre_cups: val.record.nombre,
+          fecha: val.record.fecha,
+          repeticiones: val.count
+        });
+      }
     });
 
     // Chart Data Preparation
@@ -278,6 +399,10 @@ function App() {
         const user = usuariosMap.get(topPid);
         const fn = user?.fnac || "";
 
+        // Dates for this specific CUPS and Top Patient
+        const datesSet = cupsPacDates[code]?.[topPid] || new Set();
+        const datesStr = Array.from(datesSet).sort().join(", ");
+
         return {
           CUPS: code,
           Nombre: info.name,
@@ -288,32 +413,29 @@ function App() {
           PacienteTop_Nombre: user?.nombre || "",
           PacienteTop_Sexo: user?.sexo || "",
           PacienteTop_Edad: edadDetallada(fn),
-          PacienteTop_GrupoEtario: grupoEtarioDesdeFN(fn)
+          PacienteTop_GrupoEtario: grupoEtarioDesdeFN(fn),
+          PacienteTop_Fechas: datesStr
         };
       })
       .sort((a, b) => b.Cantidad - a.Cantidad);
 
     // Ranking Pacientes
     const rankingPacientes: RankingPatientItem[] = Object.entries(pacCount)
-      .map(([pid, info]) => {
+      .map(([pid, count]) => {
         const user = usuariosMap.get(pid);
         const fn = user?.fnac || "";
+        const pMeta = pacMeta[pid] || { cups: [], dates: [] };
         
-        // Find Top CUPS for patient
-        const topC = Object.entries(info.cupsCounts).sort((a, b) => b[1] - a[1])[0];
-        // Generate services string (Top 5)
-        const services = Object.keys(info.cupsCounts).slice(0, 5).join("; ");
-
+        // No sort or unique here, keep order of occurrence or just list all
         return {
           PacienteId: pid,
           Nombre: user?.nombre || "NO REGISTRADO",
           Sexo: user?.sexo || "-",
           Edad: edadDetallada(fn) || "-",
           GrupoEtario: grupoEtarioDesdeFN(fn) || "-",
-          TotalAtenciones: info.count,
-          TopCUPS: topC ? topC[0] : "",
-          TopCUPS_Cant: topC ? topC[1] : 0,
-          Servicios: services
+          TotalAtenciones: count,
+          ListaCUPS: pMeta.cups,
+          ListaFechas: pMeta.dates
         };
       })
       .sort((a, b) => b.TotalAtenciones - a.TotalAtenciones);
@@ -324,7 +446,7 @@ function App() {
 
     const stats: ProcessingStats = {
       totalActivities,
-      totalPatients: uniquePatients.size,
+      totalPatients: usuariosMap.size,
       topCupsCode: topCup?.CUPS || "—",
       topCupsName: topCup?.Nombre || "",
       topCupsCount: topCup?.Cantidad || 0,
@@ -333,45 +455,150 @@ function App() {
       topPatientCount: topPat?.TotalAtenciones || 0
     };
 
-    return { stats, chartData, rankingCUPS, rankingPacientes };
+    return { stats, chartData, rankingCUPS, rankingPacientes, duplicatesList };
 
   }, [registros, metas, scale, usuariosMap]);
 
+  // --- Pagination Logic ---
+  const totalPagesPat = Math.ceil(rankingPacientes.length / ITEMS_PER_PAGE);
+  const currentPatData = rankingPacientes.slice((pagePat - 1) * ITEMS_PER_PAGE, pagePat * ITEMS_PER_PAGE);
+
+  const totalPagesCup = Math.ceil(rankingCUPS.length / ITEMS_PER_PAGE);
+  const currentCupData = rankingCUPS.slice((pageCup - 1) * ITEMS_PER_PAGE, pageCup * ITEMS_PER_PAGE);
+
+
+  // --- Helper for Charts ---
+  const formatXAxis = (tickItem: string) => {
+    if (!tickItem) return '';
+    return tickItem.length > 18 ? `${tickItem.substring(0, 18)}...` : tickItem;
+  };
+  
+  // Theme helpers for charts
+  const chartColors = theme === 'dark' 
+    ? { text: '#94a3b8', grid: '#1e293b', tooltipBg: '#0f172a', tooltipBorder: '#334155', tooltipText: '#f1f5f9' }
+    : { text: '#64748b', grid: '#e2e8f0', tooltipBg: '#ffffff', tooltipBorder: '#cbd5e1', tooltipText: '#1e293b' };
+
 
   // --- Exports ---
-  const handleExport = () => {
+  const handleExportGlobal = () => {
     const wb = utils.book_new();
     utils.book_append_sheet(wb, utils.json_to_sheet(chartData), "Metas_vs_Ejecutado");
     utils.book_append_sheet(wb, utils.json_to_sheet(rankingCUPS), "Ranking_CUPS");
-    utils.book_append_sheet(wb, utils.json_to_sheet(rankingPacientes), "Ranking_Pacientes");
-    writeFile(wb, "Reporte_Auditoria_RIPS.xlsx");
+    
+    // Formatting patient ranking for export (join arrays to string with newlines for excel)
+    const exportPat = rankingPacientes.map(p => ({
+      ...p,
+      ListaCUPS: p.ListaCUPS.join("\n"),
+      ListaFechas: p.ListaFechas.join("\n")
+    }));
+    utils.book_append_sheet(wb, utils.json_to_sheet(exportPat), "Ranking_Pacientes");
+    writeFile(wb, "Reporte_Global_Auditoria.xlsx");
+  };
+
+  const handleExportRankingPacientes = () => {
+    const wb = utils.book_new();
+    // Format list with new lines for cell "Excel" feel
+    const exportPat = rankingPacientes.map(p => ({
+        ...p,
+        ListaCUPS: p.ListaCUPS.join("\n"), // Saltos de linea para que quede en la misma celda pero vertical
+        ListaFechas: p.ListaFechas.join("\n")
+    }));
+    utils.book_append_sheet(wb, utils.json_to_sheet(exportPat), "Ranking_Pacientes");
+    writeFile(wb, "Ranking_Pacientes.xlsx");
+  };
+
+  const handleExportRankingCUPS = () => {
+    const wb = utils.book_new();
+    utils.book_append_sheet(wb, utils.json_to_sheet(rankingCUPS), "Ranking_CUPS");
+    writeFile(wb, "Ranking_CUPS.xlsx");
+  };
+
+  const handleExportDuplicates = () => {
+    const wb = utils.book_new();
+    utils.book_append_sheet(wb, utils.json_to_sheet(duplicatesList), "Duplicados");
+    writeFile(wb, "Auditoria_Duplicados.xlsx");
+  };
+
+  const handleExportRipsOrganizados = () => {
+    const wb = utils.book_new();
+
+    // 1. Hoja USUARIOS
+    const usuariosData = Array.from(usuariosMap.values()).map((u: UserRecord) => ({
+      Numero_Identificacion: u.id,
+      Nombre_Completo: u.nombre,
+      Sexo: u.sexo,
+      Fecha_Nacimiento: u.fnac,
+      Edad: edadDetallada(u.fnac),
+      Grupo_Etario: grupoEtarioDesdeFN(u.fnac)
+    }));
+    utils.book_append_sheet(wb, utils.json_to_sheet(usuariosData), "USUARIOS");
+
+    // 2. Segmentación de Servicios
+    const consultas: any[] = [];
+    const procedimientos: any[] = [];
+    const otros: any[] = [];
+
+    registros.forEach(r => {
+      const row = {
+        Numero_Identificacion: r.paciente,
+        Fecha_Servicio: r.fecha,
+        Codigo_CUPS: r.cups,
+        Nombre_Procedimiento: r.nombre,
+        Tipo_Servicio_Maestro: r.tipo
+      };
+
+      const t = r.tipo.toUpperCase();
+      
+      // Lógica de clasificación
+      if (t.includes("CONSULTA") || t.includes("MEDICINA GENERAL") || t.includes("ESPECIALIZADA") || t.includes("URGENCIA")) {
+        consultas.push(row);
+      } else if (t.includes("LABORATORIO") || t.includes("IMAGEN") || t.includes("ODONTOLOGIA") || t.includes("PROCEDIMIENTO") || t.includes("QUIRURGICO") || t.includes("APOYO")) {
+        procedimientos.push(row);
+      } else {
+        otros.push(row);
+      }
+    });
+
+    if(consultas.length > 0) utils.book_append_sheet(wb, utils.json_to_sheet(consultas), "CONSULTAS");
+    if(procedimientos.length > 0) utils.book_append_sheet(wb, utils.json_to_sheet(procedimientos), "PROCEDIMIENTOS");
+    if(otros.length > 0) utils.book_append_sheet(wb, utils.json_to_sheet(otros), "OTROS_SERVICIOS");
+
+    writeFile(wb, "RIPS_Consolidado_Organizado.xlsx");
   };
 
   return (
-    <div className="min-h-screen pb-20 font-sans">
+    <div className="min-h-screen pb-20 font-sans transition-colors duration-300">
       {/* Header Glassmorphism */}
-      <header className="sticky top-0 z-50 glass-panel border-b border-slate-800/50 shadow-2xl backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-4 lg:px-6 py-4 flex flex-col md:flex-row items-center justify-between gap-4">
+      <header className="sticky top-0 z-50 glass-panel shadow-lg dark:shadow-2xl">
+        <div className="w-full max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex flex-col">
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400 bg-clip-text text-transparent flex items-center gap-2">
-              <Activity className="h-6 w-6 text-indigo-400" />
-              RIPS Auditoría Pro
+            <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 dark:from-blue-400 dark:via-indigo-400 dark:to-purple-400 bg-clip-text text-transparent flex items-center gap-2">
+              <Activity className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
+              Evaluación Cápita Asistencia
             </h1>
-            <p className="text-xs text-slate-400 font-medium">Análisis inteligente de prestación de servicios</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Análisis inteligente de prestación de servicios</p>
           </div>
           
           <div className="flex items-center gap-3 w-full md:w-auto">
             <button 
+              onClick={toggleTheme}
+              className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all border border-slate-200 dark:border-slate-700 shadow-sm"
+              title={theme === 'dark' ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+            >
+              {theme === 'dark' ? <Sun className="h-5 w-5 text-amber-400" /> : <Moon className="h-5 w-5 text-indigo-500" />}
+            </button>
+            <div className="h-6 w-px bg-slate-300 dark:bg-slate-700 mx-1 hidden md:block"></div>
+            <button 
               onClick={handleSaveSession}
               disabled={isSaving}
-              className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-lg ${isSaving ? 'bg-slate-800 text-slate-500 cursor-wait' : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-500 hover:to-indigo-500 hover:shadow-indigo-500/20 active:scale-95'}`}
+              className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-md ${isSaving ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-wait' : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 active:scale-95'}`}
             >
               {isSaving ? <div className="w-4 h-4 rounded-full border-2 border-current border-t-transparent animate-spin"/> : <Server className="h-4 w-4" />}
               <span>{isSaving ? 'Sincronizando...' : 'Sincronizar'}</span>
             </button>
             <button 
               onClick={handleClearData}
-              className="flex items-center justify-center gap-2 px-4 py-2 bg-slate-800/50 hover:bg-red-500/10 text-slate-300 hover:text-red-400 border border-slate-700/50 hover:border-red-500/30 rounded-lg text-sm font-medium transition-all shadow-md active:scale-95"
+              className="flex items-center justify-center gap-2 px-4 py-2 bg-white dark:bg-slate-800/50 hover:bg-red-50 dark:hover:bg-red-500/10 text-slate-600 dark:text-slate-300 hover:text-red-600 dark:hover:text-red-400 border border-slate-200 dark:border-slate-700 hover:border-red-200 dark:hover:border-red-500/30 rounded-lg text-sm font-medium transition-all shadow-sm hover:shadow active:scale-95"
             >
               <Trash2 className="h-4 w-4" />
               <span className="hidden sm:inline">Limpiar</span>
@@ -380,14 +607,14 @@ function App() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 lg:px-6 py-8 space-y-8">
+      <main className="w-full max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         
         {/* Messages */}
         {message && (
-          <div className={`p-4 rounded-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300 shadow-lg ${
-            message.type === 'error' ? 'bg-red-500/10 text-red-200 border border-red-500/20' : 
-            message.type === 'success' ? 'bg-emerald-500/10 text-emerald-200 border border-emerald-500/20' :
-            'bg-blue-500/10 text-blue-200 border border-blue-500/20'
+          <div className={`p-4 rounded-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300 shadow-md ${
+            message.type === 'error' ? 'bg-red-50 dark:bg-red-500/10 text-red-800 dark:text-red-200 border border-red-200 dark:border-red-500/20' : 
+            message.type === 'success' ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-500/20' :
+            'bg-blue-50 dark:bg-blue-500/10 text-blue-800 dark:text-blue-200 border border-blue-200 dark:border-blue-500/20'
           }`}>
             {message.type === 'error' ? <AlertTriangle className="h-5 w-5 flex-shrink-0" /> : <CheckCircle className="h-5 w-5 flex-shrink-0" />}
             <span className="text-sm font-medium">{message.text}</span>
@@ -398,18 +625,19 @@ function App() {
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
           
           {/* Metas Config */}
-          <section className="glass-panel border border-slate-800/60 rounded-2xl p-6 shadow-xl relative overflow-hidden group">
+          <section className="glass-panel rounded-2xl p-6 shadow-xl relative overflow-hidden group transition-all">
+            {/* ... Metas content remains ... */}
             <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/5 rounded-full blur-3xl -z-10 group-hover:bg-purple-500/10 transition-colors"></div>
             
             <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-purple-400" /> Metas y Periodo
+              <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-purple-500 dark:text-purple-400" /> Metas y Periodo
               </h2>
               <div className="relative">
                 <select 
                   value={scale} 
                   onChange={(e) => setScale(Number(e.target.value))}
-                  className="appearance-none bg-slate-900 border border-slate-700 text-slate-200 rounded-lg text-sm pl-3 pr-8 py-1.5 focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 outline-none transition-all cursor-pointer hover:border-slate-600"
+                  className="appearance-none bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-sm pl-3 pr-8 py-1.5 focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 outline-none transition-all cursor-pointer hover:border-slate-300 dark:hover:border-slate-600"
                 >
                   <option value="1">Mensual (x1)</option>
                   <option value="2">Bimestral (x2)</option>
@@ -417,7 +645,7 @@ function App() {
                   <option value="6">Semestral (x6)</option>
                   <option value="12">Anual (x12)</option>
                 </select>
-                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-400">
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-500 dark:text-slate-400">
                   <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
                 </div>
               </div>
@@ -425,16 +653,16 @@ function App() {
             
             <div className="max-h-[220px] overflow-y-auto pr-2 custom-scroll">
               <table className="w-full text-sm text-left border-collapse">
-                <thead className="text-xs text-slate-400 uppercase bg-slate-900/40 sticky top-0 z-10 backdrop-blur-sm">
+                <thead className="text-xs text-slate-500 dark:text-slate-400 uppercase bg-slate-100/80 dark:bg-slate-900/40 sticky top-0 z-10 backdrop-blur-sm">
                   <tr>
                     <th className="px-3 py-2 rounded-l-lg">On</th>
                     <th className="px-3 py-2">Servicio</th>
                     <th className="px-3 py-2 text-right rounded-r-lg">Meta Mes</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800/50">
+                <tbody className="divide-y divide-slate-200 dark:divide-slate-800/50">
                   {metas.map((m, idx) => (
-                    <tr key={idx} className="group/row hover:bg-slate-800/40 transition-colors">
+                    <tr key={idx} className="group/row hover:bg-slate-100/50 dark:hover:bg-slate-800/40 transition-colors">
                       <td className="px-3 py-2.5 text-center">
                         <input 
                           type="checkbox" 
@@ -444,10 +672,10 @@ function App() {
                             nm[idx].active = e.target.checked;
                             setMetas(nm);
                           }}
-                          className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-purple-500 focus:ring-offset-0 focus:ring-purple-500/30 cursor-pointer" 
+                          className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-purple-600 dark:text-purple-500 focus:ring-offset-0 focus:ring-purple-500/30 cursor-pointer" 
                         />
                       </td>
-                      <td className="px-3 py-2.5 text-slate-300 text-xs font-medium group-hover/row:text-white transition-colors">{m.type}</td>
+                      <td className="px-3 py-2.5 text-slate-700 dark:text-slate-300 text-xs font-medium group-hover/row:text-slate-900 dark:group-hover/row:text-white transition-colors">{m.type}</td>
                       <td className="px-3 py-2.5 text-right">
                         <input 
                           type="number" 
@@ -457,7 +685,7 @@ function App() {
                             nm[idx].monthlyGoal = Number(e.target.value);
                             setMetas(nm);
                           }}
-                          className="w-24 bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-right text-xs font-mono text-emerald-400 focus:ring-1 focus:ring-purple-500 focus:border-purple-500 outline-none transition-all" 
+                          className="w-24 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-2 py-1 text-right text-xs font-mono text-emerald-600 dark:text-emerald-400 focus:ring-1 focus:ring-purple-500 focus:border-purple-500 outline-none transition-all" 
                         />
                       </td>
                     </tr>
@@ -468,10 +696,10 @@ function App() {
           </section>
 
           {/* Upload Panel */}
-          <section className="glass-panel border border-slate-800/60 rounded-2xl p-6 shadow-xl flex flex-col relative overflow-hidden">
+          <section className="glass-panel rounded-2xl p-6 shadow-xl flex flex-col relative overflow-hidden transition-all">
             <div className="absolute top-0 left-0 w-32 h-32 bg-blue-500/5 rounded-full blur-3xl -z-10"></div>
-            <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2 mb-5">
-              <Database className="h-5 w-5 text-blue-400" /> Carga de Datos
+            <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-5">
+              <Database className="h-5 w-5 text-blue-500 dark:text-blue-400" /> Carga de Datos
             </h2>
             
             <form 
@@ -486,87 +714,116 @@ function App() {
             >
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
+                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
                     Archivos RIPS (.txt)
                   </label>
                   <div className="relative group">
                     <input name="rips" type="file" multiple accept=".txt" className="hidden" id="file-rips" />
                     <label 
                       htmlFor="file-rips" 
-                      className="flex flex-col items-center justify-center w-full h-24 px-4 border-2 border-dashed border-slate-700 rounded-xl cursor-pointer hover:border-blue-500 hover:bg-slate-800/50 transition-all duration-300 group-hover:shadow-[0_0_15px_rgba(59,130,246,0.1)]"
+                      className="flex flex-col items-center justify-center w-full h-24 px-4 border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/50 dark:bg-transparent rounded-xl cursor-pointer hover:border-blue-500 dark:hover:border-blue-500 hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-all duration-300 group-hover:shadow-[0_0_15px_rgba(59,130,246,0.1)]"
                     >
-                      <FileText className="h-8 w-8 text-slate-500 group-hover:text-blue-400 transition-colors mb-2" />
-                      <span className="text-xs text-slate-400 font-medium group-hover:text-blue-300">Seleccionar TXT</span>
+                      <FileText className="h-8 w-8 text-slate-400 dark:text-slate-500 group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors mb-2" />
+                      <span className="text-xs text-slate-500 dark:text-slate-400 font-medium group-hover:text-blue-600 dark:group-hover:text-blue-300">Seleccionar TXT</span>
                     </label>
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
+                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
                     Maestro CUPS (.xlsx)
                   </label>
                   <div className="relative group">
                     <input name="cups" type="file" accept=".xlsx" className="hidden" id="file-cups" />
                     <label 
                       htmlFor="file-cups" 
-                      className="flex flex-col items-center justify-center w-full h-24 px-4 border-2 border-dashed border-slate-700 rounded-xl cursor-pointer hover:border-emerald-500 hover:bg-slate-800/50 transition-all duration-300 group-hover:shadow-[0_0_15px_rgba(16,185,129,0.1)]"
+                      className="flex flex-col items-center justify-center w-full h-24 px-4 border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/50 dark:bg-transparent rounded-xl cursor-pointer hover:border-emerald-500 dark:hover:border-emerald-500 hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-all duration-300 group-hover:shadow-[0_0_15px_rgba(16,185,129,0.1)]"
                     >
-                      <FileJson className="h-8 w-8 text-slate-500 group-hover:text-emerald-400 transition-colors mb-2" />
-                      <span className="text-xs text-slate-400 font-medium group-hover:text-emerald-300">Seleccionar Excel</span>
+                      <FileJson className="h-8 w-8 text-slate-400 dark:text-slate-500 group-hover:text-emerald-500 dark:group-hover:text-emerald-400 transition-colors mb-2" />
+                      <span className="text-xs text-slate-500 dark:text-slate-400 font-medium group-hover:text-emerald-600 dark:group-hover:text-emerald-300">Seleccionar Excel</span>
                     </label>
                   </div>
                 </div>
               </div>
 
-              <div className="flex gap-3 mt-auto">
-                <button 
-                  type="submit" 
-                  disabled={isProcessing}
-                  className="flex-1 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-bold py-2.5 px-4 rounded-xl shadow-lg shadow-blue-900/20 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2"
-                >
-                  {isProcessing ? (
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  ) : (
-                    <>
-                      <Upload className="h-4 w-4" /> Procesar Datos
-                    </>
-                  )}
-                </button>
-                <button 
-                  type="button"
-                  onClick={handleExport}
-                  disabled={registros.length === 0}
-                  className="px-4 bg-slate-800 text-slate-300 border border-slate-700 rounded-xl hover:bg-slate-700 hover:text-white disabled:opacity-50 transition-all shadow-md active:scale-95"
-                  title="Exportar Reporte a Excel"
-                >
-                  <Download className="h-5 w-5" />
-                </button>
+              <div className="grid grid-cols-2 gap-3 mt-auto">
+                <div className="col-span-2 flex flex-col gap-1">
+                   <button 
+                    type="submit" 
+                    disabled={isProcessing}
+                    className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-bold py-2.5 px-4 rounded-xl shadow-lg shadow-blue-500/20 dark:shadow-blue-900/20 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2"
+                  >
+                    {isProcessing ? (
+                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <>
+                        <Upload className="h-4 w-4" /> Procesar Data
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                 <div className="flex flex-col gap-1">
+                  <button 
+                    type="button"
+                    onClick={handleExportRipsOrganizados}
+                    disabled={registros.length === 0}
+                    className="w-full py-2.5 px-4 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30 rounded-xl hover:bg-emerald-200 dark:hover:bg-emerald-500/30 hover:text-emerald-900 dark:hover:text-emerald-100 disabled:opacity-50 transition-all shadow-sm hover:shadow active:scale-95 flex justify-center items-center gap-2"
+                  >
+                    <FileSpreadsheet className="h-4 w-4" /> RIPS Excel
+                  </button>
+                   <span className="text-[10px] text-center text-slate-400 dark:text-slate-500 font-medium truncate">Segmentado</span>
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <button 
+                    type="button"
+                    onClick={handleExportGlobal}
+                    disabled={registros.length === 0}
+                    className="w-full py-2.5 px-4 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white disabled:opacity-50 transition-all shadow-sm hover:shadow active:scale-95 flex justify-center items-center gap-2"
+                  >
+                    <Download className="h-4 w-4" /> Global
+                  </button>
+                   <span className="text-[10px] text-center text-slate-400 dark:text-slate-500 font-medium truncate">Ranking/KPI</span>
+                </div>
+
+                {duplicatesList.length > 0 && (
+                   <div className="col-span-2 flex flex-col gap-1 mt-1">
+                    <button 
+                      type="button"
+                      onClick={() => setShowDuplicates(true)}
+                      className="w-full py-2.5 px-4 bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30 rounded-xl hover:bg-amber-200 dark:hover:bg-amber-500/30 hover:text-amber-900 dark:hover:text-amber-100 disabled:opacity-50 transition-all shadow-sm hover:shadow active:scale-95 flex justify-center items-center gap-2"
+                    >
+                      <FileWarning className="h-4 w-4" /> Auditoría Duplicados ({duplicatesList.length})
+                    </button>
+                  </div>
+                )}
               </div>
             </form>
           </section>
         </div>
 
         {/* --- KPI Cards --- */}
-        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           <KpiCard 
             label="Actividades Totales" 
             value={stats.totalActivities.toLocaleString()} 
-            icon={<Activity className="h-6 w-6 text-blue-400" />}
+            icon={<Activity className="h-6 w-6 text-blue-500 dark:text-blue-400" />}
             trend="global"
             color="blue"
           />
           <KpiCard 
-            label="Pacientes Únicos" 
+            label="Total Usuarios" 
             value={stats.totalPatients.toLocaleString()} 
-            icon={<UserCheck className="h-6 w-6 text-emerald-400" />} 
+            icon={<UserCheck className="h-6 w-6 text-emerald-500 dark:text-emerald-400" />} 
             trend="distinct"
             color="emerald"
           />
           <KpiCard 
             label="CUPS Más Frecuente" 
-            value={stats.topCupsCode} 
-            sub={stats.topCupsName ? `${stats.topCupsCount} usos` : ""}
-            icon={<BarChart3 className="h-6 w-6 text-purple-400" />} 
+            value={stats.topCupsName || stats.topCupsCode} 
+            sub={`${stats.topCupsCode} • ${stats.topCupsCount} usos`}
+            icon={<BarChart3 className="h-6 w-6 text-purple-500 dark:text-purple-400" />} 
             trend="top"
             color="purple"
           />
@@ -574,7 +831,7 @@ function App() {
             label="Paciente Mayor Uso" 
             value={stats.topPatientId} 
             sub={stats.topPatientName ? `${stats.topPatientCount} atenciones` : ""}
-            icon={<Users className="h-6 w-6 text-orange-400" />} 
+            icon={<Users className="h-6 w-6 text-orange-500 dark:text-orange-400" />} 
             trend="user"
             color="orange"
           />
@@ -583,48 +840,78 @@ function App() {
         {/* --- Charts --- */}
         {registros.length > 0 && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-8 duration-500">
-            <div className="glass-panel border border-slate-800/60 rounded-2xl p-6 shadow-xl">
-              <h3 className="text-slate-100 font-bold mb-6 text-sm flex items-center gap-2">
-                <div className="w-1 h-4 bg-blue-500 rounded-full"></div> Producción vs Meta (Cantidad)
+            <div className="glass-panel rounded-2xl p-6 shadow-xl h-[550px]">
+              <h3 className="text-slate-800 dark:text-slate-100 font-bold mb-6 text-sm flex items-center gap-2">
+                <div className="w-1 h-4 bg-blue-500 rounded-full"></div> Producción (Cantidad)
               </h3>
-              <div className="h-72">
+              <div className="h-[450px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} layout="vertical" margin={{ left: 5, right: 30, top: 10, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={false} />
-                    <XAxis type="number" stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} />
-                    <YAxis dataKey="name" type="category" width={100} stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} />
-                    <Tooltip 
-                      contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '8px', color: '#f1f5f9', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.5)' }}
-                      cursor={{fill: '#1e293b', opacity: 0.5}}
+                  <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 120 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} vertical={false} />
+                    <XAxis 
+                      dataKey="name" 
+                      stroke={chartColors.text}
+                      fontSize={11} 
+                      tickLine={false} 
+                      axisLine={false} 
+                      angle={-45}
+                      textAnchor="end"
+                      interval={0}
+                      height={100}
+                      tickFormatter={formatXAxis}
                     />
-                    <Bar dataKey="meta" name="Meta" fill="#334155" stackId="a" barSize={20} radius={[0, 4, 4, 0]} />
-                    <Bar dataKey="ejecutado" name="Ejecutado" fill="#3b82f6" stackId="b" barSize={12} radius={[0, 4, 4, 0]} />
+                    <YAxis stroke={chartColors.text} fontSize={11} tickLine={false} axisLine={false} />
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: chartColors.tooltipBg, borderColor: chartColors.tooltipBorder, borderRadius: '8px', color: chartColors.tooltipText, boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
+                      cursor={{fill: chartColors.grid, opacity: 0.5}}
+                    />
+                    <Legend verticalAlign="top" height={36}/>
+                    <Bar dataKey="ejecutado" name="Ejecutado (Real)" fill="#10b981" radius={[4, 4, 0, 0]}>
+                      <LabelList dataKey="ejecutado" position="top" fill={theme === 'dark' ? "#ffffff" : "#0f172a"} fontSize={10} />
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
-            <div className="glass-panel border border-slate-800/60 rounded-2xl p-6 shadow-xl">
-              <h3 className="text-slate-100 font-bold mb-6 text-sm flex items-center gap-2">
+            <div className="glass-panel rounded-2xl p-6 shadow-xl h-[550px]">
+              <h3 className="text-slate-800 dark:text-slate-100 font-bold mb-6 text-sm flex items-center gap-2">
                 <div className="w-1 h-4 bg-emerald-500 rounded-full"></div> % Cumplimiento (Tope 100%)
               </h3>
-              <div className="h-72">
+              <div className="h-[450px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} layout="vertical" margin={{ left: 5, right: 30, top: 10, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={false} />
-                    <XAxis type="number" domain={[0, 100]} stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} />
-                    <YAxis dataKey="name" type="category" width={100} stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} />
+                  <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 120 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} vertical={false} />
+                    <XAxis 
+                      dataKey="name" 
+                      stroke={chartColors.text}
+                      fontSize={11} 
+                      tickLine={false} 
+                      axisLine={false}
+                      angle={-45}
+                      textAnchor="end"
+                      interval={0}
+                      height={100} 
+                      tickFormatter={formatXAxis}
+                    />
+                    <YAxis domain={[0, 100]} stroke={chartColors.text} fontSize={11} tickLine={false} axisLine={false} />
                     <Tooltip 
-                      contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '8px', color: '#f1f5f9' }}
-                      cursor={{fill: '#1e293b', opacity: 0.5}}
+                      contentStyle={{ backgroundColor: chartColors.tooltipBg, borderColor: chartColors.tooltipBorder, borderRadius: '8px', color: chartColors.tooltipText }}
+                      cursor={{fill: chartColors.grid, opacity: 0.5}}
                       formatter={(val: number) => `${val}%`}
                     />
-                    <ReferenceLine x={80} stroke="#eab308" strokeDasharray="3 3" />
-                    <ReferenceLine x={100} stroke="#10b981" strokeDasharray="3 3" />
-                    <Bar dataKey="cumplimiento" name="%" barSize={20} radius={[0, 4, 4, 0]}>
+                    <Legend verticalAlign="top" height={36} payload={[
+                      { value: 'Crítico (<80%)', type: 'rect', color: '#ef4444' },
+                      { value: 'Alerta (80-99%)', type: 'rect', color: '#eab308' },
+                      { value: 'Cumplido (100%)', type: 'rect', color: '#10b981' }
+                    ]}/>
+                    <ReferenceLine y={80} stroke="#eab308" strokeDasharray="3 3" />
+                    <ReferenceLine y={100} stroke="#10b981" strokeDasharray="3 3" />
+                    <Bar dataKey="cumplimiento" name="%" radius={[4, 4, 0, 0]}>
                       {chartData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
+                      <LabelList dataKey="cumplimiento" position="top" formatter={(val: number) => `${val}%`} fill={theme === 'dark' ? "#ffffff" : "#0f172a"} fontSize={10} />
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
@@ -635,23 +922,32 @@ function App() {
 
         {/* --- Tables --- */}
         {registros.length > 0 && (
-          <div className="grid grid-cols-1 gap-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
+          <div className="grid grid-cols-1 2xl:grid-cols-5 gap-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
             
             {/* Ranking Pacientes (Full Width Enhanced) */}
-            <div className="glass-panel border border-slate-800/60 rounded-2xl overflow-hidden shadow-2xl flex flex-col h-[600px]">
-              <div className="p-5 border-b border-slate-800/50 bg-slate-900/30 flex justify-between items-center">
-                <h3 className="text-slate-100 font-bold text-base flex items-center gap-2">
+            <div className="2xl:col-span-3 glass-panel rounded-2xl overflow-hidden shadow-2xl flex flex-col h-[650px]">
+              <div className="p-5 border-b border-slate-200 dark:border-slate-800/50 bg-slate-50/50 dark:bg-slate-900/30 flex justify-between items-center flex-shrink-0">
+                <h3 className="text-slate-800 dark:text-slate-100 font-bold text-base flex items-center gap-2">
                   <div className="p-1.5 bg-orange-500/10 rounded-lg">
-                    <Users className="h-5 w-5 text-orange-400" />
+                    <Users className="h-5 w-5 text-orange-500 dark:text-orange-400" />
                   </div>
                   Ranking de Usuarios
                 </h3>
-                <span className="text-xs font-mono text-slate-500 bg-slate-900 px-2 py-1 rounded">Top {rankingPacientes.length > 100 ? 100 : rankingPacientes.length}</span>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-mono text-slate-500 bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded">Total: {rankingPacientes.length}</span>
+                  <button 
+                    onClick={handleExportRankingPacientes}
+                    className="p-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-500/20 transition-all border border-emerald-200 dark:border-emerald-500/20 shadow-sm"
+                    title="Descargar Ranking Pacientes"
+                  >
+                    <Download className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
               
               <div className="overflow-auto custom-scroll flex-1">
                 <table className="w-full text-left border-collapse">
-                  <thead className="bg-slate-950/80 text-slate-400 text-xs uppercase tracking-wider sticky top-0 z-10 backdrop-blur-sm shadow-sm">
+                  <thead className="bg-slate-100/90 dark:bg-slate-950/80 text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider sticky top-0 z-10 backdrop-blur-sm shadow-sm">
                     <tr>
                       <th className="p-4 font-semibold w-12 text-center">#</th>
                       <th className="p-4 font-semibold">Paciente</th>
@@ -659,80 +955,154 @@ function App() {
                       <th className="p-4 font-semibold text-center w-20">Sexo</th>
                       <th className="p-4 font-semibold text-center w-24">Edad</th>
                       <th className="p-4 font-semibold">Grupo Etario</th>
-                      <th className="p-4 font-semibold text-right">Total Atenciones</th>
-                      <th className="p-4 font-semibold">Top CUPS</th>
-                      <th className="p-4 font-semibold text-right">Cant.</th>
+                      <th className="p-4 font-semibold text-right">Total</th>
+                      <th className="p-4 font-semibold">Historial (CUPS y Fechas)</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800/50 text-sm">
-                    {rankingPacientes.slice(0, 100).map((item, i) => (
-                      <tr key={i} className="group hover:bg-slate-800/40 transition-colors duration-150">
-                        <td className="p-4 text-center text-slate-600 group-hover:text-slate-400">{i + 1}</td>
-                        <td className="p-4 font-mono text-orange-300 font-medium">{item.PacienteId}</td>
-                        <td className="p-4 text-slate-300 font-medium">
+                  <tbody className="divide-y divide-slate-200 dark:divide-slate-800/50 text-sm">
+                    {currentPatData.map((item, i) => (
+                      <tr key={i} className="group hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors duration-150">
+                        <td className="p-4 text-center text-slate-500 dark:text-slate-600 group-hover:text-slate-700 dark:group-hover:text-slate-400">{(pagePat - 1) * ITEMS_PER_PAGE + i + 1}</td>
+                        <td className="p-4 font-mono text-orange-600 dark:text-orange-300 font-medium">{item.PacienteId}</td>
+                        <td className="p-4 text-slate-700 dark:text-slate-300 font-medium truncate max-w-[200px]">
                           {item.Nombre}
                         </td>
-                        <td className="p-4 text-center text-slate-400">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.Sexo === 'F' ? 'bg-pink-500/10 text-pink-400' : item.Sexo === 'M' ? 'bg-blue-500/10 text-blue-400' : 'bg-slate-700 text-slate-400'}`}>
+                        <td className="p-4 text-center text-slate-500 dark:text-slate-400">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.Sexo === 'F' ? 'bg-pink-100 dark:bg-pink-500/10 text-pink-600 dark:text-pink-400' : item.Sexo === 'M' ? 'bg-blue-100 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400' : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400'}`}>
                             {item.Sexo}
                           </span>
                         </td>
-                        <td className="p-4 text-center text-slate-400">{item.Edad}</td>
-                        <td className="p-4 text-slate-400 text-xs">{item.GrupoEtario}</td>
+                        <td className="p-4 text-center text-slate-600 dark:text-slate-400">{item.Edad}</td>
+                        <td className="p-4 text-slate-500 dark:text-slate-400 text-xs">{item.GrupoEtario}</td>
                         <td className="p-4 text-right">
-                          <span className="inline-block min-w-[30px] text-center bg-slate-800 text-emerald-400 font-bold px-2 py-1 rounded border border-slate-700">
+                          <span className="inline-block min-w-[30px] text-center bg-slate-100 dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 font-bold px-2 py-1 rounded border border-slate-200 dark:border-slate-700">
                             {item.TotalAtenciones}
                           </span>
                         </td>
                         <td className="p-4">
-                           <div className="flex flex-col">
-                             <span className="font-mono text-blue-300 text-xs">{item.TopCUPS}</span>
+                           <div className="flex flex-col gap-1.5 max-h-[100px] overflow-y-auto custom-scroll pr-2">
+                             <div className="flex items-start gap-1">
+                               <Stethoscope className="w-3 h-3 mt-0.5 text-blue-500 flex-shrink-0"/>
+                               <span className="font-mono text-xs text-slate-600 dark:text-slate-300 break-all leading-tight">
+                                 {item.ListaCUPS.map((cup, idx) => (
+                                   <span key={idx}>{idx > 0 && " | "}{cup}</span>
+                                 ))}
+                               </span>
+                             </div>
+                             <div className="flex items-start gap-1">
+                               <Calendar className="w-3 h-3 mt-0.5 text-emerald-500 flex-shrink-0"/>
+                               <span className="font-mono text-[10px] text-slate-500 dark:text-slate-400 leading-tight">
+                                  {item.ListaFechas.map((date, idx) => (
+                                   <span key={idx}>{idx > 0 && " | "}{date}</span>
+                                 ))}
+                               </span>
+                             </div>
                            </div>
                         </td>
-                         <td className="p-4 text-right font-mono text-slate-300">{item.TopCUPS_Cant}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
+              
+              {/* Pagination Controls */}
+              <div className="p-3 border-t border-slate-200 dark:border-slate-800/50 bg-slate-50/50 dark:bg-slate-900/30 flex justify-between items-center flex-shrink-0">
+                <button 
+                  onClick={() => setPagePat(p => Math.max(1, p - 1))}
+                  disabled={pagePat === 1}
+                  className="p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed text-slate-600 dark:text-slate-400 transition-colors"
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </button>
+                <span className="text-sm text-slate-600 dark:text-slate-400 font-medium">
+                  Página {pagePat} de {totalPagesPat}
+                </span>
+                <button 
+                  onClick={() => setPagePat(p => Math.min(totalPagesPat, p + 1))}
+                  disabled={pagePat === totalPagesPat}
+                  className="p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed text-slate-600 dark:text-slate-400 transition-colors"
+                >
+                  <ChevronRight className="h-5 w-5" />
+                </button>
+              </div>
             </div>
 
-            {/* Ranking CUPS (Updated Visuals) */}
-            <div className="glass-panel border border-slate-800/60 rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[500px]">
-              <div className="p-5 border-b border-slate-800/50 bg-slate-900/30 flex justify-between items-center">
-                 <h3 className="text-slate-100 font-bold text-base flex items-center gap-2">
+            {/* Ranking CUPS */}
+            <div className="2xl:col-span-2 glass-panel rounded-2xl overflow-hidden shadow-2xl flex flex-col h-[650px]">
+              <div className="p-5 border-b border-slate-200 dark:border-slate-800/50 bg-slate-50/50 dark:bg-slate-900/30 flex justify-between items-center flex-shrink-0">
+                 <h3 className="text-slate-800 dark:text-slate-100 font-bold text-base flex items-center gap-2">
                   <div className="p-1.5 bg-purple-500/10 rounded-lg">
-                    <TrendingUp className="h-5 w-5 text-purple-400" />
+                    <TrendingUp className="h-5 w-5 text-purple-500 dark:text-purple-400" />
                   </div>
                   Ranking CUPS
                 </h3>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-mono text-slate-500 bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded">Total: {rankingCUPS.length}</span>
+                   <button 
+                    onClick={handleExportRankingCUPS}
+                    className="p-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-500/20 transition-all border border-emerald-200 dark:border-emerald-500/20 shadow-sm"
+                    title="Descargar Ranking CUPS"
+                  >
+                    <Download className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
-              <div className="overflow-auto custom-scroll p-0">
-                <table className="w-full text-left text-sm text-slate-300">
-                  <thead className="bg-slate-950/80 text-slate-400 text-xs uppercase tracking-wider sticky top-0 z-10 backdrop-blur-sm">
+              <div className="overflow-auto custom-scroll p-0 flex-1">
+                <table className="w-full text-left text-sm text-slate-600 dark:text-slate-300">
+                  <thead className="bg-slate-100/90 dark:bg-slate-950/80 text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider sticky top-0 z-10 backdrop-blur-sm">
                     <tr>
                       <th className="p-4 w-12 text-center">#</th>
                       <th className="p-4 w-32">Código</th>
                       <th className="p-4">Nombre Procedimiento</th>
+                      <th className="p-4">Tipo Servicio</th>
                       <th className="p-4 text-right">Cantidad</th>
-                      <th className="p-4 text-right">Top Paciente (ID)</th>
+                      <th className="p-4 text-right">Top Paciente (ID y Fechas)</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800/50">
-                    {rankingCUPS.slice(0, 100).map((item, i) => (
-                      <tr key={i} className="hover:bg-slate-800/40 transition-colors">
-                        <td className="p-4 text-center text-slate-600">{i + 1}</td>
-                        <td className="p-4 font-mono text-purple-300">{item.CUPS}</td>
-                        <td className="p-4 text-slate-300 truncate max-w-[300px]" title={item.Nombre}>{item.Nombre}</td>
-                        <td className="p-4 text-right font-bold text-white">{item.Cantidad}</td>
-                        <td className="p-4 text-right text-xs">
-                           <div className="font-mono text-slate-400">{item.PacienteTop || "-"}</div>
-                           {item.PacienteTop_Cant > 0 && <div className="text-slate-600">({item.PacienteTop_Cant})</div>}
+                  <tbody className="divide-y divide-slate-200 dark:divide-slate-800/50">
+                    {currentCupData.map((item, i) => (
+                      <tr key={i} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                        <td className="p-4 text-center text-slate-500 dark:text-slate-600">{(pageCup - 1) * ITEMS_PER_PAGE + i + 1}</td>
+                        <td className="p-4 font-mono text-purple-600 dark:text-purple-300">{item.CUPS}</td>
+                        <td className="p-4 text-slate-700 dark:text-slate-300 truncate max-w-[200px]" title={item.Nombre}>{item.Nombre}</td>
+                        <td className="p-4 text-slate-500 dark:text-slate-400 text-xs truncate max-w-[150px]" title={item.TipoSer}>{item.TipoSer}</td>
+                        <td className="p-4 text-right font-bold text-slate-900 dark:text-white">{item.Cantidad}</td>
+                        <td className="p-4 text-right">
+                           <div className="flex flex-col items-end">
+                             <div className="font-mono text-slate-700 dark:text-slate-300 font-medium">{item.PacienteTop || "-"}</div>
+                             {item.PacienteTop_Cant > 0 && <div className="text-slate-500 dark:text-slate-500 text-xs mb-1">({item.PacienteTop_Cant} atenciones)</div>}
+                             {item.PacienteTop_Fechas && (
+                               <div className="text-[10px] text-slate-400 dark:text-slate-500 font-mono max-w-[120px] text-right leading-tight">
+                                 {item.PacienteTop_Fechas}
+                               </div>
+                             )}
+                           </div>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+              </div>
+              
+              {/* Pagination Controls */}
+              <div className="p-3 border-t border-slate-200 dark:border-slate-800/50 bg-slate-50/50 dark:bg-slate-900/30 flex justify-between items-center flex-shrink-0">
+                <button 
+                  onClick={() => setPageCup(p => Math.max(1, p - 1))}
+                  disabled={pageCup === 1}
+                  className="p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed text-slate-600 dark:text-slate-400 transition-colors"
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </button>
+                <span className="text-sm text-slate-600 dark:text-slate-400 font-medium">
+                  Página {pageCup} de {totalPagesCup}
+                </span>
+                <button 
+                  onClick={() => setPageCup(p => Math.min(totalPagesCup, p + 1))}
+                  disabled={pageCup === totalPagesCup}
+                  className="p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed text-slate-600 dark:text-slate-400 transition-colors"
+                >
+                  <ChevronRight className="h-5 w-5" />
+                </button>
               </div>
             </div>
 
@@ -740,28 +1110,111 @@ function App() {
         )}
 
       </main>
+
+      {/* --- Duplicates Modal --- */}
+      {showDuplicates && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[80vh] flex flex-col border border-slate-200 dark:border-slate-800">
+            <div className="flex justify-between items-center p-6 border-b border-slate-200 dark:border-slate-800">
+              <h2 className="text-xl font-bold flex items-center gap-2 text-slate-800 dark:text-white">
+                <FileWarning className="text-amber-500 h-6 w-6" /> Auditoría de Duplicados
+              </h2>
+              <div className="flex gap-2">
+                 <button 
+                  onClick={handleExportDuplicates}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 rounded-lg text-sm font-medium hover:bg-emerald-200 dark:hover:bg-emerald-500/30 transition-colors"
+                >
+                  <Download className="h-4 w-4" /> Excel
+                </button>
+                <button onClick={() => setShowDuplicates(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
+                  <X className="h-5 w-5 text-slate-500" />
+                </button>
+              </div>
+            </div>
+            
+            <div className="flex-1 overflow-auto custom-scroll p-0">
+               <table className="w-full text-left text-sm text-slate-600 dark:text-slate-300">
+                  <thead className="bg-slate-100/90 dark:bg-slate-950/80 text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider sticky top-0 z-10">
+                    <tr>
+                       <th className="p-4">Paciente</th>
+                       <th className="p-4">CUPS</th>
+                       <th className="p-4">Fecha</th>
+                       <th className="p-4 text-center">Repeticiones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 dark:divide-slate-800/50">
+                    {duplicatesList.map((d, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                        <td className="p-4">
+                          <div className="font-mono font-bold">{d.paciente}</div>
+                          <div className="text-xs text-slate-500">{d.nombre_paciente}</div>
+                        </td>
+                        <td className="p-4">
+                          <div className="font-mono text-purple-600 dark:text-purple-400">{d.cups}</div>
+                          <div className="text-xs text-slate-500 truncate max-w-[250px]">{d.nombre_cups}</div>
+                        </td>
+                        <td className="p-4 font-mono">{d.fecha}</td>
+                        <td className="p-4 text-center font-bold text-red-500">{d.repeticiones}</td>
+                      </tr>
+                    ))}
+                    {duplicatesList.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="p-8 text-center text-slate-500">
+                          <div className="flex flex-col items-center gap-2">
+                            <CheckCircle className="h-8 w-8 text-emerald-500" />
+                            <p>No se encontraron atenciones duplicadas exactas.</p>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+               </table>
+            </div>
+
+            <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 rounded-b-2xl">
+               <p className="text-xs text-slate-500 text-center">
+                 * Se consideran duplicados: Mismo Documento + Mismo Código CUPS + Misma Fecha de Servicio.
+               </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 function KpiCard({ label, value, sub, icon, color, trend }: { label: string, value: string | number, sub?: string, icon: React.ReactNode, color: string, trend: string }) {
   const colorClasses: Record<string, string> = {
-    blue: 'hover:shadow-blue-500/10 border-blue-500/20',
-    emerald: 'hover:shadow-emerald-500/10 border-emerald-500/20',
-    purple: 'hover:shadow-purple-500/10 border-purple-500/20',
-    orange: 'hover:shadow-orange-500/10 border-orange-500/20',
+    blue: 'hover:shadow-blue-500/10 border-blue-200 dark:border-blue-500/20',
+    emerald: 'hover:shadow-emerald-500/10 border-emerald-200 dark:border-emerald-500/20',
+    purple: 'hover:shadow-purple-500/10 border-purple-200 dark:border-purple-500/20',
+    orange: 'hover:shadow-orange-500/10 border-orange-200 dark:border-orange-500/20',
   };
 
+  const valStr = String(value);
+  const len = valStr.length;
+  
+  // Dynamic font size based on length
+  let textClass = "text-3xl truncate"; // Default for numbers or short text
+  if (len > 12 && len <= 25) textClass = "text-lg leading-tight line-clamp-2";
+  else if (len > 25) textClass = "text-sm leading-tight line-clamp-3";
+
   return (
-    <div className={`glass-panel border border-slate-800/60 p-5 rounded-2xl shadow-lg transition-all duration-300 hover:-translate-y-1 hover:border-opacity-50 ${colorClasses[color]}`}>
-      <div className="flex justify-between items-start mb-3">
-        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{label}</span>
-        <div className={`p-2 rounded-lg bg-${color}-500/10`}>
+    <div className={`glass-panel p-5 rounded-2xl shadow-lg transition-all duration-300 hover:-translate-y-1 hover:border-opacity-50 ${colorClasses[color]} flex flex-col h-full min-h-[160px]`}>
+      <div className="flex justify-between items-start mb-2">
+        <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{label}</span>
+        <div className={`p-2 rounded-lg bg-${color}-100 dark:bg-${color}-500/10 flex-shrink-0 ml-2`}>
           {icon}
         </div>
       </div>
-      <div className="text-2xl font-bold text-white tracking-tight truncate" title={String(value)}>{value}</div>
-      {sub && <div className="text-xs text-slate-500 mt-1 font-medium truncate">{sub}</div>}
+      
+      <div className="flex-1 flex items-center">
+         <div className={`font-bold text-slate-800 dark:text-white tracking-tight w-full ${textClass}`} title={valStr}>
+           {value}
+         </div>
+      </div>
+      
+      {sub && <div className="text-xs text-slate-500 mt-2 font-medium border-t border-slate-200 dark:border-slate-800/50 pt-2 w-full truncate">{sub}</div>}
     </div>
   );
 }

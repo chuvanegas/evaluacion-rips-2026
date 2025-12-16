@@ -71,6 +71,6 @@ app.get('*', (req, res) => {
 });
 
 app.listen(port, () => {
-  console.log(`🚀 Servidor RIPS Auditoría corriendo en http://localhost:${port}`);
+  console.log(`🚀 Servidor Evaluación Cápita Asistencia corriendo en http://localhost:${port}`);
   console.log(`📡 API lista en http://localhost:${port}/api`);
 });

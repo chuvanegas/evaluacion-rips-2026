@@ -3,30 +3,58 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>RIPS Auditoría Pro</title>
+    <title>Evaluación Cápita Asistencia</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Inter', 'system-ui', 'sans-serif'],
+            }
+          }
+        }
+      }
+    </script>
     <style>
-      /* Custom Scrollbar for dark theme */
+      :root {
+        --scroll-bg: #f1f5f9;
+        --scroll-thumb: #cbd5e1;
+        --scroll-thumb-hover: #94a3b8;
+      }
+      
+      .dark {
+        --scroll-bg: #020617;
+        --scroll-thumb: #334155;
+        --scroll-thumb-hover: #475569;
+      }
+
+      /* Custom Scrollbar */
       ::-webkit-scrollbar {
         width: 10px;
         height: 10px;
       }
       ::-webkit-scrollbar-track {
-        background: #020617; 
+        background: var(--scroll-bg); 
       }
       ::-webkit-scrollbar-thumb {
-        background: #334155; 
+        background: var(--scroll-thumb); 
         border-radius: 5px;
-        border: 2px solid #020617;
+        border: 2px solid var(--scroll-bg);
       }
       ::-webkit-scrollbar-thumb:hover {
-        background: #475569; 
+        background: var(--scroll-thumb-hover); 
       }
       
+      /* Glassmorphism Utilities */
       .glass-panel {
-        background: rgba(15, 23, 42, 0.7);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
+        @apply bg-white/80 dark:bg-slate-900/70 backdrop-blur-md border border-slate-200 dark:border-slate-800;
+      }
+      
+      .custom-scroll {
+        scrollbar-width: thin;
+        scrollbar-color: var(--scroll-thumb) var(--scroll-bg);
       }
     </style>
   <script type="importmap">
@@ -45,7 +73,7 @@
 }
 </script>
 </head>
-  <body class="bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-black text-slate-200 antialiased min-h-screen selection:bg-blue-500/30">
+  <body class="bg-slate-50 text-slate-800 dark:bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] dark:from-slate-900 dark:via-slate-950 dark:to-black dark:text-slate-200 antialiased min-h-screen selection:bg-blue-500/30 transition-colors duration-300">
     <div id="root"></div>
   </body>
 </html>

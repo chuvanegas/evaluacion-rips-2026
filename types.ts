@@ -55,6 +55,7 @@ export interface RankingCupsItem {
   PacienteTop_Sexo: string;
   PacienteTop_Edad: string;
   PacienteTop_GrupoEtario: string;
+  PacienteTop_Fechas: string; // Nuevo campo
 }
 
 export interface RankingPatientItem {
@@ -64,7 +65,16 @@ export interface RankingPatientItem {
   Edad: string;
   GrupoEtario: string;
   TotalAtenciones: number;
-  TopCUPS: string;
-  TopCUPS_Cant: number;
-  Servicios: string;
+  ListaCUPS: string[]; // Cambio a Array para exactitud
+  ListaFechas: string[]; // Cambio a Array para exactitud
+}
+
+export interface DuplicateItem {
+  id: string;
+  paciente: string;
+  nombre_paciente: string;
+  cups: string;
+  nombre_cups: string;
+  fecha: string;
+  repeticiones: number;
 }
