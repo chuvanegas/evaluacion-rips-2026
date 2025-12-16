@@ -6,7 +6,7 @@ import {
 import { 
   Upload, FileText, Database, Trash2, Save, Download, 
   Activity, Users, TrendingUp, AlertTriangle, CheckCircle, Server,
-  BarChart3, UserCheck, FileJson, Sun, Moon, ChevronLeft, ChevronRight, Calendar, Stethoscope, FileSpreadsheet, FileWarning, X
+  BarChart3, UserCheck, FileJson, Sun, Moon, ChevronLeft, ChevronRight, Calendar, Stethoscope, FileSpreadsheet, FileWarning, X, Scissors, Search
 } from 'lucide-react';
 import { 
   normalizeId, parseDateFromLine, TIPOS_SERVICIOS_DEFAULT, 
@@ -43,9 +43,13 @@ function App() {
   // Modal State
   const [showDuplicates, setShowDuplicates] = useState(false);
 
+  // Search State
+  const [searchTerm, setSearchTerm] = useState("");
+
   // Pagination State
   const [pagePat, setPagePat] = useState(1);
   const [pageCup, setPageCup] = useState(1);
+  const [pageRips, setPageRips] = useState(1);
   const ITEMS_PER_PAGE = 20;
 
   // --- Theme Effect ---
@@ -90,7 +94,13 @@ function App() {
   useEffect(() => {
     setPagePat(1);
     setPageCup(1);
+    setPageRips(1);
   }, [registros]);
+
+  // Reset Rips pagination on search
+  useEffect(() => {
+    setPageRips(1);
+  }, [searchTerm]);
 
   // Save config when changed
   useEffect(() => {
@@ -125,6 +135,54 @@ function App() {
       setIsSaving(false);
     }
   };
+
+  // --- Duplicate Management ---
+
+  const handleRemoveDuplicate = (dupId: string) => {
+    // dupId format: "paciente|cups|fecha"
+    const [pat, cup, date] = dupId.split('|');
+    let keptOne = false;
+    let removedCount = 0;
+
+    const newRegistros = registros.filter(r => {
+      // Is this the duplicate type we are targeting?
+      if (r.paciente === pat && r.cups === cup && r.fecha === date) {
+        if (!keptOne) {
+          keptOne = true; // Keep the first one found
+          return true;
+        } else {
+          removedCount++; // Remove subsequent matches
+          return false;
+        }
+      }
+      return true; // Keep unrelated records
+    });
+
+    setRegistros(newRegistros);
+    setMessage({ type: 'success', text: `Se eliminaron ${removedCount} copias excedentes.` });
+  };
+
+  const handleRemoveAllDuplicates = () => {
+    if (!confirm("¿Está seguro de eliminar TODOS los registros duplicados? Esta acción dejará solo 1 registro único por cada combinación de Paciente+CUPS+Fecha.")) return;
+
+    const seen = new Set<string>();
+    let removedCount = 0;
+
+    const newRegistros = registros.filter(r => {
+      const key = `${r.paciente}|${r.cups}|${r.fecha}`;
+      if (seen.has(key)) {
+        removedCount++;
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+
+    setRegistros(newRegistros);
+    setMessage({ type: 'success', text: `Limpieza masiva completada. Se eliminaron ${removedCount} registros duplicados.` });
+    setShowDuplicates(false);
+  };
+
 
   const processFiles = async (ripsFiles: FileList | null, cupsFile: File | null) => {
     if (!ripsFiles || ripsFiles.length === 0 || !cupsFile) {
@@ -181,7 +239,6 @@ function App() {
           const upperLine = l.toUpperCase();
           
           // --- Detección de Sección por Encabezado ---
-          // Detectar palabras clave explícitas
           if (upperLine.includes("USUARIOS") && (upperLine.includes("*") || upperLine.includes("°") || upperLine.includes("-"))) {
              section = "USUARIOS";
              continue;
@@ -191,13 +248,10 @@ function App() {
              continue;
           }
 
-          // --- Detección Inteligente de Separador (Coma o Pipe) ---
+          // --- Detección Inteligente de Separador ---
           let parts: string[] = [];
           
-          // Prioridad: Si tiene comas y parece CSV (más de 3 columnas), usa coma.
-          // Limpiamos el pipe final si existe (ej: "dato,|")
           if (l.includes(',') && (l.match(/,/g) || []).length >= 3) {
-             // Split por coma, trim y eliminar pipe final de cada elemento si existe
              parts = l.split(',').map(x => x.trim().replace(/[|]$/, '')); 
           } else if (l.includes('|')) {
              parts = l.split('|').map(x => x.trim());
@@ -207,12 +261,10 @@ function App() {
 
           if (parts.length < 2) continue;
 
-          // --- Heurística de Contenido (Auto-Detectar USUARIOS) ---
-          // Si la sección no está clara, pero la línea tiene estructura de Usuario (Fecha + Sexo)
+          // --- Heurística de Contenido ---
           if (section !== "USUARIOS") {
             const hasDate = /\d{4}-\d{2}-\d{2}|\d{2}\/\d{2}\/\d{4}/.test(l);
             const hasSex = /\b(M|F)\b/i.test(l);
-            // Si tiene fecha y sexo, forzamos tratamiento como USUARIO
             if (hasDate && hasSex) {
               section = "USUARIOS";
             }
@@ -220,28 +272,20 @@ function App() {
 
           // --- Procesar USUARIOS ---
           if (section.includes("USUARIOS")) {
-             // Estructura RIPS US: Tipo, ID, Cod, TipoUs, Apellido, Nombre... o similar.
-             // Normalmente el ID está en la posición 1 (segunda columna).
              let idCand = parts[1];
-             
-             // Si parts[1] no parece un número, buscamos en toda la línea algo que parezca un documento
              if (!idCand || !/^\d+$/.test(idCand)) {
                 idCand = parts.find(p => /^(?:CC|TI|RC|CE|PA|PE|CN|MS)?-?\d{3,20}$/i.test(p)) || "";
              }
 
              const id = normalizeId(idCand);
-             
-             // Si no hay ID válido, saltamos
              if (!id || id.length < 3) continue;
 
              const sexo = (parts.find(p => /^(M|F)$/i.test(p)) || "").toUpperCase();
              const fnac = (parts.find(p => /^\d{4}-\d{2}-\d{2}$/.test(p) || /^\d{2}\/\d{2}\/\d{4}$/.test(p)) || "");
              
-             // Heurística para nombre: busca partes de texto alfabético que no sean códigos
              const posiblesNombre = parts.filter(p => /[A-Za-zÁÉÍÓÚÑ]/.test(p) && !/^(M|F)$/i.test(p) && !/^\d+$/.test(p) && p.length > 2);
              const nombre = posiblesNombre.slice(0, 4).join(" ");
 
-             // Guardamos/Actualizamos usuario
              const prev = newUsuariosMap.get(id) || { id, sexo: "", fnac: "", nombre: "" };
              newUsuariosMap.set(id, {
                id,
@@ -252,8 +296,7 @@ function App() {
              continue;
           }
 
-          // --- Procesar SERVICIOS / OTROS ---
-          // Busca código CUPS de 6 dígitos
+          // --- Procesar SERVICIOS ---
           const mC = l.match(/\b\d{6}\b/);
           if (!mC) continue;
           const cups = mC[0];
@@ -304,13 +347,10 @@ function App() {
     const cupsCount: Record<string, {count: number, name: string, type: string}> = {};
     const cupsPacCount: Record<string, Record<string, number>> = {};
     const pacCount: Record<string, number> = {};
-    
-    // Tracking details for visual lists (CHANGED: Use Array instead of Set for history to match totals)
     const pacMeta: Record<string, { dates: string[], cups: string[] }> = {};
-    const cupsPacDates: Record<string, Record<string, Set<string>>> = {}; // Still use Set for this specific meta view logic if needed, but lets align.
+    const cupsPacDates: Record<string, Record<string, Set<string>>> = {};
 
     // Duplicates Tracking
-    // Key: Paciente|CUPS|Fecha -> Count
     const duplicateMap = new Map<string, { count: number, record: RipsRecord }>();
 
     filteredRegistros.forEach(r => {
@@ -330,11 +370,10 @@ function App() {
       if (!cupsCount[r.cups]) cupsCount[r.cups] = { count: 0, name: r.nombre, type: r.tipo };
       cupsCount[r.cups].count++;
 
-      // 4. CUPS Patient Aggregation (for top patient per cups)
+      // 4. CUPS Patient Aggregation
       if(!cupsPacCount[r.cups]) cupsPacCount[r.cups] = {};
       cupsPacCount[r.cups][r.paciente] = (cupsPacCount[r.cups][r.paciente] || 0) + 1;
 
-      // Track dates for CUPS + Patient combination (Top Patient Stats)
       if(!cupsPacDates[r.cups]) cupsPacDates[r.cups] = {};
       if(!cupsPacDates[r.cups][r.paciente]) cupsPacDates[r.cups][r.paciente] = new Set();
       cupsPacDates[r.cups][r.paciente].add(r.fecha);
@@ -342,7 +381,6 @@ function App() {
       // 5. Patient Aggregation
       pacCount[r.paciente] = (pacCount[r.paciente] || 0) + 1;
       
-      // Track details per patient (ALL Occurrences)
       if(!pacMeta[r.paciente]) pacMeta[r.paciente] = { dates: [], cups: [] };
       pacMeta[r.paciente].dates.push(r.fecha);
       pacMeta[r.paciente].cups.push(r.cups);
@@ -374,9 +412,9 @@ function App() {
         let pct = totalMeta > 0 ? Math.round((ejecutado / totalMeta) * 100) : 0;
         const capPct = pct > 100 ? 100 : pct;
 
-        let color = "#ef4444"; // red
-        if (capPct >= 80) color = "#eab308"; // yellow
-        if (capPct >= 100) color = "#10b981"; // green
+        let color = "#ef4444"; 
+        if (capPct >= 80) color = "#eab308"; 
+        if (capPct >= 100) color = "#10b981"; 
 
         return {
           name: m.type,
@@ -390,7 +428,6 @@ function App() {
     // Ranking CUPS
     const rankingCUPS: RankingCupsItem[] = Object.entries(cupsCount)
       .map(([code, info]) => {
-        // Find top patient for this cup
         const pacs = cupsPacCount[code] || {};
         const topPacEntry = Object.entries(pacs).sort((a,b) => b[1] - a[1])[0];
         const topPid = topPacEntry ? topPacEntry[0] : "";
@@ -398,8 +435,6 @@ function App() {
         
         const user = usuariosMap.get(topPid);
         const fn = user?.fnac || "";
-
-        // Dates for this specific CUPS and Top Patient
         const datesSet = cupsPacDates[code]?.[topPid] || new Set();
         const datesStr = Array.from(datesSet).sort().join(", ");
 
@@ -426,7 +461,6 @@ function App() {
         const fn = user?.fnac || "";
         const pMeta = pacMeta[pid] || { cups: [], dates: [] };
         
-        // No sort or unique here, keep order of occurrence or just list all
         return {
           PacienteId: pid,
           Nombre: user?.nombre || "NO REGISTRADO",
@@ -440,7 +474,6 @@ function App() {
       })
       .sort((a, b) => b.TotalAtenciones - a.TotalAtenciones);
 
-    // KPI Values
     const topCup = rankingCUPS[0];
     const topPat = rankingPacientes[0];
 
@@ -459,6 +492,18 @@ function App() {
 
   }, [registros, metas, scale, usuariosMap]);
 
+  // --- Search Logic for Raw Rips ---
+  const filteredRawRips = useMemo(() => {
+    if (!searchTerm) return registros;
+    const lower = searchTerm.toLowerCase();
+    return registros.filter(r => 
+      r.cups.toLowerCase().includes(lower) || 
+      r.nombre.toLowerCase().includes(lower) || 
+      r.tipo.toLowerCase().includes(lower) ||
+      r.paciente.toLowerCase().includes(lower)
+    );
+  }, [registros, searchTerm]);
+
   // --- Pagination Logic ---
   const totalPagesPat = Math.ceil(rankingPacientes.length / ITEMS_PER_PAGE);
   const currentPatData = rankingPacientes.slice((pagePat - 1) * ITEMS_PER_PAGE, pagePat * ITEMS_PER_PAGE);
@@ -466,6 +511,8 @@ function App() {
   const totalPagesCup = Math.ceil(rankingCUPS.length / ITEMS_PER_PAGE);
   const currentCupData = rankingCUPS.slice((pageCup - 1) * ITEMS_PER_PAGE, pageCup * ITEMS_PER_PAGE);
 
+  const totalPagesRips = Math.ceil(filteredRawRips.length / ITEMS_PER_PAGE);
+  const currentRipsData = filteredRawRips.slice((pageRips - 1) * ITEMS_PER_PAGE, pageRips * ITEMS_PER_PAGE);
 
   // --- Helper for Charts ---
   const formatXAxis = (tickItem: string) => {
@@ -485,7 +532,6 @@ function App() {
     utils.book_append_sheet(wb, utils.json_to_sheet(chartData), "Metas_vs_Ejecutado");
     utils.book_append_sheet(wb, utils.json_to_sheet(rankingCUPS), "Ranking_CUPS");
     
-    // Formatting patient ranking for export (join arrays to string with newlines for excel)
     const exportPat = rankingPacientes.map(p => ({
       ...p,
       ListaCUPS: p.ListaCUPS.join("\n"),
@@ -497,10 +543,9 @@ function App() {
 
   const handleExportRankingPacientes = () => {
     const wb = utils.book_new();
-    // Format list with new lines for cell "Excel" feel
     const exportPat = rankingPacientes.map(p => ({
         ...p,
-        ListaCUPS: p.ListaCUPS.join("\n"), // Saltos de linea para que quede en la misma celda pero vertical
+        ListaCUPS: p.ListaCUPS.join("\n"), 
         ListaFechas: p.ListaFechas.join("\n")
     }));
     utils.book_append_sheet(wb, utils.json_to_sheet(exportPat), "Ranking_Pacientes");
@@ -522,7 +567,6 @@ function App() {
   const handleExportRipsOrganizados = () => {
     const wb = utils.book_new();
 
-    // 1. Hoja USUARIOS
     const usuariosData = Array.from(usuariosMap.values()).map((u: UserRecord) => ({
       Numero_Identificacion: u.id,
       Nombre_Completo: u.nombre,
@@ -533,7 +577,6 @@ function App() {
     }));
     utils.book_append_sheet(wb, utils.json_to_sheet(usuariosData), "USUARIOS");
 
-    // 2. Segmentación de Servicios
     const consultas: any[] = [];
     const procedimientos: any[] = [];
     const otros: any[] = [];
@@ -548,8 +591,6 @@ function App() {
       };
 
       const t = r.tipo.toUpperCase();
-      
-      // Lógica de clasificación
       if (t.includes("CONSULTA") || t.includes("MEDICINA GENERAL") || t.includes("ESPECIALIZADA") || t.includes("URGENCIA")) {
         consultas.push(row);
       } else if (t.includes("LABORATORIO") || t.includes("IMAGEN") || t.includes("ODONTOLOGIA") || t.includes("PROCEDIMIENTO") || t.includes("QUIRURGICO") || t.includes("APOYO")) {
@@ -844,7 +885,7 @@ function App() {
               <h3 className="text-slate-800 dark:text-slate-100 font-bold mb-6 text-sm flex items-center gap-2">
                 <div className="w-1 h-4 bg-blue-500 rounded-full"></div> Producción (Cantidad)
               </h3>
-              <div className="h-[450px]">
+              <div className="h-[450px] w-full min-w-0">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 120 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} vertical={false} />
@@ -878,7 +919,7 @@ function App() {
               <h3 className="text-slate-800 dark:text-slate-100 font-bold mb-6 text-sm flex items-center gap-2">
                 <div className="w-1 h-4 bg-emerald-500 rounded-full"></div> % Cumplimiento (Tope 100%)
               </h3>
-              <div className="h-[450px]">
+              <div className="h-[450px] w-full min-w-0">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 120 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} vertical={false} />
@@ -1109,6 +1150,94 @@ function App() {
           </div>
         )}
 
+        {/* --- Raw RIPS Detail Table --- */}
+        {registros.length > 0 && (
+          <div className="glass-panel rounded-2xl overflow-hidden shadow-xl flex flex-col mt-8 animate-in fade-in slide-in-from-bottom-8 duration-1000">
+             <div className="p-5 border-b border-slate-200 dark:border-slate-800/50 bg-slate-50/50 dark:bg-slate-900/30 flex flex-col md:flex-row justify-between items-center gap-4">
+                <h3 className="text-slate-800 dark:text-slate-100 font-bold text-base flex items-center gap-2">
+                  <div className="p-1.5 bg-blue-500/10 rounded-lg">
+                    <FileText className="h-5 w-5 text-blue-500 dark:text-blue-400" />
+                  </div>
+                  Detalle General de RIPS Cargados
+                </h3>
+                
+                <div className="relative w-full md:w-96">
+                   <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                      <Search className="w-4 h-4 text-slate-400" />
+                   </div>
+                   <input 
+                      type="text"
+                      placeholder="Buscar por CUPS, Nombre, Tipo Servicio..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="block w-full p-2 pl-10 text-sm text-slate-900 border border-slate-300 rounded-lg bg-slate-50 focus:ring-blue-500 focus:border-blue-500 dark:bg-slate-800 dark:border-slate-600 dark:placeholder-slate-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500 transition-all"
+                   />
+                </div>
+             </div>
+
+             <div className="overflow-x-auto custom-scroll">
+               <table className="w-full text-left text-sm text-slate-600 dark:text-slate-300">
+                  <thead className="bg-slate-100/90 dark:bg-slate-950/80 text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider">
+                     <tr>
+                        <th className="p-4 font-semibold w-16 text-center">#</th>
+                        <th className="p-4 font-semibold w-32">Fecha</th>
+                        <th className="p-4 font-semibold w-32">Paciente</th>
+                        <th className="p-4 font-semibold w-32">Código CUPS</th>
+                        <th className="p-4 font-semibold">Nombre Procedimiento</th>
+                        <th className="p-4 font-semibold">Tipo Servicio</th>
+                     </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 dark:divide-slate-800/50">
+                     {currentRipsData.map((r, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                           <td className="p-4 text-center text-slate-400 text-xs">
+                             {(pageRips - 1) * ITEMS_PER_PAGE + idx + 1}
+                           </td>
+                           <td className="p-4 font-mono text-slate-600 dark:text-slate-400">{r.fecha}</td>
+                           <td className="p-4 font-mono font-medium text-orange-600 dark:text-orange-300">{r.paciente}</td>
+                           <td className="p-4 font-mono text-purple-600 dark:text-purple-300">{r.cups}</td>
+                           <td className="p-4 truncate max-w-[250px]" title={r.nombre}>{r.nombre}</td>
+                           <td className="p-4 text-xs">
+                              <span className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-2 py-1 rounded border border-slate-200 dark:border-slate-700">
+                                {r.tipo}
+                              </span>
+                           </td>
+                        </tr>
+                     ))}
+                     {currentRipsData.length === 0 && (
+                        <tr>
+                           <td colSpan={6} className="p-8 text-center text-slate-500">
+                              No se encontraron registros que coincidan con la búsqueda.
+                           </td>
+                        </tr>
+                     )}
+                  </tbody>
+               </table>
+             </div>
+
+             {/* Pagination for Rips Table */}
+             <div className="p-3 border-t border-slate-200 dark:border-slate-800/50 bg-slate-50/50 dark:bg-slate-900/30 flex justify-between items-center">
+                <button 
+                  onClick={() => setPageRips(p => Math.max(1, p - 1))}
+                  disabled={pageRips === 1}
+                  className="p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed text-slate-600 dark:text-slate-400 transition-colors"
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </button>
+                <span className="text-sm text-slate-600 dark:text-slate-400 font-medium">
+                  Página {pageRips} de {totalPagesRips || 1}
+                </span>
+                <button 
+                  onClick={() => setPageRips(p => Math.min(totalPagesRips, p + 1))}
+                  disabled={pageRips === totalPagesRips || totalPagesRips === 0}
+                  className="p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed text-slate-600 dark:text-slate-400 transition-colors"
+                >
+                  <ChevronRight className="h-5 w-5" />
+                </button>
+             </div>
+          </div>
+        )}
+
       </main>
 
       {/* --- Duplicates Modal --- */}
@@ -1120,6 +1249,13 @@ function App() {
                 <FileWarning className="text-amber-500 h-6 w-6" /> Auditoría de Duplicados
               </h2>
               <div className="flex gap-2">
+                 <button 
+                  onClick={handleRemoveAllDuplicates}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-300 rounded-lg text-sm font-medium hover:bg-red-200 dark:hover:bg-red-500/30 transition-colors mr-2"
+                >
+                  <Scissors className="h-4 w-4" /> Limpieza Masiva
+                </button>
+
                  <button 
                   onClick={handleExportDuplicates}
                   className="flex items-center gap-2 px-3 py-1.5 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 rounded-lg text-sm font-medium hover:bg-emerald-200 dark:hover:bg-emerald-500/30 transition-colors"
@@ -1140,6 +1276,7 @@ function App() {
                        <th className="p-4">CUPS</th>
                        <th className="p-4">Fecha</th>
                        <th className="p-4 text-center">Repeticiones</th>
+                       <th className="p-4 text-right">Acción</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 dark:divide-slate-800/50">
@@ -1155,11 +1292,20 @@ function App() {
                         </td>
                         <td className="p-4 font-mono">{d.fecha}</td>
                         <td className="p-4 text-center font-bold text-red-500">{d.repeticiones}</td>
+                        <td className="p-4 text-right">
+                          <button 
+                            onClick={() => handleRemoveDuplicate(d.id)}
+                            className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 p-2 rounded-lg transition-colors text-xs font-bold"
+                            title="Eliminar excedentes (dejar 1)"
+                          >
+                             Dejar Único
+                          </button>
+                        </td>
                       </tr>
                     ))}
                     {duplicatesList.length === 0 && (
                       <tr>
-                        <td colSpan={4} className="p-8 text-center text-slate-500">
+                        <td colSpan={5} className="p-8 text-center text-slate-500">
                           <div className="flex flex-col items-center gap-2">
                             <CheckCircle className="h-8 w-8 text-emerald-500" />
                             <p>No se encontraron atenciones duplicadas exactas.</p>
