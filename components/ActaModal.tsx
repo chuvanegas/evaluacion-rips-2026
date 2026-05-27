@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Printer, FileSpreadsheet, TrendingUp } from 'lucide-react';
+import { X, Printer, FileSpreadsheet, TrendingUp, AlertTriangle } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   Cell, LabelList, ReferenceLine
@@ -435,13 +435,16 @@ export default function ActaModal({
             <FileSpreadsheet className="h-3.5 w-3.5" /> Excel
           </button>
           <button onClick={() => {
+            const desea = window.confirm(
+              '⚠️ RECUERDE: Si no guarda el acta, no quedará ningún registro de ella.\n\n¿Desea GUARDAR el acta antes de imprimir?\n\n• Aceptar → Guardar y luego imprimir\n• Cancelar → Imprimir sin guardar (no quedará registro)'
+            );
+            if (desea) onSave();
             setView('preview');
             setTimeout(() => {
               const portal = document.getElementById('acta-print-portal');
               const src = document.getElementById('acta-preview-content');
               if (portal && src) {
                 portal.innerHTML = src.outerHTML;
-                // Copy computed styles for recharts SVGs
               }
               window.print();
               setTimeout(() => { if (portal) portal.innerHTML = ''; }, 2000);
@@ -460,6 +463,14 @@ export default function ActaModal({
             </button>
           )}
         </div>
+      </div>
+
+      {/* ── Aviso persistente: el acta NO se guarda automáticamente ── */}
+      <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-700 flex-shrink-0">
+        <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+        <p className="text-xs text-amber-700 dark:text-amber-300 font-medium">
+          <strong>Recuerde:</strong> esta acta <strong>NO se guardará automáticamente</strong>. Si cierra sin presionar <em>Guardar</em>, no quedará ningún registro de ella.
+        </p>
       </div>
 
       <div className={inline ? 'overflow-y-auto custom-scroll' : 'flex-1 overflow-y-auto custom-scroll'}>
