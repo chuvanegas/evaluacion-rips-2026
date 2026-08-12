@@ -246,6 +246,7 @@ function App() {
   const [filterRegimen, setFilterRegimen] = useState('');
   const [prestSearch, setPrestSearch] = useState('');
   const [showPrestDropdown, setShowPrestDropdown] = useState(false);
+  const [maintPrestQ, setMaintPrestQ] = useState('');
 
   // Renuncias
   const [renuncias, setRenuncias] = useState<Renuncia[]>(() => {
@@ -3035,6 +3036,21 @@ function App() {
                   </div>
                 </div>
 
+                {/* Search bar */}
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Buscar por nombre, NIT o contrato…"
+                    value={maintPrestQ}
+                    onChange={e => setMaintPrestQ(e.target.value)}
+                    className="w-full pl-9 pr-9 py-2.5 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
+                  />
+                  {maintPrestQ && (
+                    <button onClick={() => setMaintPrestQ('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-lg leading-none">×</button>
+                  )}
+                </div>
+
                 {prestadores.length === 0 ? (
                   <div className="glass-panel rounded-2xl p-10 flex flex-col items-center justify-center text-center gap-4 border-2 border-dashed border-slate-300 dark:border-slate-700">
                     <Building2 className="h-12 w-12 text-slate-400 dark:text-slate-600" />
@@ -3045,8 +3061,23 @@ function App() {
                   </div>
                 ) : (() => {
                   // Group prestadores by NIT
+                  const q = maintPrestQ.toLowerCase().trim();
+                  const visiblePrestadores = q
+                    ? prestadores.filter(p =>
+                        p.nombre.toLowerCase().includes(q) ||
+                        p.nit.toLowerCase().includes(q) ||
+                        p.contrato.toLowerCase().includes(q)
+                      )
+                    : prestadores;
                   const groups: Record<string, Prestador[]> = {};
-                  prestadores.forEach(p => { (groups[p.nit] = groups[p.nit] || []).push(p); });
+                  visiblePrestadores.forEach(p => { (groups[p.nit] = groups[p.nit] || []).push(p); });
+                  if (Object.keys(groups).length === 0) return (
+                    <div className="glass-panel rounded-2xl p-10 flex flex-col items-center justify-center text-center gap-3 border-2 border-dashed border-slate-300 dark:border-slate-700">
+                      <Search className="h-10 w-10 text-slate-300 dark:text-slate-700" />
+                      <p className="font-semibold text-slate-500">Sin resultados para "<span className="text-slate-700 dark:text-slate-300">{maintPrestQ}</span>"</p>
+                      <button onClick={() => setMaintPrestQ('')} className="text-xs text-indigo-500 hover:underline">Limpiar búsqueda</button>
+                    </div>
+                  );
                   return (
                     <div className="space-y-4">
                       {Object.entries(groups).map(([nit, grupo]) => {
