@@ -1153,6 +1153,7 @@ function App() {
       // 2. Process RIPS
       const newRegistros: RipsRecord[] = [];
       const newUsuariosMap = new Map<string, UserRecord>(usuariosMap);
+      const medDupSet = new Set<string>(); // dedup MEDICAMENTOS por paciente+codigo+fecha
 
       const getSectionFromFilename = (name: string) => {
         const n = name.toUpperCase().replace(/\.[^.]+$/, ''); // quitar extensión
@@ -1311,17 +1312,25 @@ function App() {
             continue;
           }
 
-          // MEDICAMENTOS section: extract patient id + quantity (numDosis field)
+          // MEDICAMENTOS section: formato RIPS AM (comma-delimited)
+          // Col 2=paciente, Col 6=fechaDispensacion, Col 10=codMedicamento, Col 11=nombre, Col 16=CantidadUnidadMedida
           if (section === "MEDICAMENTOS") {
-            const mP2 = l.match(/\b(?:CC|TI|RC|CE|PA|PE|CN|MS)-?\d{4,15}\b|\b\d{6,15}\b/);
-            const pacMed = mP2 ? normalizeId(mP2[0]) : "SIN_ID";
-            if (pacMed === "SIN_ID" || pacMed.length < 3) continue;
-            // Try to find numDosis: last numeric field with value > 0
-            const nums = parts.filter(p => /^\d+$/.test(p) && parseInt(p, 10) > 0).map(p => parseInt(p, 10));
-            const cantidad = nums.length > 0 ? nums[nums.length - 1] : 1;
-            const fecha = parseDateFromLine(l);
+            const medParts = l.replace(/\|+$/, '').split(',').map((s: string) => s.trim());
+            if (medParts.length < 17) continue;
+            const pacMed = normalizeId(medParts[2]);
+            if (!pacMed || pacMed.length < 3) continue;
+            const codMed = (medParts[10] || 'MEDICAM').trim() || 'MEDICAM';
+            const nombreMed = (medParts[11] || 'Medicamento').trim();
+            // Excluir gases y oxígeno medicinal
+            if (/OXIGENO|OXIGEN|GAS\s+MED|OXYGEN/i.test(nombreMed)) continue;
+            const fechaMed = (medParts[6] || '').split(' ')[0].split('T')[0] || parseDateFromLine(l);
+            const cantidad = Math.max(1, parseInt(medParts[16] || '1', 10) || 1);
+            // Dedup por paciente + código + fecha (una dispensación única)
+            const dupKey = `${pacMed}|${codMed}|${fechaMed}`;
+            if (medDupSet.has(dupKey)) continue;
+            medDupSet.add(dupKey);
             for (let q = 0; q < cantidad; q++) {
-              newRegistros.push({ cups: 'MEDICAM', paciente: pacMed, tipo: 'MEDICAMENTOS', nombre: 'Medicamento', fecha });
+              newRegistros.push({ cups: codMed, paciente: pacMed, tipo: 'MEDICAMENTOS', nombre: nombreMed, fecha: fechaMed });
             }
             continue;
           }
@@ -1517,13 +1526,18 @@ function App() {
                   const cupsGuardH = cupsHosp || 'HOSPBC';
                   newRegistros.push({ cups: cupsGuardH, paciente: id, tipo: tipoHosp, nombre: cupsHosp ? getNombre(cupsHosp) : 'Hospitalización Baja Complejidad', fecha: fechaHosp });
                 }
-                // Medicamentos: sum by cantidad (each unit = 1 record)
+                // Medicamentos: usar CantidadUnidadMedida real, excluir gases, dedup por paciente+código+fecha
                 for (const s of servicios.medicamentos || []) {
-                  const fecha = String(s.fechaDispensacion || s.fechaInicioAtencion || '').split('T')[0];
+                  const fecha = String(s.fechaDispensacion || s.fechaInicioAtencion || '').split('T')[0].split(' ')[0];
                   const nombre = String(s.nomGenerico || s.nombre || s.codMedicamento || 'Medicamento');
-                  const cantidad = Math.max(1, parseInt(String(s.cantidad || s.numDosis || 1), 10) || 1);
+                  if (/OXIGENO|OXIGEN|GAS\s+MED|OXYGEN/i.test(nombre)) continue;
+                  const codMed = String(s.codMedicamento || s.codProducto || 'MEDICAM').trim() || 'MEDICAM';
+                  const cantidad = Math.max(1, parseInt(String(s.cantidadUnidadMedida || s.cantidad || s.numDosis || 1), 10) || 1);
+                  const dupKey = `${id}|${codMed}|${fecha}`;
+                  if (medDupSet.has(dupKey)) continue;
+                  medDupSet.add(dupKey);
                   for (let q = 0; q < cantidad; q++) {
-                    newRegistros.push({ cups: 'MEDICAM', paciente: id, tipo: 'MEDICAMENTOS', nombre, fecha });
+                    newRegistros.push({ cups: codMed, paciente: id, tipo: 'MEDICAMENTOS', nombre, fecha });
                   }
                 }
               }
