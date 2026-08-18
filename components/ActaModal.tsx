@@ -465,13 +465,15 @@ export default function ActaModal({
         </div>
       </div>
 
-      {/* ── Aviso persistente: el acta NO se guarda automáticamente ── */}
-      <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-700 flex-shrink-0">
-        <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
-        <p className="text-xs text-amber-700 dark:text-amber-300 font-medium">
-          <strong>Recuerde:</strong> esta acta <strong>NO se guardará automáticamente</strong>. Si cierra sin presionar <em>Guardar</em>, no quedará ningún registro de ella.
-        </p>
-      </div>
+      {/* ── Aviso: solo visible en modo Formulario ── */}
+      {view === 'form' && (
+        <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-700 flex-shrink-0">
+          <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+          <p className="text-xs text-amber-700 dark:text-amber-300 font-medium">
+            <strong>Recuerde:</strong> esta acta <strong>NO se guardará automáticamente</strong>. Si cierra sin presionar <em>Guardar</em>, no quedará ningún registro de ella.
+          </p>
+        </div>
+      )}
 
       <div className={inline ? 'overflow-y-auto custom-scroll' : 'flex-1 overflow-y-auto custom-scroll'}>
 
