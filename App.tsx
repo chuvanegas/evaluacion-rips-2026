@@ -1548,9 +1548,26 @@ function App() {
         }
       }
 
-      setRegistros(newRegistros);
+      // Acumular registros entre archivos. Para MEDICAMENTOS, dedup a nivel de dispensación
+      // (paciente+cups+fecha) para evitar doble-conteo si el mismo archivo se sube dos veces.
+      setRegistros(prev => {
+        const existingMedKeys = new Set<string>();
+        prev.filter(r => r.tipo === 'MEDICAMENTOS').forEach(r => {
+          existingMedKeys.add(`${r.paciente}|${r.cups}|${r.fecha}`);
+        });
+        const seenNewMed = new Set<string>();
+        const toAdd = newRegistros.filter(r => {
+          if (r.tipo !== 'MEDICAMENTOS') return true;
+          const k = `${r.paciente}|${r.cups}|${r.fecha}`;
+          if (existingMedKeys.has(k)) return false; // dispensación ya registrada
+          seenNewMed.add(k);
+          return true;
+        });
+        return [...prev, ...toAdd];
+      });
       setUsuariosMap(newUsuariosMap);
-      setMessage({ type: 'success', text: `Procesado: ${newRegistros.length} registros y ${newUsuariosMap.size} pacientes.` });
+      const numFiles = (ripsFiles?.length || 0) + (jsonFiles?.length || 0);
+      setMessage({ type: 'success', text: `Añadidos ${newRegistros.length} registros de ${numFiles} archivo(s). Suba más archivos para acumular o use "Limpiar datos" para reiniciar.` });
 
     } catch (e) {
       console.error(e);
