@@ -345,7 +345,7 @@ function App() {
         if (savedCustomCups) setCustomCupsList(JSON.parse(savedCustomCups));
 
         // Siempre sincronizar desde Supabase (fuente de verdad)
-        const cloudKeys = ['prestadores', 'actas', 'appUsers', 'funcionarios', 'firmasGlobales', 'customCups'];
+        const cloudKeys = ['prestadores', 'actas', 'appUsers', 'funcionarios', 'firmasGlobales', 'customCups', 'renuncias'];
         const cloudData = await CloudStorage.getAll(cloudKeys);
         if (cloudData['prestadores']?.length > 0) {
           const rawP: Prestador[] = cloudData['prestadores'];
@@ -383,6 +383,7 @@ function App() {
         if (cloudData['funcionarios']?.length > 0) { setFuncionarios(cloudData['funcionarios']); localStorage.setItem('funcionarios', JSON.stringify(cloudData['funcionarios'])); }
         if (cloudData['firmasGlobales'] && Object.keys(cloudData['firmasGlobales']).length > 0) { setFirmasGlobales(cloudData['firmasGlobales']); localStorage.setItem('firmasGlobales', JSON.stringify(cloudData['firmasGlobales'])); }
         if (cloudData['customCups']?.length > 0) { setCustomCupsList(cloudData['customCups']); localStorage.setItem('customCups', JSON.stringify(cloudData['customCups'])); }
+        if (cloudData['renuncias']?.length > 0) { setRenuncias(cloudData['renuncias']); localStorage.setItem('renuncias', JSON.stringify(cloudData['renuncias'])); }
 
         // A partir de aquí, los cambios de estado sí se guardan en Supabase
         cloudInitialized.current = true;
@@ -404,6 +405,43 @@ function App() {
       }
     };
     initData();
+  }, []);
+
+  // Auto-sync desde Supabase cada 60 segundos para ver cambios de otros usuarios
+  useEffect(() => {
+    const poll = async () => {
+      if (!cloudInitialized.current) return;
+      try {
+        const keys = ['prestadores', 'actas', 'appUsers', 'funcionarios', 'firmasGlobales', 'customCups', 'renuncias'];
+        const data = await CloudStorage.getAll(keys);
+        if (data['prestadores']?.length > 0) {
+          setPrestadores(prev => {
+            const cloud: Prestador[] = data['prestadores'];
+            if (JSON.stringify(cloud.map(p => p.id).sort()) === JSON.stringify(prev.map(p => p.id).sort())) return prev;
+            localStorage.setItem('prestadores', JSON.stringify(cloud));
+            return cloud;
+          });
+        }
+        if (data['actas']?.length > 0) {
+          setActas(prev => {
+            const cloudA: Acta[] = data['actas'];
+            const merged = new Map<string, Acta>();
+            [...cloudA, ...prev].forEach(a => { if (!merged.has(a.id)) merged.set(a.id, a); });
+            const result = [...merged.values()];
+            if (result.length === prev.length) return prev;
+            localStorage.setItem('actas', JSON.stringify(result));
+            return result;
+          });
+        }
+        if (data['appUsers']?.length > 0) setUsers(u => JSON.stringify(data['appUsers']) !== JSON.stringify(u) ? data['appUsers'] : u);
+        if (data['funcionarios']?.length > 0) setFuncionarios(f => JSON.stringify(data['funcionarios']) !== JSON.stringify(f) ? data['funcionarios'] : f);
+        if (data['firmasGlobales'] && Object.keys(data['firmasGlobales']).length > 0) setFirmasGlobales(f => JSON.stringify(data['firmasGlobales']) !== JSON.stringify(f) ? data['firmasGlobales'] : f);
+        if (data['customCups']?.length > 0) setCustomCupsList(c => JSON.stringify(data['customCups']) !== JSON.stringify(c) ? data['customCups'] : c);
+        if (data['renuncias']?.length > 0) setRenuncias(r => JSON.stringify(data['renuncias']) !== JSON.stringify(r) ? data['renuncias'] : r);
+      } catch { /* silencioso */ }
+    };
+    const id = setInterval(poll, 60000);
+    return () => clearInterval(id);
   }, []);
 
   // Auto-actualizar scale según meses detectados en los RIPS cargados
@@ -536,6 +574,7 @@ function App() {
   // Save renuncias
   useEffect(() => {
     localStorage.setItem('renuncias', JSON.stringify(renuncias));
+    if (cloudInitialized.current) CloudStorage.set('renuncias', renuncias);
   }, [renuncias]);
 
   // --- Handlers ---
@@ -580,15 +619,37 @@ function App() {
   };
 
   const handleSaveSession = async () => {
-    if (registros.length === 0) {
-      setMessage({ type: 'error', text: 'No hay datos para guardar.' });
-      return;
-    }
     setIsSaving(true);
     try {
-      const success = await StorageService.saveSessionData(registros, Array.from(usuariosMap.values()));
-      if (success) setMessage({ type: 'success', text: 'Datos sincronizados con éxito.' });
-      else setMessage({ type: 'error', text: 'Error guardando datos (Revise conexión o tamaño).' });
+      // Push local data to Supabase
+      await Promise.all([
+        CloudStorage.set('prestadores', prestadores),
+        CloudStorage.set('actas', actas),
+        CloudStorage.set('appUsers', users),
+        CloudStorage.set('funcionarios', funcionarios),
+        CloudStorage.set('firmasGlobales', firmasGlobales),
+        CloudStorage.set('customCups', customCupsList),
+        CloudStorage.set('renuncias', renuncias),
+        ...(registros.length > 0 ? [StorageService.saveSessionData(registros, Array.from(usuariosMap.values()))] : []),
+      ]);
+      // Pull latest from Supabase
+      const keys = ['prestadores', 'actas', 'appUsers', 'funcionarios', 'firmasGlobales', 'customCups', 'renuncias'];
+      const data = await CloudStorage.getAll(keys);
+      if (data['prestadores']?.length > 0) { setPrestadores(data['prestadores']); localStorage.setItem('prestadores', JSON.stringify(data['prestadores'])); }
+      if (data['actas']?.length > 0) {
+        const merged = new Map<string, Acta>();
+        [...(data['actas'] as Acta[]), ...actas].forEach(a => { if (!merged.has(a.id)) merged.set(a.id, a); });
+        const result = deduplicarActas([...merged.values()]);
+        setActas(result); localStorage.setItem('actas', JSON.stringify(result));
+      }
+      if (data['appUsers']?.length > 0) { setUsers(data['appUsers']); localStorage.setItem('appUsers', JSON.stringify(data['appUsers'])); }
+      if (data['funcionarios']?.length > 0) { setFuncionarios(data['funcionarios']); localStorage.setItem('funcionarios', JSON.stringify(data['funcionarios'])); }
+      if (data['firmasGlobales'] && Object.keys(data['firmasGlobales']).length > 0) { setFirmasGlobales(data['firmasGlobales']); localStorage.setItem('firmasGlobales', JSON.stringify(data['firmasGlobales'])); }
+      if (data['customCups']?.length > 0) { setCustomCupsList(data['customCups']); localStorage.setItem('customCups', JSON.stringify(data['customCups'])); }
+      if (data['renuncias']?.length > 0) { setRenuncias(data['renuncias']); localStorage.setItem('renuncias', JSON.stringify(data['renuncias'])); }
+      setMessage({ type: 'success', text: `Sincronizado: ${(data['prestadores'] || prestadores).length} prestadores, ${(data['actas'] || actas).length} actas, ${(data['renuncias'] || renuncias).length} renuncias` });
+    } catch {
+      setMessage({ type: 'error', text: 'Error de sincronización. Revise la conexión.' });
     } finally {
       setIsSaving(false);
     }
