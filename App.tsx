@@ -1288,7 +1288,10 @@ function App() {
 
           if (parts.length < 2) continue;
 
-          if (section !== "USUARIOS") {
+          // Auto-detect USUARIOS only when not in a section with its own structured format.
+          // Never run inside MEDICAMENTOS: drug names are truncated to 30 chars and can
+          // end with a standalone M/F letter that falsely triggers this heuristic.
+          if (section !== "USUARIOS" && section !== "MEDICAMENTOS") {
             const hasDate = /\d{4}-\d{2}-\d{2}|\d{2}\/\d{2}\/\d{4}/.test(l);
             const hasSex = /\b(M|F)\b/i.test(l);
             if (hasDate && hasSex) section = "USUARIOS";
