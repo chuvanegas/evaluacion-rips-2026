@@ -1567,7 +1567,9 @@ function App() {
       });
       setUsuariosMap(newUsuariosMap);
       const numFiles = (ripsFiles?.length || 0) + (jsonFiles?.length || 0);
-      setMessage({ type: 'success', text: `Añadidos ${newRegistros.length} registros de ${numFiles} archivo(s). Suba más archivos para acumular o use "Limpiar datos" para reiniciar.` });
+      const medCount = newRegistros.filter(r => r.tipo === 'MEDICAMENTOS').length;
+      const svcCount = newRegistros.filter(r => r.tipo !== 'MEDICAMENTOS').length;
+      setMessage({ type: 'success', text: `Añadidos ${newRegistros.length} registros (${medCount} medicamentos, ${svcCount} otros servicios) de ${numFiles} archivo(s). Suba más archivos para acumular o use "Limpiar datos" para reiniciar.` });
 
     } catch (e) {
       console.error(e);
