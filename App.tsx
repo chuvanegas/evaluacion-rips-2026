@@ -246,6 +246,7 @@ function App() {
   const [filterRegimen, setFilterRegimen] = useState('');
   const [prestSearch, setPrestSearch] = useState('');
   const [showPrestDropdown, setShowPrestDropdown] = useState(false);
+  const [maintPrestQ, setMaintPrestQ] = useState('');
 
   // Renuncias
   const [renuncias, setRenuncias] = useState<Renuncia[]>(() => {
@@ -344,7 +345,7 @@ function App() {
         if (savedCustomCups) setCustomCupsList(JSON.parse(savedCustomCups));
 
         // Siempre sincronizar desde Supabase (fuente de verdad)
-        const cloudKeys = ['prestadores', 'actas', 'appUsers', 'funcionarios', 'firmasGlobales', 'customCups'];
+        const cloudKeys = ['prestadores', 'actas', 'appUsers', 'funcionarios', 'firmasGlobales', 'customCups', 'renuncias'];
         const cloudData = await CloudStorage.getAll(cloudKeys);
         if (cloudData['prestadores']?.length > 0) {
           const rawP: Prestador[] = cloudData['prestadores'];
@@ -382,6 +383,7 @@ function App() {
         if (cloudData['funcionarios']?.length > 0) { setFuncionarios(cloudData['funcionarios']); localStorage.setItem('funcionarios', JSON.stringify(cloudData['funcionarios'])); }
         if (cloudData['firmasGlobales'] && Object.keys(cloudData['firmasGlobales']).length > 0) { setFirmasGlobales(cloudData['firmasGlobales']); localStorage.setItem('firmasGlobales', JSON.stringify(cloudData['firmasGlobales'])); }
         if (cloudData['customCups']?.length > 0) { setCustomCupsList(cloudData['customCups']); localStorage.setItem('customCups', JSON.stringify(cloudData['customCups'])); }
+        if (cloudData['renuncias']?.length > 0) { setRenuncias(cloudData['renuncias']); localStorage.setItem('renuncias', JSON.stringify(cloudData['renuncias'])); }
 
         // A partir de aquí, los cambios de estado sí se guardan en Supabase
         cloudInitialized.current = true;
@@ -403,6 +405,43 @@ function App() {
       }
     };
     initData();
+  }, []);
+
+  // Auto-sync desde Supabase cada 60 segundos para ver cambios de otros usuarios
+  useEffect(() => {
+    const poll = async () => {
+      if (!cloudInitialized.current) return;
+      try {
+        const keys = ['prestadores', 'actas', 'appUsers', 'funcionarios', 'firmasGlobales', 'customCups', 'renuncias'];
+        const data = await CloudStorage.getAll(keys);
+        if (data['prestadores']?.length > 0) {
+          setPrestadores(prev => {
+            const cloud: Prestador[] = data['prestadores'];
+            if (JSON.stringify(cloud.map(p => p.id).sort()) === JSON.stringify(prev.map(p => p.id).sort())) return prev;
+            localStorage.setItem('prestadores', JSON.stringify(cloud));
+            return cloud;
+          });
+        }
+        if (data['actas']?.length > 0) {
+          setActas(prev => {
+            const cloudA: Acta[] = data['actas'];
+            const merged = new Map<string, Acta>();
+            [...cloudA, ...prev].forEach(a => { if (!merged.has(a.id)) merged.set(a.id, a); });
+            const result = [...merged.values()];
+            if (result.length === prev.length) return prev;
+            localStorage.setItem('actas', JSON.stringify(result));
+            return result;
+          });
+        }
+        if (data['appUsers']?.length > 0) setUsers(u => JSON.stringify(data['appUsers']) !== JSON.stringify(u) ? data['appUsers'] : u);
+        if (data['funcionarios']?.length > 0) setFuncionarios(f => JSON.stringify(data['funcionarios']) !== JSON.stringify(f) ? data['funcionarios'] : f);
+        if (data['firmasGlobales'] && Object.keys(data['firmasGlobales']).length > 0) setFirmasGlobales(f => JSON.stringify(data['firmasGlobales']) !== JSON.stringify(f) ? data['firmasGlobales'] : f);
+        if (data['customCups']?.length > 0) setCustomCupsList(c => JSON.stringify(data['customCups']) !== JSON.stringify(c) ? data['customCups'] : c);
+        if (data['renuncias']?.length > 0) setRenuncias(r => JSON.stringify(data['renuncias']) !== JSON.stringify(r) ? data['renuncias'] : r);
+      } catch { /* silencioso */ }
+    };
+    const id = setInterval(poll, 60000);
+    return () => clearInterval(id);
   }, []);
 
   // Auto-actualizar scale según meses detectados en los RIPS cargados
@@ -535,6 +574,7 @@ function App() {
   // Save renuncias
   useEffect(() => {
     localStorage.setItem('renuncias', JSON.stringify(renuncias));
+    if (cloudInitialized.current) CloudStorage.set('renuncias', renuncias);
   }, [renuncias]);
 
   // --- Handlers ---
@@ -579,15 +619,37 @@ function App() {
   };
 
   const handleSaveSession = async () => {
-    if (registros.length === 0) {
-      setMessage({ type: 'error', text: 'No hay datos para guardar.' });
-      return;
-    }
     setIsSaving(true);
     try {
-      const success = await StorageService.saveSessionData(registros, Array.from(usuariosMap.values()));
-      if (success) setMessage({ type: 'success', text: 'Datos sincronizados con éxito.' });
-      else setMessage({ type: 'error', text: 'Error guardando datos (Revise conexión o tamaño).' });
+      // Push local data to Supabase
+      await Promise.all([
+        CloudStorage.set('prestadores', prestadores),
+        CloudStorage.set('actas', actas),
+        CloudStorage.set('appUsers', users),
+        CloudStorage.set('funcionarios', funcionarios),
+        CloudStorage.set('firmasGlobales', firmasGlobales),
+        CloudStorage.set('customCups', customCupsList),
+        CloudStorage.set('renuncias', renuncias),
+        ...(registros.length > 0 ? [StorageService.saveSessionData(registros, Array.from(usuariosMap.values()))] : []),
+      ]);
+      // Pull latest from Supabase
+      const keys = ['prestadores', 'actas', 'appUsers', 'funcionarios', 'firmasGlobales', 'customCups', 'renuncias'];
+      const data = await CloudStorage.getAll(keys);
+      if (data['prestadores']?.length > 0) { setPrestadores(data['prestadores']); localStorage.setItem('prestadores', JSON.stringify(data['prestadores'])); }
+      if (data['actas']?.length > 0) {
+        const merged = new Map<string, Acta>();
+        [...(data['actas'] as Acta[]), ...actas].forEach(a => { if (!merged.has(a.id)) merged.set(a.id, a); });
+        const result = deduplicarActas([...merged.values()]);
+        setActas(result); localStorage.setItem('actas', JSON.stringify(result));
+      }
+      if (data['appUsers']?.length > 0) { setUsers(data['appUsers']); localStorage.setItem('appUsers', JSON.stringify(data['appUsers'])); }
+      if (data['funcionarios']?.length > 0) { setFuncionarios(data['funcionarios']); localStorage.setItem('funcionarios', JSON.stringify(data['funcionarios'])); }
+      if (data['firmasGlobales'] && Object.keys(data['firmasGlobales']).length > 0) { setFirmasGlobales(data['firmasGlobales']); localStorage.setItem('firmasGlobales', JSON.stringify(data['firmasGlobales'])); }
+      if (data['customCups']?.length > 0) { setCustomCupsList(data['customCups']); localStorage.setItem('customCups', JSON.stringify(data['customCups'])); }
+      if (data['renuncias']?.length > 0) { setRenuncias(data['renuncias']); localStorage.setItem('renuncias', JSON.stringify(data['renuncias'])); }
+      setMessage({ type: 'success', text: `Sincronizado: ${(data['prestadores'] || prestadores).length} prestadores, ${(data['actas'] || actas).length} actas, ${(data['renuncias'] || renuncias).length} renuncias` });
+    } catch {
+      setMessage({ type: 'error', text: 'Error de sincronización. Revise la conexión.' });
     } finally {
       setIsSaving(false);
     }
@@ -1091,6 +1153,7 @@ function App() {
       // 2. Process RIPS
       const newRegistros: RipsRecord[] = [];
       const newUsuariosMap = new Map<string, UserRecord>(usuariosMap);
+      const medDupSet = new Set<string>(); // dedup MEDICAMENTOS por paciente+codigo+fecha
 
       const getSectionFromFilename = (name: string) => {
         const n = name.toUpperCase().replace(/\.[^.]+$/, ''); // quitar extensión
@@ -1249,17 +1312,25 @@ function App() {
             continue;
           }
 
-          // MEDICAMENTOS section: extract patient id + quantity (numDosis field)
+          // MEDICAMENTOS section: formato RIPS AM (comma-delimited)
+          // Col 2=paciente, Col 6=fechaDispensacion, Col 10=codMedicamento, Col 11=nombre, Col 16=CantidadUnidadMedida
           if (section === "MEDICAMENTOS") {
-            const mP2 = l.match(/\b(?:CC|TI|RC|CE|PA|PE|CN|MS)-?\d{4,15}\b|\b\d{6,15}\b/);
-            const pacMed = mP2 ? normalizeId(mP2[0]) : "SIN_ID";
-            if (pacMed === "SIN_ID" || pacMed.length < 3) continue;
-            // Try to find numDosis: last numeric field with value > 0
-            const nums = parts.filter(p => /^\d+$/.test(p) && parseInt(p, 10) > 0).map(p => parseInt(p, 10));
-            const cantidad = nums.length > 0 ? nums[nums.length - 1] : 1;
-            const fecha = parseDateFromLine(l);
+            const medParts = l.replace(/\|+$/, '').split(',').map((s: string) => s.trim());
+            if (medParts.length < 17) continue;
+            const pacMed = normalizeId(medParts[2]);
+            if (!pacMed || pacMed.length < 3) continue;
+            const codMed = (medParts[10] || 'MEDICAM').trim() || 'MEDICAM';
+            const nombreMed = (medParts[11] || 'Medicamento').trim();
+            // Excluir gases y oxígeno medicinal
+            if (/OXIGENO|OXIGEN|GAS\s+MED|OXYGEN/i.test(nombreMed)) continue;
+            const fechaMed = (medParts[6] || '').split(' ')[0].split('T')[0] || parseDateFromLine(l);
+            const cantidad = Math.max(1, parseInt(medParts[16] || '1', 10) || 1);
+            // Dedup por paciente + código + fecha (una dispensación única)
+            const dupKey = `${pacMed}|${codMed}|${fechaMed}`;
+            if (medDupSet.has(dupKey)) continue;
+            medDupSet.add(dupKey);
             for (let q = 0; q < cantidad; q++) {
-              newRegistros.push({ cups: 'MEDICAM', paciente: pacMed, tipo: 'MEDICAMENTOS', nombre: 'Medicamento', fecha });
+              newRegistros.push({ cups: codMed, paciente: pacMed, tipo: 'MEDICAMENTOS', nombre: nombreMed, fecha: fechaMed });
             }
             continue;
           }
@@ -1455,13 +1526,18 @@ function App() {
                   const cupsGuardH = cupsHosp || 'HOSPBC';
                   newRegistros.push({ cups: cupsGuardH, paciente: id, tipo: tipoHosp, nombre: cupsHosp ? getNombre(cupsHosp) : 'Hospitalización Baja Complejidad', fecha: fechaHosp });
                 }
-                // Medicamentos: sum by cantidad (each unit = 1 record)
+                // Medicamentos: usar CantidadUnidadMedida real, excluir gases, dedup por paciente+código+fecha
                 for (const s of servicios.medicamentos || []) {
-                  const fecha = String(s.fechaDispensacion || s.fechaInicioAtencion || '').split('T')[0];
+                  const fecha = String(s.fechaDispensacion || s.fechaInicioAtencion || '').split('T')[0].split(' ')[0];
                   const nombre = String(s.nomGenerico || s.nombre || s.codMedicamento || 'Medicamento');
-                  const cantidad = Math.max(1, parseInt(String(s.cantidad || s.numDosis || 1), 10) || 1);
+                  if (/OXIGENO|OXIGEN|GAS\s+MED|OXYGEN/i.test(nombre)) continue;
+                  const codMed = String(s.codMedicamento || s.codProducto || 'MEDICAM').trim() || 'MEDICAM';
+                  const cantidad = Math.max(1, parseInt(String(s.cantidadUnidadMedida || s.cantidad || s.numDosis || 1), 10) || 1);
+                  const dupKey = `${id}|${codMed}|${fecha}`;
+                  if (medDupSet.has(dupKey)) continue;
+                  medDupSet.add(dupKey);
                   for (let q = 0; q < cantidad; q++) {
-                    newRegistros.push({ cups: 'MEDICAM', paciente: id, tipo: 'MEDICAMENTOS', nombre, fecha });
+                    newRegistros.push({ cups: codMed, paciente: id, tipo: 'MEDICAMENTOS', nombre, fecha });
                   }
                 }
               }
@@ -1472,9 +1548,26 @@ function App() {
         }
       }
 
-      setRegistros(newRegistros);
+      // Acumular registros entre archivos. Para MEDICAMENTOS, dedup a nivel de dispensación
+      // (paciente+cups+fecha) para evitar doble-conteo si el mismo archivo se sube dos veces.
+      setRegistros(prev => {
+        const existingMedKeys = new Set<string>();
+        prev.filter(r => r.tipo === 'MEDICAMENTOS').forEach(r => {
+          existingMedKeys.add(`${r.paciente}|${r.cups}|${r.fecha}`);
+        });
+        const seenNewMed = new Set<string>();
+        const toAdd = newRegistros.filter(r => {
+          if (r.tipo !== 'MEDICAMENTOS') return true;
+          const k = `${r.paciente}|${r.cups}|${r.fecha}`;
+          if (existingMedKeys.has(k)) return false; // dispensación ya registrada
+          seenNewMed.add(k);
+          return true;
+        });
+        return [...prev, ...toAdd];
+      });
       setUsuariosMap(newUsuariosMap);
-      setMessage({ type: 'success', text: `Procesado: ${newRegistros.length} registros y ${newUsuariosMap.size} pacientes.` });
+      const numFiles = (ripsFiles?.length || 0) + (jsonFiles?.length || 0);
+      setMessage({ type: 'success', text: `Añadidos ${newRegistros.length} registros de ${numFiles} archivo(s). Suba más archivos para acumular o use "Limpiar datos" para reiniciar.` });
 
     } catch (e) {
       console.error(e);
@@ -2323,7 +2416,18 @@ function App() {
                 <FileWarning className="h-5 w-5 text-amber-500" />
                 Renuencias y Búsquedas Fallidas
               </h2>
-              <span className="text-[10px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 px-2 py-0.5 rounded-full font-semibold">Se suman al ejecutado</span>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 px-2 py-0.5 rounded-full font-semibold">Se suman al ejecutado</span>
+                {metas.some(m => (m.renuencias || 0) > 0) && (
+                  <button
+                    onClick={() => setMetas(prev => prev.map(m => ({ ...m, renuencias: 0 })))}
+                    className="text-[10px] text-slate-500 hover:text-red-600 dark:hover:text-red-400 border border-slate-200 dark:border-slate-700 hover:border-red-300 dark:hover:border-red-500/40 px-2 py-0.5 rounded-full transition-colors font-medium"
+                    title="Poner todos los valores en cero"
+                  >
+                    Limpiar todo
+                  </button>
+                )}
+              </div>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
               {metas.filter(m => m.active).map((m, idx) => {
@@ -3035,6 +3139,21 @@ function App() {
                   </div>
                 </div>
 
+                {/* Search bar */}
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Buscar por nombre, NIT o contrato…"
+                    value={maintPrestQ}
+                    onChange={e => setMaintPrestQ(e.target.value)}
+                    className="w-full pl-9 pr-9 py-2.5 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
+                  />
+                  {maintPrestQ && (
+                    <button onClick={() => setMaintPrestQ('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-lg leading-none">×</button>
+                  )}
+                </div>
+
                 {prestadores.length === 0 ? (
                   <div className="glass-panel rounded-2xl p-10 flex flex-col items-center justify-center text-center gap-4 border-2 border-dashed border-slate-300 dark:border-slate-700">
                     <Building2 className="h-12 w-12 text-slate-400 dark:text-slate-600" />
@@ -3045,8 +3164,23 @@ function App() {
                   </div>
                 ) : (() => {
                   // Group prestadores by NIT
+                  const q = maintPrestQ.toLowerCase().trim();
+                  const visiblePrestadores = q
+                    ? prestadores.filter(p =>
+                        p.nombre.toLowerCase().includes(q) ||
+                        p.nit.toLowerCase().includes(q) ||
+                        p.contrato.toLowerCase().includes(q)
+                      )
+                    : prestadores;
                   const groups: Record<string, Prestador[]> = {};
-                  prestadores.forEach(p => { (groups[p.nit] = groups[p.nit] || []).push(p); });
+                  visiblePrestadores.forEach(p => { (groups[p.nit] = groups[p.nit] || []).push(p); });
+                  if (Object.keys(groups).length === 0) return (
+                    <div className="glass-panel rounded-2xl p-10 flex flex-col items-center justify-center text-center gap-3 border-2 border-dashed border-slate-300 dark:border-slate-700">
+                      <Search className="h-10 w-10 text-slate-300 dark:text-slate-700" />
+                      <p className="font-semibold text-slate-500">Sin resultados para "<span className="text-slate-700 dark:text-slate-300">{maintPrestQ}</span>"</p>
+                      <button onClick={() => setMaintPrestQ('')} className="text-xs text-indigo-500 hover:underline">Limpiar búsqueda</button>
+                    </div>
+                  );
                   return (
                     <div className="space-y-4">
                       {Object.entries(groups).map(([nit, grupo]) => {
