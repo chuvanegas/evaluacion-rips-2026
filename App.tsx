@@ -2324,7 +2324,18 @@ function App() {
                 <FileWarning className="h-5 w-5 text-amber-500" />
                 Renuencias y Búsquedas Fallidas
               </h2>
-              <span className="text-[10px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 px-2 py-0.5 rounded-full font-semibold">Se suman al ejecutado</span>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 px-2 py-0.5 rounded-full font-semibold">Se suman al ejecutado</span>
+                {metas.some(m => (m.renuencias || 0) > 0) && (
+                  <button
+                    onClick={() => setMetas(prev => prev.map(m => ({ ...m, renuencias: 0 })))}
+                    className="text-[10px] text-slate-500 hover:text-red-600 dark:hover:text-red-400 border border-slate-200 dark:border-slate-700 hover:border-red-300 dark:hover:border-red-500/40 px-2 py-0.5 rounded-full transition-colors font-medium"
+                    title="Poner todos los valores en cero"
+                  >
+                    Limpiar todo
+                  </button>
+                )}
+              </div>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
               {metas.filter(m => m.active).map((m, idx) => {
