@@ -10,7 +10,7 @@ import {
   Settings, Plus, Pencil, Check, Building2, ClipboardList, LogOut, ShieldCheck, User, Lock, Eye, EyeOff, HardDrive
 } from 'lucide-react';
 import {
-  normalizeId, parseDateFromLine, TIPOS_SERVICIOS_DEFAULT, TIPOS_ASISTENCIAL, TIPOS_ESPECIALIDADES, TIPOS_CAPITA_AMPLIADA, CUPS_TIPO_MAP,
+  normalizeId, parseDateFromLine, TIPOS_SERVICIOS_DEFAULT, TIPOS_ASISTENCIAL, TIPOS_ESPECIALIDADES, TIPOS_CAPITA_AMPLIADA, TIPOS_PAI, CUPS_TIPO_MAP,
   edadDetallada, grupoEtarioDesdeFN
 } from './utils/logic';
 import {
@@ -4217,8 +4217,8 @@ function App() {
                   <select
                     value={prestForm.tipoContrato || 'ASISTENCIAL'}
                     onChange={e => {
-                      const tipo = e.target.value as 'ASISTENCIAL' | 'ESPECIALIDADES' | 'CAPITA AMPLIADA';
-                      const lista = tipo === 'ESPECIALIDADES' ? TIPOS_ESPECIALIDADES : tipo === 'CAPITA AMPLIADA' ? TIPOS_CAPITA_AMPLIADA : TIPOS_ASISTENCIAL;
+                      const tipo = e.target.value as 'ASISTENCIAL' | 'ESPECIALIDADES' | 'CAPITA AMPLIADA' | 'PAI';
+                      const lista = tipo === 'ESPECIALIDADES' ? TIPOS_ESPECIALIDADES : tipo === 'CAPITA AMPLIADA' ? TIPOS_CAPITA_AMPLIADA : tipo === 'PAI' ? TIPOS_PAI : TIPOS_ASISTENCIAL;
                       const savedMap = new Map((prestForm.metas || []).map(m => [m.type, m]));
                       const newMetas = lista.map(t => savedMap.get(t) ?? { type: t, monthlyGoal: 0, active: true });
                       setPrestForm(f => ({ ...f, tipoContrato: tipo, metas: newMetas }));
@@ -4228,18 +4228,19 @@ function App() {
                     <option value="ASISTENCIAL">ASISTENCIAL</option>
                     <option value="ESPECIALIDADES">ESPECIALIDADES</option>
                     <option value="CAPITA AMPLIADA">CAPITA AMPLIADA</option>
+                    <option value="PAI">PAI</option>
                   </select>
                 </div>
               </div>
 
               <div>
-                <h3 className={`text-sm font-semibold mb-3 flex items-center gap-2 ${(prestForm.tipoContrato || 'ASISTENCIAL') === 'ESPECIALIDADES' ? 'text-purple-700 dark:text-purple-300' : (prestForm.tipoContrato || 'ASISTENCIAL') === 'CAPITA AMPLIADA' ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-700 dark:text-slate-300'}`}>
-                  <TrendingUp className={`h-4 w-4 ${(prestForm.tipoContrato || 'ASISTENCIAL') === 'ESPECIALIDADES' ? 'text-purple-500' : (prestForm.tipoContrato || 'ASISTENCIAL') === 'CAPITA AMPLIADA' ? 'text-emerald-500' : 'text-indigo-500'}`} />
-                  Metas Mensuales — {(prestForm.tipoContrato || 'ASISTENCIAL') === 'ESPECIALIDADES' ? 'Especialidades' : (prestForm.tipoContrato || 'ASISTENCIAL') === 'CAPITA AMPLIADA' ? 'Cápita Ampliada' : 'Servicios Asistenciales'}
+                <h3 className={`text-sm font-semibold mb-3 flex items-center gap-2 ${(prestForm.tipoContrato || 'ASISTENCIAL') === 'ESPECIALIDADES' ? 'text-purple-700 dark:text-purple-300' : (prestForm.tipoContrato || 'ASISTENCIAL') === 'CAPITA AMPLIADA' ? 'text-emerald-700 dark:text-emerald-300' : (prestForm.tipoContrato || 'ASISTENCIAL') === 'PAI' ? 'text-orange-700 dark:text-orange-300' : 'text-slate-700 dark:text-slate-300'}`}>
+                  <TrendingUp className={`h-4 w-4 ${(prestForm.tipoContrato || 'ASISTENCIAL') === 'ESPECIALIDADES' ? 'text-purple-500' : (prestForm.tipoContrato || 'ASISTENCIAL') === 'CAPITA AMPLIADA' ? 'text-emerald-500' : (prestForm.tipoContrato || 'ASISTENCIAL') === 'PAI' ? 'text-orange-500' : 'text-indigo-500'}`} />
+                  Metas Mensuales — {(prestForm.tipoContrato || 'ASISTENCIAL') === 'ESPECIALIDADES' ? 'Especialidades' : (prestForm.tipoContrato || 'ASISTENCIAL') === 'CAPITA AMPLIADA' ? 'Cápita Ampliada' : (prestForm.tipoContrato || 'ASISTENCIAL') === 'PAI' ? 'PAI — Biológicos' : 'Servicios Asistenciales'}
                 </h3>
                 <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
                   <table className="w-full text-sm">
-                    <thead className={`text-xs uppercase text-slate-500 dark:text-slate-400 ${(prestForm.tipoContrato || 'ASISTENCIAL') === 'ESPECIALIDADES' ? 'bg-purple-50 dark:bg-purple-950/30' : (prestForm.tipoContrato || 'ASISTENCIAL') === 'CAPITA AMPLIADA' ? 'bg-emerald-50 dark:bg-emerald-950/30' : 'bg-slate-100/80 dark:bg-slate-950/60'}`}>
+                    <thead className={`text-xs uppercase text-slate-500 dark:text-slate-400 ${(prestForm.tipoContrato || 'ASISTENCIAL') === 'ESPECIALIDADES' ? 'bg-purple-50 dark:bg-purple-950/30' : (prestForm.tipoContrato || 'ASISTENCIAL') === 'CAPITA AMPLIADA' ? 'bg-emerald-50 dark:bg-emerald-950/30' : (prestForm.tipoContrato || 'ASISTENCIAL') === 'PAI' ? 'bg-orange-50 dark:bg-orange-950/30' : 'bg-slate-100/80 dark:bg-slate-950/60'}`}>
                       <tr>
                         <th className="px-4 py-2 text-left">Servicio</th>
                         <th className="px-4 py-2 text-center w-40">Estado</th>
@@ -4252,6 +4253,8 @@ function App() {
                           ? TIPOS_ESPECIALIDADES.includes(m.type)
                           : (prestForm.tipoContrato || 'ASISTENCIAL') === 'CAPITA AMPLIADA'
                           ? TIPOS_CAPITA_AMPLIADA.includes(m.type)
+                          : (prestForm.tipoContrato || 'ASISTENCIAL') === 'PAI'
+                          ? TIPOS_PAI.includes(m.type)
                           : TIPOS_ASISTENCIAL.includes(m.type)
                       ).map((m, _) => {
                         const idx = prestForm.metas.findIndex(x => x.type === m.type);

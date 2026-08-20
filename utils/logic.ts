@@ -156,6 +156,21 @@ const CUPS_MAP_RAW: [string, string[]][] = [
   ["NUTRICION", [
     "890206","890306"
   ]],
+  // PAI — Programa Ampliado de Inmunización (AP)
+  ["BCG (TUBERCULOSIS)", ["993102"]],
+  ["HEPATITIS B PAI", ["993503"]],
+  ["POLIO PAI", ["993501"]],
+  ["PENTAVALENTE PAI", ["993130"]],
+  ["ROTAVIRUS PAI", ["993512"]],
+  ["NEUMOCOCO PAI", ["993106"]],
+  ["INFLUENZA PAI", ["993104"]],
+  ["SRP PAI", ["993522"]],
+  ["FIEBRE AMARILLA PAI", ["993504"]],
+  ["VARICELA PAI", ["993509"]],
+  ["HEPATITIS A PAI", ["993502"]],
+  ["DPT/TDAP PAI", ["993122"]],
+  ["VPH PAI", ["993513"]],
+  ["TD PAI", ["993120"]],
 ];
 
 export const CUPS_TIPO_MAP: Record<string, string> = {};
@@ -203,6 +218,23 @@ export const TIPOS_ESPECIALIDADES = [
   "MEDICINA INTERNA",
   "NUTRICION",
   "PSICOLOGIA",
+];
+
+export const TIPOS_PAI = [
+  "BCG (TUBERCULOSIS)",
+  "HEPATITIS B PAI",
+  "POLIO PAI",
+  "PENTAVALENTE PAI",
+  "ROTAVIRUS PAI",
+  "NEUMOCOCO PAI",
+  "INFLUENZA PAI",
+  "SRP PAI",
+  "FIEBRE AMARILLA PAI",
+  "VARICELA PAI",
+  "HEPATITIS A PAI",
+  "DPT/TDAP PAI",
+  "VPH PAI",
+  "TD PAI",
 ];
 
 export const TIPOS_CAPITA_AMPLIADA = [
