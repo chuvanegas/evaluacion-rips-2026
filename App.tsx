@@ -927,7 +927,20 @@ function App() {
   const sanitizeActaServicios = (acta: Acta): Acta => {
     const p = prestadores.find(x => x.id === acta.prestadorId) || prestadores.find(x => x.nit === acta.nit);
     if (!p) return acta;
+
+    // PAI: consolidate individual vaccine entries into a single 'PAI' entry
+    if (p.tipoContrato === 'PAI') {
+      const paiServs = acta.servicios.filter(s => TIPOS_PAI.includes(s.tipo) || s.tipo === 'PAI');
+      if (paiServs.length > 0 && !(paiServs.length === 1 && paiServs[0].tipo === 'PAI')) {
+        const totalProg = paiServs.reduce((sum, s) => sum + s.programado, 0);
+        const totalEjec = paiServs.reduce((sum, s) => sum + s.ejecutado, 0);
+        return { ...acta, servicios: [{ tipo: 'PAI', programado: totalProg, ejecutado: totalEjec }] };
+      }
+    }
+
     const contratados = new Set(p.metas.filter(m => m.active && m.monthlyGoal > 0).map(m => m.type));
+    // For PAI prestador, 'PAI' is always valid even if not in individual metas
+    if (p.tipoContrato === 'PAI') contratados.add('PAI');
     const serviciosFiltrados = acta.servicios.filter(s => contratados.has(s.tipo));
     if (serviciosFiltrados.length === acta.servicios.length) return acta;
     return { ...acta, servicios: serviciosFiltrados };
