@@ -861,17 +861,19 @@ function App() {
     let numero = `${p.contrato}-${seq}`;
     while (actas.some(a => a.numero === numero)) { seq++; numero = `${p.contrato}-${seq}`; }
     const ripsPertenecenAlPrestador = detectedPrestadorId === p.id;
-    const servicios: ActaServicio[] = p.metas
-      .filter(m => m.active && m.monthlyGoal > 0)
-      .map(m => {
-        const ejecutado = (ripsPertenecenAlPrestador && metas.find(x => x.type === m.type)) ?
-          (chartData.find(c => c.name === m.type)?.ejecutado || 0) : 0;
-        return {
-          tipo: m.type,
-          programado: m.monthlyGoal * scale,
-          ejecutado
-        };
-      });
+    const isPAIPrestador = p.tipoContrato === 'PAI';
+    const servicios: ActaServicio[] = isPAIPrestador
+      ? [{
+          tipo: 'PAI',
+          programado: p.metas.filter(m => m.active && TIPOS_PAI.includes(m.type))
+            .reduce((s, m) => s + m.monthlyGoal * scale, 0),
+          ejecutado: ripsPertenecenAlPrestador ? (chartData[0]?.ejecutado || 0) : 0
+        }]
+      : p.metas.filter(m => m.active && m.monthlyGoal > 0).map(m => {
+          const ejecutado = (ripsPertenecenAlPrestador && metas.find(x => x.type === m.type))
+            ? (chartData.find(c => c.name === m.type)?.ejecutado || 0) : 0;
+          return { tipo: m.type, programado: m.monthlyGoal * scale, ejecutado };
+        });
     if (!ripsPertenecenAlPrestador && registros.length > 0) {
       setMessage({ type: 'info', text: `Los RIPS cargados no corresponden a ${p.nombre}. Los valores ejecutados se muestran en 0. Carga los RIPS de este prestador para ver los datos correctos.` });
     }
@@ -964,11 +966,21 @@ function App() {
       objetivo: 'Verificar la ejecución de la efectiva prestación de los servicios, cumplimiento de metas reflejadas en los RIPS cargados y facturas radicadas por parte de los prestadores de la red de atención primaria bajo la modalidad de cápita, según los anexos 11, 13, 14 y 17.',
       desarrolloYConclusiones: 'Se realiza la evaluación de la ejecución de las actividades contenidas en las rutas de atención en salud correspondientes al período evaluado. En donde se evidencia lo relacionado en la gráfica 1.',
       desarrolloConclusionesPost: 'Se verifica la ejecución de las actividades de atención primaria, correspondientes a la vigencia antes mencionada, se aclara que se debe cumplir con mínimo el 100% de las actividades programadas para los servicios Asistenciales, a continuación, se relaciona en la tabla 2. el resultado obtenido:',
-      servicios: metas.filter(m => m.active).map(m => ({
-        tipo: m.type,
-        programado: m.monthlyGoal * scale,
-        ejecutado: chartData.find(c => c.name === m.type)?.ejecutado || 0
-      })),
+      servicios: (() => {
+        const dpBlank = detectedPrestadorId ? prestadores.find(p => p.id === detectedPrestadorId) : null;
+        if (dpBlank?.tipoContrato === 'PAI') {
+          return [{
+            tipo: 'PAI',
+            programado: metas.filter(m => m.active && TIPOS_PAI.includes(m.type)).reduce((s, m) => s + m.monthlyGoal * scale, 0),
+            ejecutado: chartData[0]?.ejecutado || 0
+          }];
+        }
+        return metas.filter(m => m.active).map(m => ({
+          tipo: m.type,
+          programado: m.monthlyGoal * scale,
+          ejecutado: chartData.find(c => c.name === m.type)?.ejecutado || 0
+        }));
+      })(),
       observaciones: '',
       repLegalIPS: '',
       repLegalEPS: firmasGlobales.repLegalEPSI,
@@ -2584,7 +2596,7 @@ function App() {
                       cursor={{fill: chartColors.grid, opacity: 0.5}}
                     />
                     <Legend verticalAlign="top" height={36}/>
-                    <Bar dataKey="ejecutado" name="Ejecutado (Real)" fill="#10b981" radius={[4, 4, 0, 0]} isAnimationActive={false}>
+                    <Bar dataKey="ejecutado" name="Ejecutado (Real)" fill="#10b981" radius={[4, 4, 0, 0]} isAnimationActive={false} maxBarSize={120}>
                       <LabelList dataKey="ejecutado" position="top" fill={theme === 'dark' ? "#ffffff" : "#0f172a"} fontSize={10} />
                     </Bar>
                   </BarChart>
@@ -2623,7 +2635,7 @@ function App() {
                     ]}/>
                     <ReferenceLine y={80} stroke="#eab308" strokeDasharray="3 3" />
                     <ReferenceLine y={100} stroke="#10b981" strokeDasharray="3 3" />
-                    <Bar dataKey="cumplimiento" name="%" radius={[4, 4, 0, 0]} minPointSize={3} isAnimationActive={false}>
+                    <Bar dataKey="cumplimiento" name="%" radius={[4, 4, 0, 0]} minPointSize={3} isAnimationActive={false} maxBarSize={120}>
                       {chartData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
@@ -4057,14 +4069,19 @@ function App() {
                         || prestadores.find(x => x.nit === inlineActa.nit);
                       if (!p) { setMessage({ type: 'error', text: 'No se encontró el prestador de esta acta. Verifica el NIT.' }); return; }
                       const ripsPertenecenAlPrestador = detectedPrestadorId === p.id;
-                      const nuevosServicios: ActaServicio[] = p.metas
-                        .filter(m => m.active && m.monthlyGoal > 0)
-                        .map(m => ({
-                          tipo: m.type,
-                          programado: m.monthlyGoal * scale,
-                          ejecutado: (ripsPertenecenAlPrestador && metas.find(x => x.type === m.type))
-                            ? (chartData.find(c => c.name === m.type)?.ejecutado || 0) : 0
-                        }));
+                      const nuevosServicios: ActaServicio[] = p.tipoContrato === 'PAI'
+                        ? [{
+                            tipo: 'PAI',
+                            programado: p.metas.filter(m => m.active && TIPOS_PAI.includes(m.type))
+                              .reduce((s, m) => s + m.monthlyGoal * scale, 0),
+                            ejecutado: ripsPertenecenAlPrestador ? (chartData[0]?.ejecutado || 0) : 0
+                          }]
+                        : p.metas.filter(m => m.active && m.monthlyGoal > 0).map(m => ({
+                            tipo: m.type,
+                            programado: m.monthlyGoal * scale,
+                            ejecutado: (ripsPertenecenAlPrestador && metas.find(x => x.type === m.type))
+                              ? (chartData.find(c => c.name === m.type)?.ejecutado || 0) : 0
+                          }));
                       setInlineActa(prev => prev ? { ...prev, servicios: nuevosServicios } : prev);
                       setMessage({ type: 'success', text: `Servicios actualizados desde ${p.nombre}.` });
                     }}
