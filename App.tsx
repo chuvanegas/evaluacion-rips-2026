@@ -1658,25 +1658,42 @@ function App() {
     });
 
     // Chart Data Preparation
-    const chartData: ChartDataPoint[] = metas
-      .filter(m => m.active)
-      .map(m => {
-        const ejecutadoRips = typeCount[m.type] || 0;
-        const ejecutado = ejecutadoRips + (m.renuencias || 0);
-        const totalMeta = m.monthlyGoal * scale;
-        let pct = totalMeta > 0 ? Math.round((ejecutado / totalMeta) * 100) : 0;
-        const capPct = pct > 100 ? 100 : pct;
+    const detectedPrest = detectedPrestadorId ? prestadores.find(p => p.id === detectedPrestadorId) : null;
+    const isPAI = detectedPrest?.tipoContrato === 'PAI';
 
-        const color = "#10b981";
-
-        return {
-          name: m.type,
-          meta: totalMeta,
-          ejecutado,
-          cumplimiento: capPct,
-          color
-        };
-      });
+    let chartData: ChartDataPoint[];
+    if (isPAI) {
+      // PAI: collapse all vaccine types into a single "PAI" bar
+      const totalEjecutado = TIPOS_PAI.reduce((sum, t) => sum + (typeCount[t] || 0), 0)
+        + metas.filter(m => TIPOS_PAI.includes(m.type)).reduce((sum, m) => sum + (m.renuencias || 0), 0);
+      const totalMeta = metas.filter(m => TIPOS_PAI.includes(m.type) && m.active)
+        .reduce((sum, m) => sum + m.monthlyGoal * scale, 0);
+      const pct = totalMeta > 0 ? Math.min(100, Math.round((totalEjecutado / totalMeta) * 100)) : 0;
+      chartData = [{
+        name: 'PAI',
+        meta: totalMeta,
+        ejecutado: totalEjecutado,
+        cumplimiento: pct,
+        color: '#10b981'
+      }];
+    } else {
+      chartData = metas
+        .filter(m => m.active)
+        .map(m => {
+          const ejecutadoRips = typeCount[m.type] || 0;
+          const ejecutado = ejecutadoRips + (m.renuencias || 0);
+          const totalMeta = m.monthlyGoal * scale;
+          let pct = totalMeta > 0 ? Math.round((ejecutado / totalMeta) * 100) : 0;
+          const capPct = pct > 100 ? 100 : pct;
+          return {
+            name: m.type,
+            meta: totalMeta,
+            ejecutado,
+            cumplimiento: capPct,
+            color: '#10b981'
+          };
+        });
+    }
 
     // Ranking CUPS
     const rankingCUPS: RankingCupsItem[] = Object.entries(cupsCount)
@@ -1743,7 +1760,7 @@ function App() {
 
     return { stats, chartData, rankingCUPS, rankingPacientes, duplicatesList };
 
-  }, [registros, metas, scale, usuariosMap]);
+  }, [registros, metas, scale, usuariosMap, detectedPrestadorId, prestadores]);
 
   // --- Search Logic for Raw Rips ---
   const filteredRawRips = useMemo(() => {
