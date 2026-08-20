@@ -232,7 +232,15 @@ function App() {
       const s = localStorage.getItem('actas');
       if (!s) return [];
       const raw: Acta[] = JSON.parse(s);
-      const clean = deduplicarActas(raw);
+      // Migrate: consolidate old PAI actas that have individual vaccine services
+      const migrated = raw.map(acta => {
+        const paiServs = acta.servicios.filter((sv: ActaServicio) => TIPOS_PAI.includes(sv.tipo));
+        if (paiServs.length <= 1) return acta; // nothing to consolidate
+        const totalProg = paiServs.reduce((sum: number, sv: ActaServicio) => sum + sv.programado, 0);
+        const totalEjec = paiServs.reduce((sum: number, sv: ActaServicio) => sum + sv.ejecutado, 0);
+        return { ...acta, servicios: [{ tipo: 'PAI', programado: totalProg, ejecutado: totalEjec }] };
+      });
+      const clean = deduplicarActas(migrated);
       localStorage.setItem('actas', JSON.stringify(clean));
       return clean;
     } catch { return []; }
@@ -368,7 +376,14 @@ function App() {
             const pct = (x: Acta) => { const p = x.servicios.reduce((s, sv) => s + sv.programado, 0); const e = x.servicios.reduce((s, sv) => s + Math.min(sv.ejecutado, sv.programado), 0); return p > 0 ? e / p : 0; };
             if (!ex || pct(a) > pct(ex)) merged.set(a.id, a);
           });
-          const cleanCloud = deduplicarActas([...merged.values()]);
+          const migratedCloud = [...merged.values()].map(acta => {
+            const paiServs = acta.servicios.filter((sv: ActaServicio) => TIPOS_PAI.includes(sv.tipo));
+            if (paiServs.length <= 1) return acta;
+            const totalProg = paiServs.reduce((sum: number, sv: ActaServicio) => sum + sv.programado, 0);
+            const totalEjec = paiServs.reduce((sum: number, sv: ActaServicio) => sum + sv.ejecutado, 0);
+            return { ...acta, servicios: [{ tipo: 'PAI', programado: totalProg, ejecutado: totalEjec }] };
+          });
+          const cleanCloud = deduplicarActas(migratedCloud);
           setActas(cleanCloud);
           localStorage.setItem('actas', JSON.stringify(cleanCloud));
           // Solo actualizar backup si el resultado tiene >= actas que el respaldo actual
