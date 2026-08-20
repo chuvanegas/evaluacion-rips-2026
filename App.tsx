@@ -595,7 +595,7 @@ function App() {
   // --- Handlers ---
 
   const handleClearData = async () => {
-    if (confirm('¿Estás seguro de eliminar todos los datos? Esta acción no se puede deshacer.')) {
+    if (confirm('¿Limpiar los RIPS cargados? Las actas y prestadores NO se borran.')) {
       setRegistros([]);
       setUsuariosMap(new Map());
       setDetectedPrestadorId(null);
@@ -2424,16 +2424,14 @@ function App() {
                       <><Upload className="h-4 w-4" /> Procesar Data</>
                     )}
                   </button>
-                  {isAdmin && (
-                    <button
-                      type="button"
-                      onClick={handleClearData}
-                      className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-800/50 hover:bg-red-50 dark:hover:bg-red-500/10 text-slate-600 dark:text-slate-300 hover:text-red-600 dark:hover:text-red-400 border border-slate-200 dark:border-slate-700 hover:border-red-200 dark:hover:border-red-500/30 rounded-xl text-sm font-medium transition-all shadow-sm"
-                      title="Limpiar datos"
-                    >
-                      <Trash2 className="h-4 w-4" /> Limpiar
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={handleClearData}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-800/50 hover:bg-red-50 dark:hover:bg-red-500/10 text-slate-600 dark:text-slate-300 hover:text-red-600 dark:hover:text-red-400 border border-slate-200 dark:border-slate-700 hover:border-red-200 dark:hover:border-red-500/30 rounded-xl text-sm font-medium transition-all shadow-sm"
+                    title="Limpiar RIPS cargados"
+                  >
+                    <Trash2 className="h-4 w-4" /> Limpiar RIPS
+                  </button>
                 </div>
 
                  <div className="flex flex-col gap-1">
@@ -4171,6 +4169,7 @@ function App() {
                 onRemoveFuncionario={handleRemoveFuncionario}
                 firmasGlobales={firmasGlobales}
                 onSaveFirmaGlobal={handleSaveFirmaGlobal}
+                liveTypeCount={{ ...typeCount, PAI: TIPOS_PAI.reduce((s, t) => s + (typeCount[t] || 0), 0) }}
               />
             ) : (
               <div className="glass-panel rounded-2xl p-12 flex flex-col items-center justify-center text-center gap-5 border-2 border-dashed border-slate-300 dark:border-slate-700">
@@ -4254,6 +4253,7 @@ function App() {
           onRemoveFuncionario={handleRemoveFuncionario}
           firmasGlobales={firmasGlobales}
           onSaveFirmaGlobal={handleSaveFirmaGlobal}
+          liveTypeCount={{ ...typeCount, PAI: TIPOS_PAI.reduce((s, t) => s + (typeCount[t] || 0), 0) }}
         />
       )}
 

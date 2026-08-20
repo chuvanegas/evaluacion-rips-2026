@@ -66,14 +66,24 @@ function XBarTick({ x, y, payload }: any) {
 
 // ─── Preview (print-faithful PDF replica) ───────────────────────────────────
 
-export function ActaPreview({ acta }: { acta: Acta }) {
+export function ActaPreview({ acta, liveTypeCount }: { acta: Acta; liveTypeCount?: Record<string, number> }) {
+  // If live RIPS counts are available, use them instead of stored ejecutado
+  const getLiveEjec = (srv: ActaServicio): number => {
+    if (liveTypeCount && liveTypeCount[srv.tipo] !== undefined) return liveTypeCount[srv.tipo];
+    return srv.ejecutado;
+  };
+  const getLivePct = (srv: ActaServicio): number => {
+    if (!srv.programado) return 0;
+    return Math.min(Math.round((getLiveEjec(srv) / srv.programado) * 100), 100);
+  };
+
   const totalProg  = acta.servicios.reduce((s, x) => s + x.programado, 0);
-  const totalEjec  = acta.servicios.reduce((s, x) => s + ejec(x), 0);
+  const totalEjec  = acta.servicios.reduce((s, x) => s + Math.min(getLiveEjec(x), x.programado), 0);
   const totalCumpl = totalProg > 0 ? Math.min(Math.round((totalEjec / totalProg) * 100), 100) : 0;
 
   const chartData = acta.servicios.map(srv => ({
     tipo: srv.tipo,
-    pct: pct(srv),
+    pct: getLivePct(srv),
     fill: '#2dd4bf',
   }));
 
@@ -229,13 +239,14 @@ export function ActaPreview({ acta }: { acta: Acta }) {
                 <th className={th + ' border-r-0 w-24'}>% CUMPLIMIENTO</th>
               </tr>
               {acta.servicios.map((srv, i) => {
-                const p = pct(srv);
+                const lEjec = getLiveEjec(srv);
+                const lPct = getLivePct(srv);
                 return (
                   <tr key={i} className={i % 2 === 0 ? '' : 'bg-gray-50'}>
                     <td className={td + ' border-l-0'}>{srv.tipo}</td>
                     <td className={td + ' text-right'}>{srv.programado.toLocaleString()}</td>
-                    <td className={td + ' text-right'}>{ejec(srv).toLocaleString()}</td>
-                    <td className={td + ' border-r-0 text-right font-bold'} style={{ color: '#000000' }}>{p}%</td>
+                    <td className={td + ' text-right'}>{Math.min(lEjec, srv.programado).toLocaleString()}</td>
+                    <td className={td + ' border-r-0 text-right font-bold'} style={{ color: '#000000' }}>{lPct}%</td>
                   </tr>
                 );
               })}
@@ -335,12 +346,14 @@ interface Props {
   onRemoveFuncionario?: (name: string) => void;
   firmasGlobales?: { repLegalEPSI: string; coordinador: string; lugarActa?: string };
   onSaveFirmaGlobal?: (key: 'repLegalEPSI' | 'coordinador' | 'lugarActa', val: string) => void;
+  liveTypeCount?: Record<string, number>;
 }
 
 export default function ActaModal({
   acta, onChange, onSave, onClose, inline = false,
   funcionarios = [], onAddFuncionario, onRemoveFuncionario,
-  firmasGlobales, onSaveFirmaGlobal
+  firmasGlobales, onSaveFirmaGlobal,
+  liveTypeCount
 }: Props) {
   const [view, setView] = useState<'form' | 'preview'>('form');
   const [nuevoFuncionario, setNuevoFuncionario] = useState('');
@@ -727,7 +740,7 @@ export default function ActaModal({
         {/* ══ PREVIEW ══ */}
         {view === 'preview' && (
           <div className="p-6 bg-slate-100 dark:bg-slate-950 min-h-full">
-            <ActaPreview acta={acta} />
+            <ActaPreview acta={acta} liveTypeCount={liveTypeCount} />
           </div>
         )}
 
