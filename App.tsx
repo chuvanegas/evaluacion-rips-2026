@@ -928,10 +928,12 @@ function App() {
     const p = prestadores.find(x => x.id === acta.prestadorId) || prestadores.find(x => x.nit === acta.nit);
     if (!p) return acta;
 
-    // PAI: consolidate individual vaccine entries into a single 'PAI' entry
-    if (p.tipoContrato === 'PAI') {
+    // Detect PAI by content (vaccine service types) OR by tipoContrato — robust to old saved data
+    const isPAI = p.tipoContrato === 'PAI' || acta.servicios.some(s => TIPOS_PAI.includes(s.tipo));
+    if (isPAI) {
       const paiServs = acta.servicios.filter(s => TIPOS_PAI.includes(s.tipo) || s.tipo === 'PAI');
-      if (paiServs.length > 0 && !(paiServs.length === 1 && paiServs[0].tipo === 'PAI')) {
+      const alreadySingleEntry = paiServs.length === 1 && paiServs[0].tipo === 'PAI';
+      if (!alreadySingleEntry && paiServs.length > 0) {
         const totalProg = paiServs.reduce((sum, s) => sum + s.programado, 0);
         const totalEjec = paiServs.reduce((sum, s) => sum + s.ejecutado, 0);
         return { ...acta, servicios: [{ tipo: 'PAI', programado: totalProg, ejecutado: totalEjec }] };
@@ -939,8 +941,7 @@ function App() {
     }
 
     const contratados = new Set(p.metas.filter(m => m.active && m.monthlyGoal > 0).map(m => m.type));
-    // For PAI prestador, 'PAI' is always valid even if not in individual metas
-    if (p.tipoContrato === 'PAI') contratados.add('PAI');
+    if (isPAI) contratados.add('PAI');
     const serviciosFiltrados = acta.servicios.filter(s => contratados.has(s.tipo));
     if (serviciosFiltrados.length === acta.servicios.length) return acta;
     return { ...acta, servicios: serviciosFiltrados };
@@ -1786,6 +1787,26 @@ function App() {
     return { stats, chartData, rankingCUPS, rankingPacientes, duplicatesList, typeCount };
 
   }, [registros, metas, scale, usuariosMap, detectedPrestadorId, prestadores]);
+
+  // Auto-consolidate PAI actas when opened or when RIPS change
+  useEffect(() => {
+    if (!inlineActa) return;
+    const isPAIActa = inlineActa.servicios.some(s => TIPOS_PAI.includes(s.tipo));
+    const alreadySinglePAI = inlineActa.servicios.length === 1 && inlineActa.servicios[0].tipo === 'PAI';
+    if (!isPAIActa && !alreadySinglePAI) return;
+
+    const p = prestadores.find(x => x.id === inlineActa.prestadorId) || prestadores.find(x => x.nit === inlineActa.nit);
+    const ripsMatch = p?.id === detectedPrestadorId;
+    const paiChartEntry = chartData.find(c => c.name === 'PAI');
+    const paiServs = inlineActa.servicios.filter(s => TIPOS_PAI.includes(s.tipo) || s.tipo === 'PAI');
+    const totalProg = paiServs.reduce((sum, s) => sum + s.programado, 0);
+    const storedEjec = paiServs.reduce((sum, s) => sum + s.ejecutado, 0);
+    const liveEjec = ripsMatch && paiChartEntry ? paiChartEntry.ejecutado : storedEjec;
+    const needsUpdate = isPAIActa || (alreadySinglePAI && ripsMatch && paiChartEntry && inlineActa.servicios[0].ejecutado !== liveEjec);
+    if (!needsUpdate) return;
+
+    setInlineActa(prev => prev ? { ...prev, servicios: [{ tipo: 'PAI', programado: totalProg, ejecutado: liveEjec }] } : prev);
+  }, [inlineActa?.id, chartData, detectedPrestadorId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- Search Logic for Raw Rips ---
   const filteredRawRips = useMemo(() => {
