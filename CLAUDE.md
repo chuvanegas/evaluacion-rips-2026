@@ -142,11 +142,26 @@ La auto-detección de USUARIOS (por heurística fecha+sexo) solo corre si `secti
 
 ---
 
+## Tipos de contrato (`tipoContrato` en `types.ts`)
+
+| Tipo | Constante en `logic.ts` | Tema | Descripción |
+|---|---|---|---|
+| `ASISTENCIAL` | `TIPOS_ASISTENCIAL` | Azul índigo | 11 servicios: consulta, odonto, enfermería, lab, imagen, gineco, medicina interna, TAB, urgencias, hosp, medicamentos |
+| `ESPECIALIDADES` | `TIPOS_ESPECIALIDADES` | Morado | 6 servicios especializados |
+| `CAPITA AMPLIADA` | `TIPOS_CAPITA_AMPLIADA` | Verde esmeralda | ASISTENCIAL + pediatría, nutrición, psicología |
+| `PAI` | `TIPOS_PAI` | Naranja | 14 biológicos mapeados a CUPS 993xxx. Dashboard agrega todo en una barra "PAI". Renuencias muestra por vacuna. |
+
+### PAI — Archivos RIPS
+Los archivos `ARCHIVO-PROCEDIMIENTOS` (tipo AP) se procesan como `section = "SERVICIOS"` en el parser. Los CUPS 993xxx están en `CUPS_MAP_RAW` y clasifican automáticamente al tipo de biológico correcto. El `useMemo` expone `typeCount` (conteo bruto por tipo) para que la sección Renuencias pueda leer conteos individuales aunque el chart esté agrupado.
+
+---
+
 ## Versiones
 
 | Versión | Tag git | Descripción |
 |---|---|---|
+| **2.1** | `v2.1` | CAPITA AMPLIADA y PAI como tipos de contrato. Dashboard PAI unificado. Renuencias filtradas por tipo de contrato. |
 | **2.0** | `v2.0` | Primera versión estable documentada. MEDICAMENTOS corregido, impresión de actas limpia, logo restaurado, acumulación de uploads |
 
 Para volver a una versión: `git checkout v2.0`
-Para crear una versión nueva: `git tag v2.5 && git push origin v2.5`
+Para crear una versión nueva: `git tag v2.2 && git push origin v2.2`

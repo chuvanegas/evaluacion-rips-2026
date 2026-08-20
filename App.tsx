@@ -1584,7 +1584,7 @@ function App() {
 
   // --- Calculations ---
 
-  const { stats, chartData, rankingCUPS, rankingPacientes, duplicatesList } = useMemo(() => {
+  const { stats, chartData, rankingCUPS, rankingPacientes, duplicatesList, typeCount } = useMemo(() => {
     // Filter active services
     const activeTypes = new Set(metas.filter(m => m.active).map(m => m.type));
     const filteredRegistros = registros.filter(r => activeTypes.has(r.tipo));
@@ -1758,7 +1758,7 @@ function App() {
       topPatientCount: topPat?.TotalAtenciones || 0
     };
 
-    return { stats, chartData, rankingCUPS, rankingPacientes, duplicatesList };
+    return { stats, chartData, rankingCUPS, rankingPacientes, duplicatesList, typeCount };
 
   }, [registros, metas, scale, usuariosMap, detectedPrestadorId, prestadores]);
 
@@ -2452,29 +2452,37 @@ function App() {
               </div>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
-              {metas.filter(m => m.active).map((m, idx) => {
-                const ripsCount = chartData.find(c => c.name === m.type)?.ejecutado ?? 0;
-                const ren = m.renuencias || 0;
-                const total = ripsCount;
-                return (
-                  <div key={idx} className="flex flex-col gap-1.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-3">
-                    <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide leading-tight line-clamp-2">{m.type}</span>
-                    <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
-                      <span className="font-mono text-slate-700 dark:text-slate-300">{(ripsCount - ren).toLocaleString()}</span>
-                      <span>RIPS</span>
-                      {ren > 0 && <span className="text-amber-500 font-bold">+{ren.toLocaleString()}</span>}
+              {(() => {
+                const dp = detectedPrestadorId ? prestadores.find(p => p.id === detectedPrestadorId) : null;
+                const tc = dp?.tipoContrato || 'ASISTENCIAL';
+                const allowedTypes = tc === 'PAI' ? TIPOS_PAI
+                  : tc === 'ESPECIALIDADES' ? TIPOS_ESPECIALIDADES
+                  : tc === 'CAPITA AMPLIADA' ? TIPOS_CAPITA_AMPLIADA
+                  : TIPOS_ASISTENCIAL;
+                return metas.filter(m => m.active && allowedTypes.includes(m.type)).map((m, idx) => {
+                  const ripsCount = typeCount[m.type] || 0;
+                  const ren = m.renuencias || 0;
+                  const total = ripsCount;
+                  return (
+                    <div key={idx} className="flex flex-col gap-1.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-3">
+                      <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide leading-tight line-clamp-2">{m.type}</span>
+                      <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+                        <span className="font-mono text-slate-700 dark:text-slate-300">{(ripsCount - ren).toLocaleString()}</span>
+                        <span>RIPS</span>
+                        {ren > 0 && <span className="text-amber-500 font-bold">+{ren.toLocaleString()}</span>}
+                      </div>
+                      <input
+                        type="number" min="0"
+                        value={ren}
+                        onChange={e => setMetas(prev => prev.map(x => x.type === m.type ? { ...x, renuencias: Math.max(0, Number(e.target.value)) } : x))}
+                        className="w-full bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-500/30 rounded-lg px-2 py-1 text-center text-sm font-bold text-amber-600 dark:text-amber-400 focus:ring-2 focus:ring-amber-500/30 outline-none"
+                        placeholder="0"
+                      />
+                      <span className="text-[10px] text-center text-slate-400">Total: <strong className="text-slate-700 dark:text-slate-200">{total.toLocaleString()}</strong></span>
                     </div>
-                    <input
-                      type="number" min="0"
-                      value={ren}
-                      onChange={e => setMetas(prev => prev.map(x => x.type === m.type ? { ...x, renuencias: Math.max(0, Number(e.target.value)) } : x))}
-                      className="w-full bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-500/30 rounded-lg px-2 py-1 text-center text-sm font-bold text-amber-600 dark:text-amber-400 focus:ring-2 focus:ring-amber-500/30 outline-none"
-                      placeholder="0"
-                    />
-                    <span className="text-[10px] text-center text-slate-400">Total: <strong className="text-slate-700 dark:text-slate-200">{total.toLocaleString()}</strong></span>
-                  </div>
-                );
-              })}
+                  );
+                });
+              })()}
             </div>
           </section>
         )}
