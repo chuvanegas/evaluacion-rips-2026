@@ -160,6 +160,7 @@ Los archivos `ARCHIVO-PROCEDIMIENTOS` (tipo AP) se procesan como `section = "SER
 
 | Versión | Tag git | Descripción |
 |---|---|---|
+| **2.2** | `v2.2` | Vista Previa del Acta con ejecutado dinámico desde RIPS. Migración auto de actas PAI viejas. Botón "Limpiar RIPS" para todos. |
 | **2.1** | `v2.1` | CAPITA AMPLIADA y PAI como tipos de contrato. Dashboard PAI unificado. Renuencias filtradas por tipo de contrato. |
 | **2.0** | `v2.0` | Primera versión estable documentada. MEDICAMENTOS corregido, impresión de actas limpia, logo restaurado, acumulación de uploads |
 

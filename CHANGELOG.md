@@ -1,5 +1,23 @@
 # Changelog — Evaluación Cápita Asistencial
 
+## v2.2 — 2026-08-20
+
+### Ejecutado dinámico en Vista Previa
+- **Vista Previa del Acta siempre refleja RIPS cargados:** `ActaPreview` recibe `liveTypeCount` (conteos vivos por tipo de servicio) y los usa para mostrar ejecutado, % cumplimiento y totales. Ya no depende del valor guardado en el acta — si tienes los RIPS cargados, la gráfica y tabla del acta se actualizan en tiempo real.
+- **PAI en Vista Previa:** el tipo 'PAI' recibe la suma de todos los biológicos (`TIPOS_PAI`) del `typeCount` activo, por lo que el acta PAI muestra el total real de vacunas aplicadas.
+
+### Botón "Limpiar RIPS"
+- Visible para todos los usuarios (antes era solo admin).
+- Limpia registros cargados, usuariosMap y prestador detectado.
+- Mensaje de confirmación aclarado: **las actas y prestadores NO se borran**.
+
+### Migración automática de actas PAI viejas
+- Al cargar la app (localStorage) y al sincronizar con Supabase, se detectan automáticamente las actas PAI con la estructura vieja (14 filas individuales de vacunas) y se consolidan en una sola fila `{tipo: 'PAI', programado: suma, ejecutado: suma}`.
+- No requiere ninguna acción del usuario.
+
+### `useEffect` de auto-consolidación PAI
+- Cuando se abre un acta PAI en el editor inline, un `useEffect` detecta si tiene vacunas individuales y las consolida. Además, si los RIPS del prestador PAI están cargados (`detectedPrestadorId` coincide), actualiza el ejecutado desde `chartData` automáticamente.
+
 ## v2.1 — 2026-08-20
 
 ### Nuevos tipos de contrato
