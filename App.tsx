@@ -440,10 +440,13 @@ function App() {
         if (data['actas']?.length > 0) {
           setActas(prev => {
             const cloudA: Acta[] = data['actas'];
+            const cloudIds = new Set(cloudA.map((a: Acta) => a.id));
             const merged = new Map<string, Acta>();
             [...cloudA, ...prev].forEach(a => { if (!merged.has(a.id)) merged.set(a.id, a); });
             const result = [...merged.values()];
-            if (result.length === prev.length) return prev;
+            // Also push if local has actas cloud doesn't know about yet
+            const hasLocalOnly = prev.some(a => !cloudIds.has(a.id));
+            if (result.length === prev.length && !hasLocalOnly) return prev;
             localStorage.setItem('actas', JSON.stringify(result));
             return result;
           });
@@ -735,7 +738,7 @@ function App() {
     }
     setShowPrestForm(false);
     setEditPrest(null);
-    setPrestForm({ nombre: '', nit: '', departamento: '', municipio: '', contrato: '', vigencia: '', regimen: 'SUBSIDIADO', metas: metas.map(m => ({ ...m })) });
+    setPrestForm({ nombre: '', nit: '', departamento: '', municipio: '', contrato: '', vigencia: '', regimen: 'SUBSIDIADO', tipoContrato: 'ASISTENCIAL', metas: TIPOS_ASISTENCIAL.map(t => ({ type: t, monthlyGoal: 0, active: true })) });
     setMessage({ type: 'success', text: editPrest ? 'Prestador actualizado.' : 'Prestador creado.' });
   };
 
@@ -3217,7 +3220,7 @@ function App() {
                     </button>
                     <button
                       onClick={() => {
-                        setPrestForm({ nombre: '', nit: '', departamento: '', municipio: '', contrato: '', vigencia: '', regimen: 'SUBSIDIADO', metas: metas.map(m => ({ ...m })) });
+                        setPrestForm({ nombre: '', nit: '', departamento: '', municipio: '', contrato: '', vigencia: '', regimen: 'SUBSIDIADO', tipoContrato: 'ASISTENCIAL', metas: TIPOS_ASISTENCIAL.map(t => ({ type: t, monthlyGoal: 0, active: true })) });
                         setEditPrest(null);
                         setShowPrestForm(true);
                       }}

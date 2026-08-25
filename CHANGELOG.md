@@ -1,5 +1,15 @@
 # Changelog — Evaluación Cápita Asistencial
 
+## v2.3 — 2026-08-25
+
+### Corrección: Nuevo prestador siempre inicia como ASISTENCIAL
+- Al hacer clic en "Nuevo Prestador", el formulario ahora se inicializa con `tipoContrato: 'ASISTENCIAL'` y las metas estándar de ASISTENCIAL en cero — nunca hereda los tipos del prestador activo.
+- Bug anterior: si el último prestador activo era PAI, el formulario de nuevo prestador heredaba los biológicos PAI. Al generar el acta, aunque el dropdown mostraba "ASISTENCIAL", las metas tenían tipos PAI y el acta salía con servicios de vacunas en cero.
+
+### Corrección: Sincronización Supabase — actas locales perdidas
+- La sincronización periódica (60 segundos) ahora detecta actas que existen localmente pero no en la nube y fuerza su subida.
+- Bug anterior: si un PC tenía actas creadas localmente que Supabase no conocía, el poll comparaba `result.length === prev.length` y devolvía `prev` sin cambio de referencia → el `useEffect` de auto-guardado no se disparaba → las actas nunca llegaban a Supabase. Esto explicaba la diferencia de 112 vs 103 actas entre dispositivos.
+
 ## v2.2 — 2026-08-20
 
 ### Ejecutado dinámico en Vista Previa
