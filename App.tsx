@@ -355,9 +355,12 @@ function App() {
         // Siempre sincronizar desde Supabase (fuente de verdad)
         const cloudKeys = ['prestadores', 'actas', 'appUsers', 'funcionarios', 'firmasGlobales', 'customCups', 'renuncias'];
         const cloudData = await CloudStorage.getAll(cloudKeys);
-        if (cloudData['prestadores']?.length > 0) {
-          const rawP: Prestador[] = cloudData['prestadores'];
-          const byIdP = new Map<string, Prestador>(); rawP.forEach(p => byIdP.set(p.id, p));
+        {
+          const rawP: Prestador[] = cloudData['prestadores'] || [];
+          const localP: Prestador[] = (() => { try { const s = localStorage.getItem('prestadores'); return s ? JSON.parse(s) : []; } catch { return []; } })();
+          // Fusionar cloud + local: el cloud tiene prioridad en caso de mismo ID (versión más reciente)
+          const byIdP = new Map<string, Prestador>();
+          [...localP, ...rawP].forEach(p => byIdP.set(p.id, p)); // rawP va segundo → sobreescribe local
           const byNitContratoP = new Map<string, Prestador>();
           [...byIdP.values()].forEach(p => byNitContratoP.set(`${p.nit}|${p.contrato}`, p));
           const cleanP = [...byNitContratoP.values()].map(p =>
@@ -429,12 +432,23 @@ function App() {
       try {
         const keys = ['prestadores', 'actas', 'appUsers', 'funcionarios', 'firmasGlobales', 'customCups', 'renuncias'];
         const data = await CloudStorage.getAll(keys);
-        if (data['prestadores']?.length > 0) {
+        if (data['prestadores']?.length > 0 || true) {
           setPrestadores(prev => {
-            const cloud: Prestador[] = data['prestadores'];
-            if (JSON.stringify(cloud.map(p => p.id).sort()) === JSON.stringify(prev.map(p => p.id).sort())) return prev;
-            localStorage.setItem('prestadores', JSON.stringify(cloud));
-            return cloud;
+            const cloud: Prestador[] = data['prestadores'] || [];
+            const cloudIds = new Set(cloud.map((p: Prestador) => p.id));
+            // Fusionar: cloud tiene prioridad (versión editada desde otro PC), pero conservar locales únicos
+            const byId = new Map<string, Prestador>();
+            [...prev, ...cloud].forEach(p => byId.set(p.id, p)); // cloud va segundo → gana en conflicto
+            const byNitContrato = new Map<string, Prestador>();
+            [...byId.values()].forEach(p => byNitContrato.set(`${p.nit}|${p.contrato}`, p));
+            const result = [...byNitContrato.values()].map(p =>
+              p.tipoContrato ? p : { ...p, tipoContrato: 'ASISTENCIAL' as const }
+            );
+            const hasLocalOnly = prev.some(p => !cloudIds.has(p.id));
+            const sameIds = result.length === prev.length && result.every(p => prev.find(pp => pp.id === p.id));
+            if (sameIds && !hasLocalOnly) return prev;
+            localStorage.setItem('prestadores', JSON.stringify(result));
+            return result;
           });
         }
         if (data['actas']?.length > 0) {

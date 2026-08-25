@@ -2,6 +2,11 @@
 
 ## v2.3 — 2026-08-25
 
+### Sincronización bidireccional de prestadores entre dispositivos
+- La carga inicial ahora **fusiona** local + nube (antes solo tomaba la nube, perdiendo prestadores creados offline).
+- El poll de 60 segundos también fusiona en lugar de reemplazar: si el PC A crea un prestador sin conexión, en la próxima sincronización se sube a Supabase y queda disponible para todos los demás PCs.
+- Si un PC tiene prestadores que la nube no conoce, el cambio de estado fuerza la escritura en Supabase vía el `useEffect` de auto-guardado.
+
 ### Corrección: Nuevo prestador siempre inicia como ASISTENCIAL
 - Al hacer clic en "Nuevo Prestador", el formulario ahora se inicializa con `tipoContrato: 'ASISTENCIAL'` y las metas estándar de ASISTENCIAL en cero — nunca hereda los tipos del prestador activo.
 - Bug anterior: si el último prestador activo era PAI, el formulario de nuevo prestador heredaba los biológicos PAI. Al generar el acta, aunque el dropdown mostraba "ASISTENCIAL", las metas tenían tipos PAI y el acta salía con servicios de vacunas en cero.
