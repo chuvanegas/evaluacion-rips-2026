@@ -156,13 +156,48 @@ Los archivos `ARCHIVO-PROCEDIMIENTOS` (tipo AP) se procesan como `section = "SER
 
 ---
 
+## Sincronización multi-dispositivo (v2.3+)
+
+Todo dato persistente (prestadores, actas, renuencias, usuarios, firmantes, CUPS personalizados) se guarda en **Supabase** y se sincroniza automáticamente.
+
+### Estrategia de sync
+
+| Momento | Qué hace |
+|---|---|
+| **Carga inicial** | Fusiona localStorage + Supabase. La nube tiene prioridad en conflicto de ID pero los registros solo-locales también se conservan y se suben. |
+| **Auto-save** (useEffect) | Cada vez que cambia `prestadores`, `actas`, `renuncias`, etc., se guarda en Supabase si `cloudInitialized.current === true`. |
+| **Poll 60 s** | Descarga cloud, fusiona con local. Si hay registros solo-locales que la nube no conoce, devuelve nuevo array → dispara auto-save → los sube. |
+| **Guardar Sesión** | Botón manual de push+pull completo. Útil para sincronizar inmediatamente sin esperar el poll. |
+
+### Dedup de prestadores
+Clave de dedup secundaria: `${nit}|${contrato}` — si el mismo prestador fue creado con distintos IDs en dos PCs, se conserva solo uno.
+
+### Dedup de actas (`deduplicarActas`)
+1. Por `id` exacto (mismo objeto guardado dos veces → una copia).
+2. Por `prestadorId||numero` — si el acta fue regenerada (nuevo ID, mismo número y prestador), queda la de mayor % de cumplimiento.
+
+---
+
+## Formulario de Prestadores
+
+### Nuevo prestador
+- Siempre inicia con `tipoContrato: 'ASISTENCIAL'` y `TIPOS_ASISTENCIAL` en cero.
+- No hereda las metas del prestador activo (bug corregido en v2.3).
+
+### Editar prestador existente
+- El formulario se popula desde `p.metas` del prestador seleccionado.
+- Al cambiar el `tipoContrato` en el selector, las metas se recalculan automáticamente desde `TIPOS_*` correspondiente, conservando los valores guardados si el tipo de servicio existe en la nueva lista.
+
+---
+
 ## Versiones
 
 | Versión | Tag git | Descripción |
 |---|---|---|
+| **2.3** | `v2.3` | Sync bidireccional de prestadores. Fix acta ASISTENCIAL generada como PAI. Fix poll pierde actas solo-locales. |
 | **2.2** | `v2.2` | Vista Previa del Acta con ejecutado dinámico desde RIPS. Migración auto de actas PAI viejas. Botón "Limpiar RIPS" para todos. |
 | **2.1** | `v2.1` | CAPITA AMPLIADA y PAI como tipos de contrato. Dashboard PAI unificado. Renuencias filtradas por tipo de contrato. |
-| **2.0** | `v2.0` | Primera versión estable documentada. MEDICAMENTOS corregido, impresión de actas limpia, logo restaurado, acumulación de uploads |
+| **2.0** | `v2.0` | Primera versión estable documentada. MEDICAMENTOS corregido, impresión de actas limpia, logo restaurado, acumulación de uploads. |
 
-Para volver a una versión: `git checkout v2.0`
-Para crear una versión nueva: `git tag v2.2 && git push origin v2.2`
+Para volver a una versión: `git checkout v2.3`
+Para crear una versión nueva: `git tag v2.3 && git push origin v2.3`
