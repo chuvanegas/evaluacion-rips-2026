@@ -3312,7 +3312,7 @@ function App() {
                                 </span>
                                 {isAdmin && (
                                   <button
-                                    onClick={() => { setPrestForm({ nombre: rep.nombre, nit: rep.nit, departamento: rep.departamento, municipio: rep.municipio, contrato: '', vigencia: '', regimen: 'SUBSIDIADO', metas: metas.map(m => ({ ...m })) }); setEditPrest(null); setShowPrestForm(true); }}
+                                    onClick={() => { setPrestForm({ nombre: rep.nombre, nit: rep.nit, departamento: rep.departamento, municipio: rep.municipio, contrato: '', vigencia: '', regimen: 'SUBSIDIADO', tipoContrato: 'ASISTENCIAL', metas: TIPOS_ASISTENCIAL.map(t => ({ type: t, monthlyGoal: 0, active: true })) }); setEditPrest(null); setShowPrestForm(true); }}
                                     className="text-[11px] flex items-center gap-1 px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors font-medium"
                                     title="Agregar contrato a este prestador"
                                   >
