@@ -653,33 +653,55 @@ function App() {
   const handleSaveSession = async () => {
     setIsSaving(true);
     try {
-      // Push local data to Supabase
+      const keys = ['prestadores', 'actas', 'appUsers', 'funcionarios', 'firmasGlobales', 'customCups', 'renuncias'];
+
+      // Paso 1: Descargar la nube PRIMERO para no destruir datos de otros PCs
+      const data = await CloudStorage.getAll(keys);
+
+      // Paso 2: Fusionar prestadores (local + nube → dedup por nit|contrato)
+      const cloudP: Prestador[] = data['prestadores'] || [];
+      const byIdP = new Map<string, Prestador>();
+      [...prestadores, ...cloudP].forEach(p => byIdP.set(p.id, p)); // nube gana en conflicto de ID
+      const byNitContratoP = new Map<string, Prestador>();
+      [...byIdP.values()].forEach(p => byNitContratoP.set(`${p.nit}|${p.contrato}`, p));
+      const mergedP = [...byNitContratoP.values()].map(p =>
+        p.tipoContrato ? p : { ...p, tipoContrato: 'ASISTENCIAL' as const }
+      );
+
+      // Paso 3: Fusionar actas (local + nube)
+      const cloudA: Acta[] = data['actas'] || [];
+      const mergedAMap = new Map<string, Acta>();
+      [...actas, ...cloudA].forEach(a => { if (!mergedAMap.has(a.id)) mergedAMap.set(a.id, a); });
+      const mergedA = deduplicarActas([...mergedAMap.values()]);
+
+      // Paso 4: Fusionar renuncias (local + nube, dedup por id)
+      const cloudR = (data['renuncias'] as typeof renuncias) || [];
+      const mergedRMap = new Map<string, (typeof renuncias)[0]>();
+      [...renuncias, ...cloudR].forEach(r => { if (!mergedRMap.has(r.id)) mergedRMap.set(r.id, r); });
+      const mergedR = [...mergedRMap.values()];
+
+      // Paso 5: Subir el resultado fusionado a Supabase
       await Promise.all([
-        CloudStorage.set('prestadores', prestadores),
-        CloudStorage.set('actas', actas),
+        CloudStorage.set('prestadores', mergedP),
+        CloudStorage.set('actas', mergedA),
         CloudStorage.set('appUsers', users),
         CloudStorage.set('funcionarios', funcionarios),
         CloudStorage.set('firmasGlobales', firmasGlobales),
         CloudStorage.set('customCups', customCupsList),
-        CloudStorage.set('renuncias', renuncias),
+        CloudStorage.set('renuncias', mergedR),
         ...(registros.length > 0 ? [StorageService.saveSessionData(registros, Array.from(usuariosMap.values()))] : []),
       ]);
-      // Pull latest from Supabase
-      const keys = ['prestadores', 'actas', 'appUsers', 'funcionarios', 'firmasGlobales', 'customCups', 'renuncias'];
-      const data = await CloudStorage.getAll(keys);
-      if (data['prestadores']?.length > 0) { setPrestadores(data['prestadores']); localStorage.setItem('prestadores', JSON.stringify(data['prestadores'])); }
-      if (data['actas']?.length > 0) {
-        const merged = new Map<string, Acta>();
-        [...(data['actas'] as Acta[]), ...actas].forEach(a => { if (!merged.has(a.id)) merged.set(a.id, a); });
-        const result = deduplicarActas([...merged.values()]);
-        setActas(result); localStorage.setItem('actas', JSON.stringify(result));
-      }
+
+      // Paso 6: Actualizar estado local con el resultado fusionado
+      setPrestadores(mergedP); localStorage.setItem('prestadores', JSON.stringify(mergedP));
+      setActas(mergedA); localStorage.setItem('actas', JSON.stringify(mergedA));
+      setRenuncias(mergedR); localStorage.setItem('renuncias', JSON.stringify(mergedR));
       if (data['appUsers']?.length > 0) { setUsers(data['appUsers']); localStorage.setItem('appUsers', JSON.stringify(data['appUsers'])); }
       if (data['funcionarios']?.length > 0) { setFuncionarios(data['funcionarios']); localStorage.setItem('funcionarios', JSON.stringify(data['funcionarios'])); }
       if (data['firmasGlobales'] && Object.keys(data['firmasGlobales']).length > 0) { setFirmasGlobales(data['firmasGlobales']); localStorage.setItem('firmasGlobales', JSON.stringify(data['firmasGlobales'])); }
       if (data['customCups']?.length > 0) { setCustomCupsList(data['customCups']); localStorage.setItem('customCups', JSON.stringify(data['customCups'])); }
-      if (data['renuncias']?.length > 0) { setRenuncias(data['renuncias']); localStorage.setItem('renuncias', JSON.stringify(data['renuncias'])); }
-      setMessage({ type: 'success', text: `Sincronizado: ${(data['prestadores'] || prestadores).length} prestadores, ${(data['actas'] || actas).length} actas, ${(data['renuncias'] || renuncias).length} renuncias` });
+
+      setMessage({ type: 'success', text: `Sincronizado: ${mergedP.length} prestadores, ${mergedA.length} actas, ${mergedR.length} renuncias` });
     } catch {
       setMessage({ type: 'error', text: 'Error de sincronización. Revise la conexión.' });
     } finally {

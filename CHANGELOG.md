@@ -1,5 +1,12 @@
 # Changelog — Evaluación Cápita Asistencial
 
+## v2.5 — 2026-08-31
+
+### Corrección crítica: "Guardar Sesión" destruía datos de otros PCs
+- **Bug:** El botón "Guardar Sesión" hacía primero push y luego pull. Al hacer push, sobreescribía Supabase con solo los datos locales, borrando lo que cualquier otro PC hubiera subido. El pull posterior traía de vuelta solo lo recién subido — ciclo destructivo.
+- **Fix:** Ahora el orden es correcto: **pull primero → fusionar local+nube → push fusionado → actualizar local**. Ningún PC puede borrar los datos del otro.
+- La fusión aplica la misma lógica que el poll de 60 segundos: prestadores dedup por `nit|contrato`, actas dedup por `id` y `prestadorId||numero`, renuncias dedup por `id`.
+
 ## v2.4 — 2026-08-31
 
 ### Corrección: Formulario de nuevo prestador/contrato siempre limpio

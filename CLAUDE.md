@@ -167,7 +167,7 @@ Todo dato persistente (prestadores, actas, renuencias, usuarios, firmantes, CUPS
 | **Carga inicial** | Fusiona localStorage + Supabase. La nube tiene prioridad en conflicto de ID pero los registros solo-locales también se conservan y se suben. |
 | **Auto-save** (useEffect) | Cada vez que cambia `prestadores`, `actas`, `renuncias`, etc., se guarda en Supabase si `cloudInitialized.current === true`. |
 | **Poll 60 s** | Descarga cloud, fusiona con local. Si hay registros solo-locales que la nube no conoce, devuelve nuevo array → dispara auto-save → los sube. |
-| **Guardar Sesión** | Botón manual de push+pull completo. Útil para sincronizar inmediatamente sin esperar el poll. |
+| **Guardar Sesión** | Botón manual: pull → merge → push fusionado. Garantiza que ningún PC destruya datos del otro. |
 
 ### Dedup de prestadores
 Clave de dedup secundaria: `${nit}|${contrato}` — si el mismo prestador fue creado con distintos IDs en dos PCs, se conserva solo uno.
@@ -194,6 +194,7 @@ Clave de dedup secundaria: `${nit}|${contrato}` — si el mismo prestador fue cr
 
 | Versión | Tag git | Descripción |
 |---|---|---|
+| **2.5** | `v2.5` | Fix crítico: "Guardar Sesión" ahora hace pull→merge→push en lugar de push→pull (antes destruía datos de otros PCs). |
 | **2.4** | `v2.4` | Fix botón "+Contrato" heredaba metas del prestador activo. Las tres rutas de apertura del formulario ahora inician siempre en ASISTENCIAL limpio. |
 | **2.3** | `v2.3` | Sync bidireccional de prestadores. Fix acta ASISTENCIAL generada como PAI. Fix poll pierde actas solo-locales. |
 | **2.2** | `v2.2` | Vista Previa del Acta con ejecutado dinámico desde RIPS. Migración auto de actas PAI viejas. Botón "Limpiar RIPS" para todos. |
