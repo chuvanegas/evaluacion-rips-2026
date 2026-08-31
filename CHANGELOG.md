@@ -1,5 +1,11 @@
 # Changelog — Evaluación Cápita Asistencial
 
+## v2.4 — 2026-08-31
+
+### Corrección: Formulario de nuevo prestador/contrato siempre limpio
+- El botón **"+ Contrato"** (para agregar un contrato nuevo a un prestador existente) ahora inicia con `tipoContrato: 'ASISTENCIAL'` y las 11 metas asistenciales en cero. Antes copiaba las metas globales del prestador activo en ese momento, causando que aparecieran las metas (y en algunos casos los tipos) del prestador anterior.
+- Se confirman las tres rutas que abren el formulario en estado limpio: "Nuevo Prestador", reset tras guardar, y "+ Contrato".
+
 ## v2.3 — 2026-08-25
 
 ### Sincronización bidireccional de prestadores entre dispositivos

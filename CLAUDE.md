@@ -194,10 +194,25 @@ Clave de dedup secundaria: `${nit}|${contrato}` — si el mismo prestador fue cr
 
 | Versión | Tag git | Descripción |
 |---|---|---|
+| **2.4** | `v2.4` | Fix botón "+Contrato" heredaba metas del prestador activo. Las tres rutas de apertura del formulario ahora inician siempre en ASISTENCIAL limpio. |
 | **2.3** | `v2.3` | Sync bidireccional de prestadores. Fix acta ASISTENCIAL generada como PAI. Fix poll pierde actas solo-locales. |
 | **2.2** | `v2.2` | Vista Previa del Acta con ejecutado dinámico desde RIPS. Migración auto de actas PAI viejas. Botón "Limpiar RIPS" para todos. |
 | **2.1** | `v2.1` | CAPITA AMPLIADA y PAI como tipos de contrato. Dashboard PAI unificado. Renuencias filtradas por tipo de contrato. |
 | **2.0** | `v2.0` | Primera versión estable documentada. MEDICAMENTOS corregido, impresión de actas limpia, logo restaurado, acumulación de uploads. |
 
-Para volver a una versión: `git checkout v2.3`
-Para crear una versión nueva: `git tag v2.3 && git push origin v2.3`
+Para volver a una versión: `git checkout v2.4`
+Para crear una versión nueva: `git tag v2.4 && git push origin v2.4`
+
+---
+
+## Rutas que abren el formulario de prestador
+
+Hay tres botones que abren `showPrestForm = true`. Los tres deben iniciar con metas limpias cuando crean un prestador/contrato nuevo:
+
+| Botón | Ubicación | Estado |
+|---|---|---|
+| "Nuevo Prestador" | Cabecera de la lista de prestadores | Inicia con ASISTENCIAL en 0 |
+| Reset tras guardar | `handleSavePrestador` (App.tsx ~línea 755) | Inicia con ASISTENCIAL en 0 |
+| "+ Contrato" | Fila de representante en lista | Inicia con ASISTENCIAL en 0 (corregido v2.4) |
+
+El botón **Editar (lápiz)** sí carga los datos del prestador existente — eso es correcto.
