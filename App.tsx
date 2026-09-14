@@ -1671,7 +1671,7 @@ function App() {
 
   // --- Calculations ---
 
-  const { stats, chartData, rankingCUPS, rankingPacientes, duplicatesList, typeCount } = useMemo(() => {
+  const { stats, chartData, rankingCUPS, rankingPacientes, duplicatesList, typeCount, isAuditMode } = useMemo(() => {
     // Filter active services
     const activeTypes = new Set(metas.filter(m => m.active).map(m => m.type));
     const filteredRegistros = registros.filter(r => activeTypes.has(r.tipo));
@@ -1747,9 +1747,22 @@ function App() {
     // Chart Data Preparation
     const detectedPrest = detectedPrestadorId ? prestadores.find(p => p.id === detectedPrestadorId) : null;
     const isPAI = detectedPrest?.tipoContrato === 'PAI';
+    const isAuditMode = !detectedPrestadorId && registros.length > 0;
 
     let chartData: ChartDataPoint[];
-    if (isPAI) {
+    if (isAuditMode) {
+      // Sin prestador seleccionado: mostrar todos los tipos encontrados en los RIPS (auditoría libre)
+      chartData = Object.entries(typeCount)
+        .filter(([, count]) => count > 0)
+        .sort((a, b) => b[1] - a[1])
+        .map(([tipo, count]) => ({
+          name: tipo,
+          meta: 0,
+          ejecutado: count,
+          cumplimiento: 0,
+          color: '#6366f1'
+        }));
+    } else if (isPAI) {
       // PAI: collapse all vaccine types into a single "PAI" bar
       const totalEjecutado = TIPOS_PAI.reduce((sum, t) => sum + (typeCount[t] || 0), 0)
         + metas.filter(m => TIPOS_PAI.includes(m.type)).reduce((sum, m) => sum + (m.renuencias || 0), 0);
@@ -1845,7 +1858,7 @@ function App() {
       topPatientCount: topPat?.TotalAtenciones || 0
     };
 
-    return { stats, chartData, rankingCUPS, rankingPacientes, duplicatesList, typeCount };
+    return { stats, chartData, rankingCUPS, rankingPacientes, duplicatesList, typeCount, isAuditMode };
 
   }, [registros, metas, scale, usuariosMap, detectedPrestadorId, prestadores]);
 
@@ -2659,9 +2672,14 @@ function App() {
             <div className="glass-panel rounded-2xl p-6 shadow-xl h-[550px]">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-slate-800 dark:text-slate-100 font-bold text-sm flex items-center gap-2">
-                  <div className="w-1 h-4 bg-blue-500 rounded-full"></div> Producción (Cantidad)
+                  <div className={`w-1 h-4 rounded-full ${isAuditMode ? 'bg-indigo-500' : 'bg-blue-500'}`}></div>
+                  {isAuditMode ? 'Auditoría de RIPS (sin prestador)' : 'Producción (Cantidad)'}
                 </h3>
-                {scale > 1 && (
+                {isAuditMode ? (
+                  <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30">
+                    Modo Auditoría — selecciona un prestador para ver metas
+                  </span>
+                ) : scale > 1 && (
                   <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30">
                     Meta × {scale} {scale === 12 ? 'meses (anual)' : `meses`}
                   </span>

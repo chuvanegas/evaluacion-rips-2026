@@ -1,5 +1,13 @@
 # Changelog — Evaluación Cápita Asistencial
 
+## v2.8 — 2026-09-14
+
+### Modo Auditoría (sin prestador seleccionado)
+- Si se cargan y procesan RIPS/JSON **sin seleccionar ningún prestador**, el dashboard entra en "Modo Auditoría": muestra todos los tipos de servicio encontrados en los archivos ordenados por cantidad, sin filtrar por metas.
+- La gráfica izquierda cambia su título a "Auditoría de RIPS (sin prestador)" con una etiqueta indicadora.
+- Útil para explorar qué hay en un archivo desconocido o hacer auditoría libre sin necesitar un prestador registrado.
+- El ranking de CUPS, pacientes, duplicados y exportaciones siguen funcionando igual.
+
 ## v2.7 — 2026-09-14
 
 ### Corrección: Selector de prestador limpia RIPS automáticamente al cambiar
