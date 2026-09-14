@@ -194,6 +194,7 @@ Clave de dedup secundaria: `${nit}|${contrato}` — si el mismo prestador fue cr
 
 | Versión | Tag git | Descripción |
 |---|---|---|
+| **2.7** | `v2.7` | Al cambiar de prestador en el selector, RIPS se limpian automáticamente. Detección desde archivos ya no sobreescribe selección manual. |
 | **2.6** | `v2.6` | RIPS se limpian automáticamente al detectar un prestador diferente en el upload. La detección siempre corre (no solo cuando estaba vacía). |
 | **2.5** | `v2.5` | Fix crítico: "Guardar Sesión" ahora hace pull→merge→push en lugar de push→pull (antes destruía datos de otros PCs). |
 | **2.4** | `v2.4` | Fix botón "+Contrato" heredaba metas del prestador activo. Las tres rutas de apertura del formulario ahora inician siempre en ASISTENCIAL limpio. |

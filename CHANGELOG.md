@@ -1,5 +1,11 @@
 # Changelog — Evaluación Cápita Asistencial
 
+## v2.7 — 2026-09-14
+
+### Corrección: Selector de prestador limpia RIPS automáticamente al cambiar
+- Cuando el usuario selecciona un prestador DIFERENTE en el selector de "Carga de Datos", los RIPS cargados anteriormente se limpian automáticamente para evitar que datos de un prestador contaminen el análisis del siguiente.
+- La detección automática de prestador desde nombre de archivos/JSON solo corre si no hay ninguno seleccionado — ya no sobreescribe la selección manual del usuario (fix del bug de v2.6 que hacía que "perpetuo" apareciera en lugar del prestador elegido manualmente).
+
 ## v2.6 — 2026-09-14
 
 ### Corrección: RIPS se limpian automáticamente al cargar archivos de otro prestador

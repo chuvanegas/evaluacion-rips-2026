@@ -785,6 +785,13 @@ function App() {
   };
 
   const handleLoadPrestadorMetas = (p: Prestador) => {
+    // Si el usuario cambia a un prestador diferente, limpiar RIPS para evitar contaminación cruzada
+    if (detectedPrestadorId && detectedPrestadorId !== p.id && registros.length > 0) {
+      setRegistros([]);
+      setUsuariosMap(new Map());
+      setRipsFileNames([]);
+      setJsonFileNames([]);
+    }
     const savedMap = new Map((p.metas || []).map(m => [m.type, m]));
     // Keep all global types, also include custom types from prestador not in globals
     const globalTypes = new Set(metas.map(m => m.type));
@@ -1528,9 +1535,8 @@ function App() {
         }
       }
 
-      // Detectar prestador desde nombre de archivos TXT (siempre, aunque ya haya uno detectado)
-      let newlyDetectedId: string | null = null;
-      if (hasTxt) {
+      // Detectar prestador desde nombre de archivos TXT (solo si no hay uno seleccionado)
+      if (hasTxt && !detectedPrestadorId) {
         for (let i = 0; i < ripsFiles!.length; i++) {
           const name = ripsFiles![i].name.toUpperCase();
           const found = prestadores.find(p => {
@@ -1538,7 +1544,7 @@ function App() {
             const contratoClean = p.contrato.toUpperCase().replace(/[^A-Z0-9]/g, '');
             return (nitClean && name.includes(nitClean)) || (contratoClean && name.includes(contratoClean));
           });
-          if (found) { newlyDetectedId = found.id; break; }
+          if (found) { setDetectedPrestadorId(found.id); break; }
         }
       }
 
@@ -1552,10 +1558,10 @@ function App() {
             // Support single object or array of objects
             const docs: any[] = Array.isArray(data) ? data : [data];
 
-            // Detectar prestador desde campos del JSON (siempre, aunque ya haya uno detectado)
+            // Detectar prestador desde campos del JSON (solo si no hay uno seleccionado)
             const normalizeNit = (v: string) => String(v || '').replace(/[^0-9]/g, '').slice(0, 9);
             for (const doc of docs) {
-              if (!newlyDetectedId) {
+              if (!detectedPrestadorId) {
                 const nitDoc = normalizeNit(String(doc.numDocumentoIdObligado || doc.nit || doc.nitPrestador || ''));
                 const contratoDoc = String(doc.numContrato || doc.contrato || '').trim().toLowerCase();
                 const found = prestadores.find(p => {
@@ -1563,7 +1569,7 @@ function App() {
                   const contratoP = p.contrato.trim().toLowerCase();
                   return (nitDoc && nitP && nitDoc === nitP) || (contratoDoc && contratoP && contratoDoc === contratoP);
                 });
-                if (found) newlyDetectedId = found.id;
+                if (found) setDetectedPrestadorId(found.id);
               }
             }
 
@@ -1632,16 +1638,11 @@ function App() {
         }
       }
 
-      // Si se detectó un prestador diferente al anterior, limpiar RIPS viejos automáticamente
-      const prestadorCambio = newlyDetectedId && newlyDetectedId !== detectedPrestadorId;
-      if (newlyDetectedId) setDetectedPrestadorId(newlyDetectedId);
-
       // Acumular registros entre archivos. Para MEDICAMENTOS, dedup a nivel de dispensación
       // (paciente+cups+fecha) para evitar doble-conteo si el mismo archivo se sube dos veces.
       setRegistros(prev => {
-        const base: RipsRecord[] = prestadorCambio ? [] : prev; // limpiar si cambió prestador
         const existingMedKeys = new Set<string>();
-        base.filter(r => r.tipo === 'MEDICAMENTOS').forEach(r => {
+        prev.filter(r => r.tipo === 'MEDICAMENTOS').forEach(r => {
           existingMedKeys.add(`${r.paciente}|${r.cups}|${r.fecha}`);
         });
         const seenNewMed = new Set<string>();
@@ -1652,14 +1653,13 @@ function App() {
           seenNewMed.add(k);
           return true;
         });
-        return [...base, ...toAdd];
+        return [...prev, ...toAdd];
       });
       setUsuariosMap(newUsuariosMap);
       const numFiles = (ripsFiles?.length || 0) + (jsonFiles?.length || 0);
       const medCount = newRegistros.filter(r => r.tipo === 'MEDICAMENTOS').length;
       const svcCount = newRegistros.filter(r => r.tipo !== 'MEDICAMENTOS').length;
-      const prefijo = prestadorCambio ? 'Prestador cambiado — RIPS anteriores limpiados. ' : '';
-      setMessage({ type: 'success', text: `${prefijo}Añadidos ${newRegistros.length} registros (${medCount} medicamentos, ${svcCount} otros servicios) de ${numFiles} archivo(s). Suba más archivos para acumular o use "Limpiar datos" para reiniciar.` });
+      setMessage({ type: 'success', text: `Añadidos ${newRegistros.length} registros (${medCount} medicamentos, ${svcCount} otros servicios) de ${numFiles} archivo(s). Suba más archivos para acumular o use "Limpiar datos" para reiniciar.` });
 
     } catch (e) {
       console.error(e);
