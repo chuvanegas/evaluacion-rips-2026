@@ -1,5 +1,13 @@
 # Changelog — Evaluación Cápita Asistencial
 
+## v2.6 — 2026-09-14
+
+### Corrección: RIPS se limpian automáticamente al cargar archivos de otro prestador
+- Al subir RIPS/JSON, el sistema ahora **siempre detecta** el prestador en los archivos (antes solo lo hacía si no había ninguno detectado).
+- Si los nuevos archivos pertenecen a un **prestador diferente** al que estaba activo, los registros anteriores se limpian automáticamente antes de agregar los nuevos. El mensaje de éxito indica "Prestador cambiado — RIPS anteriores limpiados."
+- Si los nuevos archivos son del **mismo prestador**, se acumulan como antes.
+- Esto corrige el caso donde se cargaban RIPS de un PAI, luego se subían RIPS de un prestador ASISTENCIAL y el dashboard seguía mostrando PAI mezclado.
+
 ## v2.5 — 2026-08-31
 
 ### Corrección crítica: "Guardar Sesión" destruía datos de otros PCs
