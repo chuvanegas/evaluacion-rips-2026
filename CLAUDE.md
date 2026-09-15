@@ -33,10 +33,66 @@ git -c http.proxy="" -c https.proxy="" push --force \
 
 ---
 
+## Base de datos — PocketBase en VPS Contabo (v2.10+)
+
+Desde v2.10 la app usa **PocketBase** en lugar de Supabase.
+
+| Dato | Valor |
+|---|---|
+| **Servidor** | VPS Contabo — `207.180.243.127` |
+| **Panel admin** | `https://evaluacion-db.duckdns.org/_/` |
+| **API** | `https://evaluacion-db.duckdns.org` |
+| **Admin email** | `jd_vanegas@hotmail.com` |
+| **Colección** | `app_storage` (key-value JSON, 11 registros) |
+| **SSL** | Let's Encrypt via nginx reverse proxy — renueva automáticamente |
+| **DuckDNS token** | `7336e4f9-ef84-42e7-af5f-f065f031fad1` (cuenta `elprimordialjd29@gmail.com`) |
+
+### Acceso SSH al VPS
+```bash
+ssh root@207.180.243.127
+# Contraseña: V@negas1920
+```
+> Cambiar contraseña SSH cuando sea posible (`passwd`).
+
+### Servicios en el VPS
+- **PocketBase**: `systemctl status pocketbase` — puerto 8090 interno
+- **nginx**: reverse proxy con SSL en puerto 443 → proxea a 8090
+- **certbot**: renovación automática de certificado (systemd timer)
+
+### Estructura de app_storage
+Cada key es un string; value es un array/objeto JSON:
+
+| key | Contenido |
+|---|---|
+| `prestadores` | Array de todos los prestadores registrados |
+| `actas` | Array de todas las actas generadas |
+| `renuncias` | Array de renuencias/búsquedas fallidas |
+| `appUsers` | Array de usuarios de la app |
+| `funcionarios` | Array de funcionarios firmantes |
+| `firmasGlobales` | Objeto con firmas globales del coordinador |
+| `customCups` | Array de CUPS personalizados |
+| `rips_dashboard_metas` | Metas globales por tipo de servicio |
+| `rips_dashboard_scale` | Escala de meses actual |
+| `rips_dashboard_registros` | Registros RIPS cargados (sesión) |
+| `rips_dashboard_usuarios` | Mapa de usuarios detectados en RIPS |
+
+### Cliente PocketBase (`services/supabaseClient.ts`)
+Exporta `CloudStorage` con la misma interfaz que antes (Supabase):
+- `CloudStorage.get(key)` — GET con filter por key
+- `CloudStorage.set(key, value)` — upsert (GET para encontrar ID, luego PATCH o POST)
+- `CloudStorage.getAll(keys[])` — GET con filter OR de múltiples keys
+
+El token de admin se cachea 11 horas para evitar re-autenticación frecuente.
+
+### Migración desde Supabase
+Los datos de Supabase (`wczamyidhyqwtxvjgwgu.supabase.co`) fueron migrados a PocketBase el 2026-09-15. Supabase ya no se usa pero los datos siguen ahí como respaldo histórico.
+
+---
+
 ## Arquitectura
 
 ```
-App.tsx                  ← componente raíz, lógica principal (~3000 líneas)
+App.tsx                  ← componente raíz, lógica principal (~4000+ líneas)
 index.tsx                ← punto de entrada React
 index.html               ← HTML con print CSS y portal de impresión
 types.ts                 ← interfaces TypeScript (RipsRecord, Acta, Prestador, etc.)
@@ -46,8 +102,8 @@ components/
 utils/
   logic.ts               ← lógica de cálculo de metas y cumplimiento
 services/
-  storageService.ts      ← persistencia Supabase (actas, prestadores, renuencias)
-  supabaseClient.ts      ← cliente Supabase
+  storageService.ts      ← persistencia de sesión RIPS (registros grandes)
+  supabaseClient.ts      ← cliente CloudStorage (ahora apunta a PocketBase)
 public/
   logo-dusakawi.jpg      ← logo para el header del acta
 ```
@@ -69,7 +125,11 @@ Dashboard → barra "Ejecutado (Real)"
 ### Estado clave en App.tsx
 - `registros: RipsRecord[]` — todos los registros procesados, acumulados entre uploads
 - `metas: ServiceTypeMeta[]` — metas mensuales por tipo de servicio del prestador activo
-- `actas: Acta[]` — actas guardadas en Supabase
+- `actas: Acta[]` — actas guardadas en PocketBase
+- `detectedPrestadorId` — ID del prestador detectado en los archivos cargados
+- `isAuditMode` — `true` cuando hay registros pero no hay prestador seleccionado
+- `supabaseStatus` — estado del ping periódico a PocketBase (`'ok'|'error'|'checking'|'unknown'`)
+- `expandedNits` — Set de NITs de prestadores con el cajón abierto en la lista
 
 ---
 
@@ -97,12 +157,12 @@ Columnas separadas por coma, **índice 0-based**:
 | 25 | Consecutivo dentro factura |
 
 ### Bug corregido en v2.0 — Auto-detección falsa de USUARIOS
-Los nombres de medicamento se truncan a **30 caracteres**. Algunos terminan en `M` o `F` suelto (ej: `"CLOPIDROGEL 75 mg (PLATEMAX) M"`), lo que disparaba falsamente el detector automático de sección USUARIOS (regex `\b[MFmf]\b` + fecha), rompiendo el conteo de todos los medicamentos siguientes en esa sección.
+Los nombres de medicamento se truncan a **30 caracteres**. Algunos terminan en `M` o `F` suelto (ej: `"CLOPIDROGEL 75 mg (PLATEMAX) M"`), lo que disparaba falsamente el detector automático de sección USUARIOS.
 
 **Fix:** La auto-detección de USUARIOS no corre cuando `section === "MEDICAMENTOS"`.
 
 ### Deduplicación de medicamentos
-Clave de dedup: `${paciente}|${codMed}|${fecha}` — una dispensación única por paciente+código+fecha. Compartida en `medDupSet` entre todos los archivos de un mismo upload, y también entre uploads sucesivos (acumulación en `setRegistros`).
+Clave de dedup: `${paciente}|${codMed}|${fecha}` — una dispensación única por paciente+código+fecha.
 
 ### Exclusión de OXÍGENO
 Se excluyen líneas donde `nombreMed` coincide con `/OXIGENO|OXIGEN|GAS\s+MED|OXYGEN/i`.
@@ -114,31 +174,23 @@ Se excluyen líneas donde `nombreMed` coincide con `/OXIGENO|OXIGEN|GAS\s+MED|OX
 "ARCHIVO-USUARIOS" → section = "USUARIOS"
 "ARCHIVO-URGENCIAS" → inUrgenciasSection = true
 ```
-La auto-detección de USUARIOS (por heurística fecha+sexo) solo corre si `section !== "USUARIOS" && section !== "MEDICAMENTOS"`.
 
 ---
 
 ## Impresión / PDF de actas
 
-- Botón "Imprimir / PDF" copia el HTML del acta a `#acta-print-portal` (div hermano de `#root` en el body)
-- CSS en `index.html`:
-  ```css
-  @media print {
-    #root { display: none !important; }
-    #acta-print-portal { display: block !important; }
-  }
-  ```
-- Esto oculta toda la UI de la app y muestra solo el contenido del acta
-- El logo `logo-dusakawi.jpg` debe estar en `public/` para aparecer en el acta
+- Botón "Imprimir / PDF" copia el HTML del acta a `#acta-print-portal`
+- CSS en `index.html`: `@media print { #root { display: none } #acta-print-portal { display: block } }`
+- El logo `logo-dusakawi.jpg` debe estar en `public/`
 
 ---
 
 ## Actas de Evaluación
 
-- Guardadas en Supabase (tabla `actas`)
+- Guardadas en PocketBase (`app_storage` key `actas`) vía `CloudStorage.set`
 - `ActaServicio.ejecutado` viene del conteo de `registros` filtrados por tipo
-- El botón "Recalcular Servicios" actualiza los valores ejecutados con los RIPS cargados actualmente
-- El aviso "NO se guardará automáticamente" solo aparece en pestaña **Formulario**, no en **Vista Previa**
+- El botón "Recalcular Servicios" actualiza los valores ejecutados con los RIPS cargados
+- El aviso "NO se guardará automáticamente" solo aparece en pestaña **Formulario**
 
 ---
 
@@ -149,44 +201,61 @@ La auto-detección de USUARIOS (por heurística fecha+sexo) solo corre si `secti
 | `ASISTENCIAL` | `TIPOS_ASISTENCIAL` | Azul índigo | 11 servicios: consulta, odonto, enfermería, lab, imagen, gineco, medicina interna, TAB, urgencias, hosp, medicamentos |
 | `ESPECIALIDADES` | `TIPOS_ESPECIALIDADES` | Morado | 6 servicios especializados |
 | `CAPITA AMPLIADA` | `TIPOS_CAPITA_AMPLIADA` | Verde esmeralda | ASISTENCIAL + pediatría, nutrición, psicología |
-| `PAI` | `TIPOS_PAI` | Naranja | 14 biológicos mapeados a CUPS 993xxx. Dashboard agrega todo en una barra "PAI". Renuencias muestra por vacuna. |
-
-### PAI — Archivos RIPS
-Los archivos `ARCHIVO-PROCEDIMIENTOS` (tipo AP) se procesan como `section = "SERVICIOS"` en el parser. Los CUPS 993xxx están en `CUPS_MAP_RAW` y clasifican automáticamente al tipo de biológico correcto. El `useMemo` expone `typeCount` (conteo bruto por tipo) para que la sección Renuencias pueda leer conteos individuales aunque el chart esté agrupado.
+| `PAI` | `TIPOS_PAI` | Naranja | 14 biológicos mapeados a CUPS 993xxx |
 
 ---
 
 ## Sincronización multi-dispositivo (v2.3+)
 
-Todo dato persistente (prestadores, actas, renuencias, usuarios, firmantes, CUPS personalizados) se guarda en **Supabase** y se sincroniza automáticamente.
-
-### Estrategia de sync
-
 | Momento | Qué hace |
 |---|---|
-| **Carga inicial** | Fusiona localStorage + Supabase. La nube tiene prioridad en conflicto de ID pero los registros solo-locales también se conservan y se suben. |
-| **Auto-save** (useEffect) | Cada vez que cambia `prestadores`, `actas`, `renuncias`, etc., se guarda en Supabase si `cloudInitialized.current === true`. |
-| **Poll 60 s** | Descarga cloud, fusiona con local. Si hay registros solo-locales que la nube no conoce, devuelve nuevo array → dispara auto-save → los sube. |
-| **Guardar Sesión** | Botón manual: pull → merge → push fusionado. Garantiza que ningún PC destruya datos del otro. |
+| **Carga inicial** | Fusiona localStorage + PocketBase. La nube tiene prioridad en conflicto de ID. |
+| **Auto-save** (useEffect) | Cada vez que cambia estado clave, guarda en PocketBase si `cloudInitialized.current === true`. |
+| **Poll 60 s** | Descarga cloud, fusiona con local. Si hay registros solo-locales, los sube. |
+| **Sincronizar** | Botón manual: pull → merge → push fusionado. |
+| **Ping 2 min** | `supabaseStatus` — verifica disponibilidad de PocketBase cada 2 minutos. Indicador verde/rojo/amarillo en header. |
 
 ### Dedup de prestadores
-Clave de dedup secundaria: `${nit}|${contrato}` — si el mismo prestador fue creado con distintos IDs en dos PCs, se conserva solo uno.
+Clave secundaria: `${nit}|${contrato}` — evita duplicados por ID diferente.
 
 ### Dedup de actas (`deduplicarActas`)
-1. Por `id` exacto (mismo objeto guardado dos veces → una copia).
-2. Por `prestadorId||numero` — si el acta fue regenerada (nuevo ID, mismo número y prestador), queda la de mayor % de cumplimiento.
+1. Por `id` exacto.
+2. Por `prestadorId||numero` — queda la de mayor % de cumplimiento.
+
+---
+
+## Lista de Prestadores — Cajones colapsables (v2.11+)
+
+- Los prestadores están agrupados por NIT
+- **Por defecto colapsados** — header muestra nombre, NIT, ubicación, badges S:/C: y total de actas
+- **Clic en el header** → abre el cajón con:
+  - Panel **SUBSIDIADO** (izquierda): mini tarjetas de actas verde/amarillo/rojo con % cumplimiento
+  - Panel **CONTRIBUTIVO** (derecha): ídem
+  - Clic en mini tarjeta → abre el acta
+  - Contratos completos con botones (Cargar Metas, Acta, editar, eliminar)
+- `expandedNits: Set<string>` — controla qué grupos están abiertos
 
 ---
 
 ## Formulario de Prestadores
 
-### Nuevo prestador
-- Siempre inicia con `tipoContrato: 'ASISTENCIAL'` y `TIPOS_ASISTENCIAL` en cero.
-- No hereda las metas del prestador activo (bug corregido en v2.3).
+### Nuevo prestador / + Contrato / Reset tras guardar
+Siempre inicia con `tipoContrato: 'ASISTENCIAL'` y `TIPOS_ASISTENCIAL` en cero.
 
 ### Editar prestador existente
-- El formulario se popula desde `p.metas` del prestador seleccionado.
-- Al cambiar el `tipoContrato` en el selector, las metas se recalculan automáticamente desde `TIPOS_*` correspondiente, conservando los valores guardados si el tipo de servicio existe en la nueva lista.
+El formulario se popula desde `p.metas` del prestador seleccionado.
+
+### Selector de prestador (Carga de Datos)
+- Al seleccionar un prestador diferente al activo → RIPS se limpian automáticamente
+- Detección desde archivos solo corre si `!detectedPrestadorId` (no sobreescribe selección manual)
+
+---
+
+## Modo Auditoría (v2.8+)
+
+- `isAuditMode = !detectedPrestadorId && registros.length > 0`
+- La gráfica muestra todos los tipos de servicio encontrados ordenados por cantidad, sin filtrar por metas
+- Útil para explorar archivos desconocidos sin necesitar un prestador registrado
 
 ---
 
@@ -194,29 +263,35 @@ Clave de dedup secundaria: `${nit}|${contrato}` — si el mismo prestador fue cr
 
 | Versión | Tag git | Descripción |
 |---|---|---|
-| **2.8** | `v2.8` | Modo Auditoría: sin prestador seleccionado, el dashboard muestra todos los tipos de servicio encontrados en los RIPS ordenados por cantidad. |
-| **2.7** | `v2.7` | Al cambiar de prestador en el selector, RIPS se limpian automáticamente. Detección desde archivos ya no sobreescribe selección manual. |
-| **2.6** | `v2.6` | RIPS se limpian automáticamente al detectar un prestador diferente en el upload. La detección siempre corre (no solo cuando estaba vacía). |
-| **2.5** | `v2.5` | Fix crítico: "Guardar Sesión" ahora hace pull→merge→push en lugar de push→pull (antes destruía datos de otros PCs). |
-| **2.4** | `v2.4` | Fix botón "+Contrato" heredaba metas del prestador activo. Las tres rutas de apertura del formulario ahora inician siempre en ASISTENCIAL limpio. |
-| **2.3** | `v2.3` | Sync bidireccional de prestadores. Fix acta ASISTENCIAL generada como PAI. Fix poll pierde actas solo-locales. |
-| **2.2** | `v2.2` | Vista Previa del Acta con ejecutado dinámico desde RIPS. Migración auto de actas PAI viejas. Botón "Limpiar RIPS" para todos. |
-| **2.1** | `v2.1` | CAPITA AMPLIADA y PAI como tipos de contrato. Dashboard PAI unificado. Renuencias filtradas por tipo de contrato. |
-| **2.0** | `v2.0` | Primera versión estable documentada. MEDICAMENTOS corregido, impresión de actas limpia, logo restaurado, acumulación de uploads. |
+| **2.11** | `v2.11` | Cajones colapsables en lista de prestadores con mini vista SUBSIDIADO/CONTRIBUTIVO. |
+| **2.10** | `v2.10` | Migración de Supabase a PocketBase en VPS Contabo propio. |
+| **2.9** | `v2.9` | Monitor de estado PocketBase con indicador verde/rojo en header, ping cada 2 min. |
+| **2.8** | `v2.8` | Modo Auditoría: sin prestador seleccionado muestra todos los tipos de servicio. |
+| **2.7** | `v2.7` | Selector de prestador limpia RIPS al cambiar. Detección no sobreescribe selección manual. |
+| **2.6** | `v2.6` | RIPS se limpian al detectar prestador diferente en upload. |
+| **2.5** | `v2.5` | Fix "Guardar Sesión": pull→merge→push (antes destruía datos de otros PCs). |
+| **2.4** | `v2.4` | Fix "+Contrato" heredaba metas del prestador activo. |
+| **2.3** | `v2.3` | Sync bidireccional de prestadores. Fix acta PAI. Fix poll pierde actas locales. |
+| **2.2** | `v2.2` | Vista Previa dinámica desde RIPS. Migración auto actas PAI. Limpiar RIPS para todos. |
+| **2.1** | `v2.1` | CAPITA AMPLIADA y PAI. Dashboard PAI unificado. Renuencias filtradas por tipo. |
+| **2.0** | `v2.0` | Primera versión estable. MEDICAMENTOS corregido, impresión limpia, logo restaurado. |
 
-Para volver a una versión: `git checkout v2.4`
-Para crear una versión nueva: `git tag v2.4 && git push origin v2.4`
+```bash
+# Volver a una versión
+git checkout v2.11
+
+# Crear tag nuevo
+git tag v2.11 && git -c http.proxy="" -c https.proxy="" push \
+  "https://<TOKEN>@github.com/chuvanegas/evaluacion-rips-2026.git" v2.11
+```
 
 ---
 
 ## Rutas que abren el formulario de prestador
 
-Hay tres botones que abren `showPrestForm = true`. Los tres deben iniciar con metas limpias cuando crean un prestador/contrato nuevo:
-
 | Botón | Ubicación | Estado |
 |---|---|---|
-| "Nuevo Prestador" | Cabecera de la lista de prestadores | Inicia con ASISTENCIAL en 0 |
-| Reset tras guardar | `handleSavePrestador` (App.tsx ~línea 755) | Inicia con ASISTENCIAL en 0 |
-| "+ Contrato" | Fila de representante en lista | Inicia con ASISTENCIAL en 0 (corregido v2.4) |
-
-El botón **Editar (lápiz)** sí carga los datos del prestador existente — eso es correcto.
+| "Nuevo Prestador" | Cabecera de la lista | ASISTENCIAL en 0 |
+| Reset tras guardar | `handleSavePrestador` (~línea 755) | ASISTENCIAL en 0 |
+| "+ Contrato" | Header del grupo NIT | ASISTENCIAL en 0 (corregido v2.4) |
+| **Editar (lápiz)** | Fila de contrato | Carga datos existentes — correcto |
