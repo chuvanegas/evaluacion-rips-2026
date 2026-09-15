@@ -1,5 +1,14 @@
 # Changelog — Evaluación Cápita Asistencial
 
+## v2.10 — 2026-09-15
+
+### Migración de base de datos: Supabase → PocketBase (VPS propio)
+- La app ahora usa **PocketBase** corriendo en `evaluacion-db.duckdns.org` en un VPS Contabo propio.
+- Todos los datos (prestadores, actas, renuncias, usuarios, etc.) fueron migrados desde Supabase.
+- La interfaz `CloudStorage` (get/set/getAll) mantiene la misma API — ningún otro archivo cambió.
+- PocketBase corre con SSL (Let's Encrypt) y nginx como reverse proxy, renovación automática de certificado.
+- El monitor de estado (v2.9) ahora apunta al nuevo endpoint.
+
 ## v2.9 — 2026-09-15
 
 ### Monitor de estado Supabase
