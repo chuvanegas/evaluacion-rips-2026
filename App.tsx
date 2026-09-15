@@ -221,6 +221,7 @@ function App() {
   // Mantenimiento – Custom CUPS
   const [customCupsList, setCustomCupsList] = useState<CustomCupsEntry[]>([]);
   const [editingCups, setEditingCups] = useState<string | null>(null); // cups code being edited
+  const [expandedNits, setExpandedNits] = useState<Set<string>>(new Set());
   const [editCupsEntry, setEditCupsEntry] = useState<CustomCupsEntry>({ cups: '', nombre: '', tipo: '' });
   const [newCupsEntry, setNewCupsEntry] = useState<CustomCupsEntry>({ cups: '', nombre: '', tipo: '' });
 
@@ -3370,17 +3371,55 @@ function App() {
                     </div>
                   );
                   return (
-                    <div className="space-y-4">
+                    <div className="space-y-3">
                       {Object.entries(groups).map(([nit, grupo]) => {
                         const rep = grupo[0];
-                        const totalActas = grupo.reduce((sum, p) =>
-                          sum + [...new Map(actas.filter(a => a.prestadorId === p.id || (a.nit && a.nit === p.nit && a.contrato === p.contrato)).map(a => [a.id, a])).values()].length, 0);
+                        const isOpen = expandedNits.has(nit);
+                        const toggleOpen = () => setExpandedNits(prev => {
+                          const next = new Set(prev);
+                          if (next.has(nit)) next.delete(nit); else next.add(nit);
+                          return next;
+                        });
+                        // All actas for this prestador, deduped
+                        const allActas = [...new Map(
+                          grupo.flatMap(p => actas.filter(a => a.prestadorId === p.id || (a.nit && a.nit === p.nit && a.contrato === p.contrato)))
+                          .map(a => [a.id, a])
+                        ).values()];
+                        const subActas = allActas.filter(a => {
+                          const p = grupo.find(pp => pp.id === a.prestadorId || (a.nit === pp.nit && a.contrato === pp.contrato));
+                          return !p || p.regimen !== 'CONTRIBUTIVO';
+                        });
+                        const contActas = allActas.filter(a => {
+                          const p = grupo.find(pp => pp.id === a.prestadorId || (a.nit === pp.nit && a.contrato === pp.contrato));
+                          return p?.regimen === 'CONTRIBUTIVO';
+                        });
+                        const totalActas = allActas.length;
+
+                        const ActaMiniCard = ({ acta }: { acta: Acta }) => {
+                          const totalProg = acta.servicios.reduce((s, x) => s + x.programado, 0);
+                          const totalEjec = acta.servicios.reduce((s, x) => s + Math.min(x.ejecutado, x.programado), 0);
+                          const cumpl = totalProg > 0 ? Math.min(Math.round((totalEjec / totalProg) * 100), 100) : 0;
+                          const badgeColor = cumpl >= 100 ? 'bg-green-100 dark:bg-green-500/15 text-green-700 dark:text-green-400 border-green-200 dark:border-green-500/20' : cumpl >= 80 ? 'bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-500/20' : 'bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 border-red-200 dark:border-red-500/20';
+                          return (
+                            <div className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2 ${badgeColor} cursor-pointer hover:opacity-80 transition-opacity`} onClick={() => handleEditActa(acta)}>
+                              <div className="min-w-0">
+                                <p className="text-[11px] font-mono font-bold truncate">{acta.numero}</p>
+                                <p className="text-[10px] opacity-70 truncate">{acta.periodoEvaluado}</p>
+                              </div>
+                              <span className="text-sm font-black shrink-0">{cumpl}%</span>
+                            </div>
+                          );
+                        };
+
                         return (
-                          <div key={nit} className="glass-panel rounded-2xl shadow-lg overflow-hidden">
-                            {/* Group header */}
-                            <div className="flex items-start justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-800/40">
-                              <div>
-                                <h3 className="font-bold text-slate-800 dark:text-white text-base leading-tight">{rep.nombre}</h3>
+                          <div key={nit} className="glass-panel rounded-2xl shadow-md overflow-hidden">
+                            {/* Clickable header */}
+                            <button
+                              onClick={toggleOpen}
+                              className="w-full flex items-center justify-between px-5 py-4 bg-slate-50/60 dark:bg-slate-800/40 hover:bg-slate-100/60 dark:hover:bg-slate-800/60 transition-colors text-left"
+                            >
+                              <div className="min-w-0">
+                                <h3 className="font-bold text-slate-800 dark:text-white text-base leading-tight truncate">{rep.nombre}</h3>
                                 <div className="flex flex-wrap gap-3 mt-1 text-xs text-slate-500 dark:text-slate-400">
                                   <span className="font-mono">NIT: {nit}</span>
                                   {(rep.departamento || rep.municipio) && (
@@ -3388,106 +3427,121 @@ function App() {
                                   )}
                                 </div>
                               </div>
-                              <div className="flex items-center gap-2 shrink-0">
+                              <div className="flex items-center gap-2 shrink-0 ml-3">
+                                {subActas.length > 0 && (
+                                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300">
+                                    S: {subActas.length}
+                                  </span>
+                                )}
+                                {contActas.length > 0 && (
+                                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-orange-100 dark:bg-orange-500/20 text-orange-600 dark:text-orange-300">
+                                    C: {contActas.length}
+                                  </span>
+                                )}
                                 <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full ${totalActas > 0 ? 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-400'}`}>
                                   {totalActas} acta{totalActas !== 1 ? 's' : ''}
                                 </span>
                                 {isAdmin && (
-                                  <button
-                                    onClick={() => { setPrestForm({ nombre: rep.nombre, nit: rep.nit, departamento: rep.departamento, municipio: rep.municipio, contrato: '', vigencia: '', regimen: 'SUBSIDIADO', tipoContrato: 'ASISTENCIAL', metas: TIPOS_ASISTENCIAL.map(t => ({ type: t, monthlyGoal: 0, active: true })) }); setEditPrest(null); setShowPrestForm(true); }}
+                                  <span
+                                    role="button"
+                                    onClick={e => { e.stopPropagation(); setPrestForm({ nombre: rep.nombre, nit: rep.nit, departamento: rep.departamento, municipio: rep.municipio, contrato: '', vigencia: '', regimen: 'SUBSIDIADO', tipoContrato: 'ASISTENCIAL', metas: TIPOS_ASISTENCIAL.map(t => ({ type: t, monthlyGoal: 0, active: true })) }); setEditPrest(null); setShowPrestForm(true); }}
                                     className="text-[11px] flex items-center gap-1 px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors font-medium"
-                                    title="Agregar contrato a este prestador"
                                   >
                                     <Plus className="h-3 w-3" /> Contrato
-                                  </button>
+                                  </span>
                                 )}
+                                {isOpen ? <ChevronLeft className="h-4 w-4 text-slate-400 rotate-90" /> : <ChevronRight className="h-4 w-4 text-slate-400" />}
                               </div>
-                            </div>
+                            </button>
 
-                            {/* Contracts table */}
-                            <div className="divide-y divide-slate-100 dark:divide-slate-700/50">
-                              {grupo.map(p => {
-                                const pActas = [...new Map(actas.filter(a => a.prestadorId === p.id || (a.nit && a.nit === p.nit && a.contrato === p.contrato)).map(a => [a.id, a])).values()];
-                                return (
-                                  <div key={p.id} className="px-5 py-3 hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors">
-                                    <div className="flex items-start justify-between gap-3">
-                                      {/* Contract info */}
-                                      <div className="flex flex-wrap items-center gap-2 min-w-0">
-                                        {p.contrato && (
-                                          <span className="font-mono text-sm font-semibold text-slate-700 dark:text-slate-200">
-                                            📋 {p.contrato}
-                                          </span>
-                                        )}
-                                        <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${p.regimen === 'CONTRIBUTIVO' ? 'bg-orange-100 dark:bg-orange-500/15 text-orange-600 dark:text-orange-400' : 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'}`}>
-                                          {p.regimen || 'SUBSIDIADO'}
-                                        </span>
-                                        <span className="text-[11px] text-slate-400 dark:text-slate-500">
-                                          {p.metas.filter(m => m.monthlyGoal > 0).length} servicios
-                                        </span>
-                                        {p.vigencia && (
-                                          <span className="text-[11px] text-slate-400">vigencia: {p.vigencia}</span>
-                                        )}
+                            {/* Drawer content */}
+                            {isOpen && (
+                              <div>
+                                {/* Mini vista actas por régimen */}
+                                {totalActas > 0 && (
+                                  <div className="grid grid-cols-2 gap-0 border-b border-slate-200 dark:border-slate-700/60">
+                                    {/* SUBSIDIADO */}
+                                    <div className="p-4 border-r border-slate-200 dark:border-slate-700/60">
+                                      <div className="flex items-center gap-2 mb-3">
+                                        <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300">Subsidiado</span>
+                                        <span className="text-[10px] text-slate-400">{subActas.length} actas</span>
                                       </div>
-                                      {/* Actions */}
-                                      <div className="flex gap-1 shrink-0">
-                                        <button
-                                          onClick={() => handleLoadPrestadorMetas(p)}
-                                          className="text-[11px] px-2.5 py-1 bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 rounded-lg font-medium transition-colors border border-indigo-200 dark:border-indigo-500/20"
-                                        >
-                                          Cargar Metas
-                                        </button>
-                                        <button
-                                          onClick={() => handleGenerarActa(p)}
-                                          className="text-[11px] flex items-center gap-1 px-2.5 py-1 bg-emerald-50 dark:bg-emerald-500/10 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 rounded-lg font-medium transition-colors border border-emerald-200 dark:border-emerald-500/20"
-                                        >
-                                          <ClipboardList className="h-3 w-3" /> Acta
-                                        </button>
-                                        {isAdmin && (<>
-                                          <button
-                                            onClick={() => { setEditPrest(p); const savedMetasMap = new Map((p.metas||[]).map((m: ServiceTypeMeta) => [m.type, m])); const mergedMetas = metas.map(m => savedMetasMap.get(m.type) ?? { ...m, monthlyGoal: 0 }); setPrestForm({ nombre: p.nombre, nit: p.nit, departamento: p.departamento, municipio: p.municipio, contrato: p.contrato, vigencia: p.vigencia || '', regimen: p.regimen || 'SUBSIDIADO', repLegalIPS: p.repLegalIPS || '', metas: mergedMetas, tipoContrato: p.tipoContrato }); setShowPrestForm(true); }}
-                                            className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors"
-                                            title="Editar contrato"
-                                          >
-                                            <Pencil className="h-3.5 w-3.5" />
-                                          </button>
-                                          <button
-                                            onClick={() => handleDeletePrestador(p.id)}
-                                            className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 text-slate-500 hover:text-red-500 transition-colors"
-                                            title="Eliminar contrato"
-                                          >
-                                            <Trash2 className="h-3.5 w-3.5" />
-                                          </button>
-                                        </>)}
-                                      </div>
+                                      {subActas.length > 0 ? (
+                                        <div className="space-y-1.5">
+                                          {subActas.map(a => <ActaMiniCard key={a.id} acta={a} />)}
+                                        </div>
+                                      ) : (
+                                        <p className="text-[11px] text-slate-400 italic">Sin actas</p>
+                                      )}
                                     </div>
-                                    {/* Actas for this contract */}
-                                    {pActas.length > 0 && (
-                                      <div className="mt-2 flex flex-wrap gap-1.5">
-                                        {pActas.map(acta => {
-                                          const totalProg = acta.servicios.reduce((s, x) => s + x.programado, 0);
-                                          const totalEjec = acta.servicios.reduce((s, x) => s + Math.min(x.ejecutado, x.programado), 0);
-                                          const cumpl = totalProg > 0 ? Math.min(Math.round((totalEjec / totalProg) * 100), 100) : 0;
-                                          const badgeColor = cumpl >= 100 ? 'bg-green-100 dark:bg-green-500/15 text-green-700 dark:text-green-400' : cumpl >= 80 ? 'bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400' : 'bg-red-100 dark:bg-red-500/15 text-red-600 dark:text-red-400';
-                                          return (
-                                            <div key={acta.id} className="flex items-center gap-1.5 bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1">
-                                              <span className="text-[11px] font-mono font-semibold text-indigo-600 dark:text-indigo-400">{acta.numero}</span>
-                                              <span className="text-[10px] text-slate-400 hidden sm:inline">{acta.periodoEvaluado}</span>
-                                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${badgeColor}`}>{cumpl}%</span>
-                                              <button onClick={() => handleEditActa(acta)} className="p-0.5 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors text-slate-400" title="Ver/Editar">
-                                                <Pencil className="h-3 w-3" />
-                                              </button>
-                                              <button onClick={() => handleDeleteActa(acta.id)} className="p-0.5 hover:text-red-500 transition-colors text-slate-400" title="Eliminar">
-                                                <Trash2 className="h-3 w-3" />
-                                              </button>
-                                            </div>
-                                          );
-                                        })}
+                                    {/* CONTRIBUTIVO */}
+                                    <div className="p-4">
+                                      <div className="flex items-center gap-2 mb-3">
+                                        <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-orange-100 dark:bg-orange-500/20 text-orange-600 dark:text-orange-300">Contributivo</span>
+                                        <span className="text-[10px] text-slate-400">{contActas.length} actas</span>
                                       </div>
-                                    )}
+                                      {contActas.length > 0 ? (
+                                        <div className="space-y-1.5">
+                                          {contActas.map(a => <ActaMiniCard key={a.id} acta={a} />)}
+                                        </div>
+                                      ) : (
+                                        <p className="text-[11px] text-slate-400 italic">Sin actas</p>
+                                      )}
+                                    </div>
                                   </div>
-                                );
-                              })}
-                            </div>
+                                )}
+
+                                {/* Contracts table — funciones intactas */}
+                                <div className="divide-y divide-slate-100 dark:divide-slate-700/50">
+                                  {grupo.map(p => {
+                                    const pActas = [...new Map(actas.filter(a => a.prestadorId === p.id || (a.nit && a.nit === p.nit && a.contrato === p.contrato)).map(a => [a.id, a])).values()];
+                                    return (
+                                      <div key={p.id} className="px-5 py-3 hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors">
+                                        <div className="flex items-start justify-between gap-3">
+                                          <div className="flex flex-wrap items-center gap-2 min-w-0">
+                                            {p.contrato && (
+                                              <span className="font-mono text-sm font-semibold text-slate-700 dark:text-slate-200">📋 {p.contrato}</span>
+                                            )}
+                                            <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${p.regimen === 'CONTRIBUTIVO' ? 'bg-orange-100 dark:bg-orange-500/15 text-orange-600 dark:text-orange-400' : 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'}`}>
+                                              {p.regimen || 'SUBSIDIADO'}
+                                            </span>
+                                            <span className="text-[11px] text-slate-400 dark:text-slate-500">{p.metas.filter(m => m.monthlyGoal > 0).length} servicios</span>
+                                            {p.vigencia && <span className="text-[11px] text-slate-400">vigencia: {p.vigencia}</span>}
+                                          </div>
+                                          <div className="flex gap-1 shrink-0">
+                                            <button onClick={() => handleLoadPrestadorMetas(p)} className="text-[11px] px-2.5 py-1 bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 rounded-lg font-medium transition-colors border border-indigo-200 dark:border-indigo-500/20">Cargar Metas</button>
+                                            <button onClick={() => handleGenerarActa(p)} className="text-[11px] flex items-center gap-1 px-2.5 py-1 bg-emerald-50 dark:bg-emerald-500/10 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 rounded-lg font-medium transition-colors border border-emerald-200 dark:border-emerald-500/20"><ClipboardList className="h-3 w-3" /> Acta</button>
+                                            {isAdmin && (<>
+                                              <button onClick={() => { setEditPrest(p); const savedMetasMap = new Map((p.metas||[]).map((m: ServiceTypeMeta) => [m.type, m])); const mergedMetas = metas.map(m => savedMetasMap.get(m.type) ?? { ...m, monthlyGoal: 0 }); setPrestForm({ nombre: p.nombre, nit: p.nit, departamento: p.departamento, municipio: p.municipio, contrato: p.contrato, vigencia: p.vigencia || '', regimen: p.regimen || 'SUBSIDIADO', repLegalIPS: p.repLegalIPS || '', metas: mergedMetas, tipoContrato: p.tipoContrato }); setShowPrestForm(true); }} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors" title="Editar contrato"><Pencil className="h-3.5 w-3.5" /></button>
+                                              <button onClick={() => handleDeletePrestador(p.id)} className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 text-slate-500 hover:text-red-500 transition-colors" title="Eliminar contrato"><Trash2 className="h-3.5 w-3.5" /></button>
+                                            </>)}
+                                          </div>
+                                        </div>
+                                        {pActas.length > 0 && (
+                                          <div className="mt-2 flex flex-wrap gap-1.5">
+                                            {pActas.map(acta => {
+                                              const totalProg = acta.servicios.reduce((s, x) => s + x.programado, 0);
+                                              const totalEjec = acta.servicios.reduce((s, x) => s + Math.min(x.ejecutado, x.programado), 0);
+                                              const cumpl = totalProg > 0 ? Math.min(Math.round((totalEjec / totalProg) * 100), 100) : 0;
+                                              const badgeColor = cumpl >= 100 ? 'bg-green-100 dark:bg-green-500/15 text-green-700 dark:text-green-400' : cumpl >= 80 ? 'bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400' : 'bg-red-100 dark:bg-red-500/15 text-red-600 dark:text-red-400';
+                                              return (
+                                                <div key={acta.id} className="flex items-center gap-1.5 bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1">
+                                                  <span className="text-[11px] font-mono font-semibold text-indigo-600 dark:text-indigo-400">{acta.numero}</span>
+                                                  <span className="text-[10px] text-slate-400 hidden sm:inline">{acta.periodoEvaluado}</span>
+                                                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${badgeColor}`}>{cumpl}%</span>
+                                                  <button onClick={() => handleEditActa(acta)} className="p-0.5 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors text-slate-400" title="Ver/Editar"><Pencil className="h-3 w-3" /></button>
+                                                  <button onClick={() => handleDeleteActa(acta.id)} className="p-0.5 hover:text-red-500 transition-colors text-slate-400" title="Eliminar"><Trash2 className="h-3 w-3" /></button>
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         );
                       })}

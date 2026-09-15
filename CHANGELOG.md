@@ -1,5 +1,16 @@
 # Changelog — Evaluación Cápita Asistencial
 
+## v2.11 — 2026-09-15
+
+### Cajones colapsables de prestadores con mini vista por régimen
+- La lista de prestadores ahora muestra cada IPS **colapsada por defecto** — solo el nombre, NIT, ubicación y conteo de actas.
+- Al hacer clic en un prestador se abre un **cajón** que muestra:
+  - **Panel SUBSIDIADO** (izquierda): mini tarjetas de todas las actas subsidiado con número, período y % cumplimiento con color.
+  - **Panel CONTRIBUTIVO** (derecha): ídem para actas contributivo.
+  - Clic en cualquier mini tarjeta abre el acta directamente.
+- Badges S: y C: en el header muestran cuántas actas hay por régimen sin necesidad de abrir.
+- Debajo de la mini vista se mantienen todos los contratos con sus botones intactos (Cargar Metas, Acta, editar, eliminar).
+
 ## v2.10 — 2026-09-15
 
 ### Migración de base de datos: Supabase → PocketBase (VPS propio)
