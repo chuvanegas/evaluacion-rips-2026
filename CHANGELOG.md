@@ -1,5 +1,12 @@
 # Changelog — Evaluación Cápita Asistencial
 
+## v2.12 — 2026-09-15
+
+### Corrección: Renuencias muestra los mismos servicios que la gráfica
+- **Bug:** La sección "Renuencias y Búsquedas Fallidas" filtraba servicios según el tipo de contrato del prestador detectado, cayendo a `ASISTENCIAL` cuando no había prestador. Esto omitía PEDIATRÍA, PSICOLOGÍA y NUTRICIÓN (solo presentes en CAPITA AMPLIADA) aunque la gráfica los mostrara.
+- **Fix:** Ahora usa `chartData` como fuente de verdad: cualquier servicio que aparece en la gráfica también aparece en Renuencias. Los dos paneles siempre muestran exactamente los mismos tipos de servicio.
+- **Bonus:** El total de cada servicio ahora suma correctamente `RIPS + renuencias` (antes solo mostraba los RIPS, ignorando las renuencias ya ingresadas).
+
 ## v2.11 — 2026-09-15
 
 ### Cajones colapsables de prestadores con mini vista por régimen
