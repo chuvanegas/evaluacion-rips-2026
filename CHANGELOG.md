@@ -1,5 +1,16 @@
 # Changelog — Evaluación Cápita Asistencial
 
+## v2.9 — 2026-09-15
+
+### Monitor de estado Supabase
+- La app ahora hace un ping a Supabase cada **2 minutos** para verificar disponibilidad.
+- Un indicador de estado aparece junto al botón "Sincronizar" en el header:
+  - **Verde "DB OK"**: Supabase responde correctamente.
+  - **Rojo "DB Error"**: Supabase no disponible — la sincronización puede fallar.
+  - **Amarillo "DB..."**: Verificando conexión (también aparece mientras carga la primera vez).
+- Al pasar el cursor sobre el indicador se muestra un tooltip descriptivo.
+- Útil para saber antes de intentar sincronizar si la nube está disponible o hay una interrupción.
+
 ## v2.8 — 2026-09-14
 
 ### Modo Auditoría (sin prestador seleccionado)

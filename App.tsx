@@ -177,6 +177,7 @@ function App() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<{type: 'success' | 'error' | 'info', text: string} | null>(null);
+  const [supabaseStatus, setSupabaseStatus] = useState<'ok' | 'error' | 'checking' | 'unknown'>('unknown');
   
   // Modal State
   const [showDuplicates, setShowDuplicates] = useState(false);
@@ -473,6 +474,24 @@ function App() {
       } catch { /* silencioso */ }
     };
     const id = setInterval(poll, 60000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Supabase health check — runs every 2 minutes
+  useEffect(() => {
+    const check = async () => {
+      setSupabaseStatus('checking');
+      try {
+        const result = await CloudStorage.get('__health_ping__');
+        // Any non-null or null response (but no exception) means Supabase is reachable
+        void result;
+        setSupabaseStatus('ok');
+      } catch {
+        setSupabaseStatus('error');
+      }
+    };
+    check();
+    const id = setInterval(check, 120000);
     return () => clearInterval(id);
   }, []);
 
@@ -2091,14 +2110,30 @@ function App() {
                 <HardDrive className="h-4 w-4" /> Restaurar
               </button>
             )}
-            <button
-              onClick={handleSaveSession}
-              disabled={isSaving}
-              className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-md ${isSaving ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-wait' : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 active:scale-95'}`}
-            >
-              {isSaving ? <div className="w-4 h-4 rounded-full border-2 border-current border-t-transparent animate-spin"/> : <Server className="h-4 w-4" />}
-              <span>{isSaving ? 'Sincronizando...' : 'Sincronizar'}</span>
-            </button>
+            <div className="flex items-center gap-2">
+              {supabaseStatus !== 'unknown' && (
+                <span
+                  title={supabaseStatus === 'ok' ? 'Supabase conectado' : supabaseStatus === 'error' ? 'Supabase no disponible — la sincronización puede fallar' : 'Verificando Supabase...'}
+                  className="flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full border"
+                  style={{
+                    background: supabaseStatus === 'ok' ? 'rgba(34,197,94,0.1)' : supabaseStatus === 'error' ? 'rgba(239,68,68,0.1)' : 'rgba(234,179,8,0.1)',
+                    borderColor: supabaseStatus === 'ok' ? 'rgba(34,197,94,0.4)' : supabaseStatus === 'error' ? 'rgba(239,68,68,0.4)' : 'rgba(234,179,8,0.4)',
+                    color: supabaseStatus === 'ok' ? '#16a34a' : supabaseStatus === 'error' ? '#dc2626' : '#ca8a04',
+                  }}
+                >
+                  <span className={`w-2 h-2 rounded-full ${supabaseStatus === 'checking' ? 'animate-pulse' : ''}`} style={{ background: supabaseStatus === 'ok' ? '#22c55e' : supabaseStatus === 'error' ? '#ef4444' : '#eab308' }} />
+                  <span className="hidden sm:inline">{supabaseStatus === 'ok' ? 'DB OK' : supabaseStatus === 'error' ? 'DB Error' : 'DB...'}</span>
+                </span>
+              )}
+              <button
+                onClick={handleSaveSession}
+                disabled={isSaving}
+                className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-md ${isSaving ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-wait' : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 active:scale-95'}`}
+              >
+                {isSaving ? <div className="w-4 h-4 rounded-full border-2 border-current border-t-transparent animate-spin"/> : <Server className="h-4 w-4" />}
+                <span>{isSaving ? 'Sincronizando...' : 'Sincronizar'}</span>
+              </button>
+            </div>
           </div>
         </div>
         {/* Tab Navigation */}
