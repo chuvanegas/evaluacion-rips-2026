@@ -222,8 +222,6 @@ function App() {
   const [customCupsList, setCustomCupsList] = useState<CustomCupsEntry[]>([]);
   const [editingCups, setEditingCups] = useState<string | null>(null); // cups code being edited
   const [expandedNits, setExpandedNits] = useState<Set<string>>(new Set());
-  const [expandedActaNits, setExpandedActaNits] = useState<Set<string>>(new Set());
-  const [actaSearch, setActaSearch] = useState('');
   const [editCupsEntry, setEditCupsEntry] = useState<CustomCupsEntry>({ cups: '', nombre: '', tipo: '' });
   const [newCupsEntry, setNewCupsEntry] = useState<CustomCupsEntry>({ cups: '', nombre: '', tipo: '' });
 
@@ -4240,9 +4238,20 @@ function App() {
               <div className="flex items-center gap-3">
                 <h2 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
                   <ClipboardList className="h-5 w-5 text-indigo-500" /> Actas de Evaluación
-                  {actas.length > 0 && <span className="text-xs font-semibold bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-full">{actas.length}</span>}
                 </h2>
+                {/* Acta selector (when multiple saved) */}
+                {actas.length > 1 && !inlineActa && (
+                  <div className="flex gap-1 flex-wrap">
+                    {actas.map((a, i) => (
+                      <button key={a.id} onClick={() => setInlineActa(sanitizeActaServicios({ ...a }))}
+                        className="px-2.5 py-1 rounded-lg text-xs font-mono font-medium bg-slate-100 dark:bg-slate-800 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 text-slate-600 dark:text-slate-300 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors border border-slate-200 dark:border-slate-700">
+                        {a.numero}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
+
               <div className="flex gap-2 items-center flex-wrap">
                 {inlineActa && (
                   <button onClick={() => setInlineActa(null)}
@@ -4277,13 +4286,6 @@ function App() {
                     ↺ Recalcular Servicios
                   </button>
                 )}
-                {!inlineActa && (
-                  <button
-                    onClick={() => setInlineActa(makeBlankActa())}
-                    className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-sm font-medium transition-all border border-slate-200 dark:border-slate-700">
-                    <Plus className="h-4 w-4" /> Plantilla en blanco
-                  </button>
-                )}
                 {prestadores.length > 0 && (
                   <button
                     onClick={() => {
@@ -4295,10 +4297,16 @@ function App() {
                     <Plus className="h-4 w-4" /> Nueva Acta
                   </button>
                 )}
+                {prestadores.length === 0 && (
+                  <button onClick={() => { setActiveTab('mantenimiento'); setMaintTab('prestadores'); }}
+                    className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg text-sm font-medium hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">
+                    <Building2 className="h-4 w-4" /> Configurar Prestadores
+                  </button>
+                )}
               </div>
             </div>
 
-            {/* ── Inline editor ── */}
+            {/* ── Inline editor: always show a template ── */}
             {inlineActa ? (
               <ActaModal
                 inline
@@ -4313,174 +4321,73 @@ function App() {
                 onSaveFirmaGlobal={handleSaveFirmaGlobal}
                 liveTypeCount={{ ...typeCount, PAI: TIPOS_PAI.reduce((s, t) => s + (typeCount[t] || 0), 0) }}
               />
-            ) : actas.length === 0 ? (
-              <div className="glass-panel rounded-2xl p-12 flex flex-col items-center justify-center text-center gap-4 border-2 border-dashed border-slate-300 dark:border-slate-700">
+            ) : (
+              <div className="glass-panel rounded-2xl p-12 flex flex-col items-center justify-center text-center gap-5 border-2 border-dashed border-slate-300 dark:border-slate-700">
                 <ClipboardList className="h-14 w-14 text-slate-300 dark:text-slate-700" />
                 <div>
-                  <p className="font-bold text-slate-600 dark:text-slate-300 text-lg">Sin actas registradas</p>
-                  <p className="text-sm text-slate-400 mt-1">Genera la primera acta desde el Dashboard con un prestador cargado</p>
+                  <p className="font-bold text-slate-600 dark:text-slate-300 text-lg">Actas de Evaluación</p>
+                  <p className="text-sm text-slate-400 mt-1">Genera una nueva acta o carga una ya guardada</p>
                 </div>
-              </div>
-            ) : (() => {
-              // ── Agrupar actas por NIT ──
-              const q = actaSearch.toLowerCase();
-              const actasFiltradas = q
-                ? actas.filter(a => a.empresa?.toLowerCase().includes(q) || a.nit?.includes(q) || a.numero?.toLowerCase().includes(q) || a.contrato?.toLowerCase().includes(q) || a.periodoEvaluado?.toLowerCase().includes(q))
-                : actas;
-
-              const grupos = new Map<string, Acta[]>();
-              actasFiltradas.forEach(a => {
-                const key = a.nit || a.empresa || 'SIN_NIT';
-                if (!grupos.has(key)) grupos.set(key, []);
-                grupos.get(key)!.push(a);
-              });
-
-              const ActaCard = ({ a }: { a: Acta }) => {
-                const totalProg = a.servicios.reduce((s, x) => s + x.programado, 0);
-                const totalEjec = a.servicios.reduce((s, x) => s + x.ejecutado, 0);
-                const cumpl = totalProg > 0 ? Math.min(Math.round((totalEjec / totalProg) * 100), 100) : 0;
-                const color = cumpl >= 100 ? '#10b981' : cumpl >= 80 ? '#eab308' : '#ef4444';
-                const regimenBg = a.regimen === 'CONTRIBUTIVO'
-                  ? 'bg-blue-100 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300'
-                  : 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300';
-                return (
-                  <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl p-4 flex flex-col gap-3 hover:border-indigo-300 dark:hover:border-indigo-500/40 hover:shadow-md transition-all">
-                    {/* Número + % */}
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <p className="font-mono font-bold text-indigo-600 dark:text-indigo-400 text-xs truncate">{a.numero || '—'}</p>
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">{a.contrato}</p>
-                      </div>
-                      <span className="text-xl font-bold shrink-0" style={{ color }}>{cumpl}%</span>
-                    </div>
-                    {/* Barra de progreso */}
-                    <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5">
-                      <div className="h-1.5 rounded-full" style={{ width: `${cumpl}%`, backgroundColor: color }} />
-                    </div>
-                    {/* Badges */}
-                    <div className="flex flex-wrap gap-1.5 text-[10px] font-medium">
-                      <span className={`px-2 py-0.5 rounded-full ${regimenBg}`}>{a.regimen}</span>
-                      {a.periodoEvaluado && <span className="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full">{a.periodoEvaluado}</span>}
-                      <span className="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full">{a.fechaActa}</span>
-                    </div>
-                    {/* Acciones */}
-                    <div className="flex gap-2 pt-1 border-t border-slate-100 dark:border-slate-700/60">
-                      <button
-                        onClick={() => setInlineActa(sanitizeActaServicios({ ...a }))}
-                        className="flex-1 flex items-center justify-center gap-1 py-1.5 text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 rounded-lg transition-colors">
-                        Ver / Editar →
-                      </button>
-                      {isAdmin && (
-                        <button
-                          onClick={() => handleDeleteActa(a.id)}
-                          className="p-1.5 text-slate-300 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors">
-                          <Trash2 className="h-3.5 w-3.5" />
+                <div className="flex gap-3 flex-wrap justify-center">
+                  <button
+                    onClick={() => setInlineActa(makeBlankActa())}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium transition-all shadow-md shadow-indigo-500/20"
+                  >
+                    <Plus className="h-4 w-4" /> Abrir plantilla en blanco
+                  </button>
+                  {actas.length > 0 && (
+                    <div className="flex gap-2 flex-wrap justify-center">
+                      {actas.map(a => (
+                        <button key={a.id} onClick={() => setInlineActa(sanitizeActaServicios({ ...a }))}
+                          className="px-4 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-xl text-sm font-mono font-medium transition-all border border-slate-200 dark:border-slate-700">
+                          {a.numero || 'Acta sin número'}
                         </button>
-                      )}
+                      ))}
                     </div>
-                  </div>
-                );
-              };
-
-              return (
-                <div className="space-y-3">
-                  {/* Buscador */}
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                    <input
-                      type="text"
-                      placeholder="Buscar por IPS, NIT, número de acta, contrato o período..."
-                      value={actaSearch}
-                      onChange={e => setActaSearch(e.target.value)}
-                      className="w-full pl-9 pr-4 py-2.5 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
-                    />
-                  </div>
-
-                  {actasFiltradas.length === 0 ? (
-                    <p className="text-center text-slate-400 py-8 text-sm">No se encontraron actas para "{actaSearch}"</p>
-                  ) : (
-                    Array.from(grupos.entries()).map(([nit, grupoActas]) => {
-                      const primerActa = grupoActas[0];
-                      const empresa = primerActa.empresa || nit;
-                      const isOpen = expandedActaNits.has(nit);
-                      const toggle = () => setExpandedActaNits(prev => {
-                        const next = new Set(prev);
-                        next.has(nit) ? next.delete(nit) : next.add(nit);
-                        return next;
-                      });
-                      const subActas = grupoActas.filter(a => a.regimen !== 'CONTRIBUTIVO');
-                      const contActas = grupoActas.filter(a => a.regimen === 'CONTRIBUTIVO');
-                      const avgCumpl = (arr: Acta[]) => {
-                        if (!arr.length) return null;
-                        const avg = arr.reduce((s, a) => {
-                          const tp = a.servicios.reduce((ss, x) => ss + x.programado, 0);
-                          const te = a.servicios.reduce((ss, x) => ss + x.ejecutado, 0);
-                          return s + (tp > 0 ? Math.min((te / tp) * 100, 100) : 0);
-                        }, 0) / arr.length;
-                        return Math.round(avg);
-                      };
-                      const avgS = avgCumpl(subActas);
-                      const avgC = avgCumpl(contActas);
-                      const badgeColor = (v: number | null) => v === null ? '' : v >= 100 ? 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : v >= 80 ? 'bg-yellow-100 dark:bg-yellow-500/15 text-yellow-700 dark:text-yellow-300' : 'bg-red-100 dark:bg-red-500/15 text-red-600 dark:text-red-400';
-
-                      return (
-                        <div key={nit} className="glass-panel rounded-2xl overflow-hidden shadow-sm border border-slate-200 dark:border-slate-700/60">
-                          {/* Header del grupo */}
-                          <button
-                            onClick={toggle}
-                            className="w-full flex items-center gap-3 px-5 py-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors text-left"
-                          >
-                            <Building2 className="h-5 w-5 text-indigo-400 shrink-0" />
-                            <div className="flex-1 min-w-0">
-                              <p className="font-bold text-slate-800 dark:text-white text-sm leading-tight truncate">{empresa}</p>
-                              <p className="text-[11px] text-slate-400 dark:text-slate-500 font-mono mt-0.5">NIT {nit}</p>
-                            </div>
-                            <div className="flex items-center gap-2 shrink-0">
-                              {subActas.length > 0 && avgS !== null && (
-                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${badgeColor(avgS)}`}>
-                                  S: {avgS}% · {subActas.length} acta{subActas.length !== 1 ? 's' : ''}
-                                </span>
-                              )}
-                              {contActas.length > 0 && avgC !== null && (
-                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${badgeColor(avgC)}`}>
-                                  C: {avgC}% · {contActas.length} acta{contActas.length !== 1 ? 's' : ''}
-                                </span>
-                              )}
-                              <span className="text-[10px] font-semibold bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-full">
-                                {grupoActas.length} total
-                              </span>
-                              <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
-                            </div>
-                          </button>
-
-                          {/* Cajón */}
-                          {isOpen && (
-                            <div className="border-t border-slate-200 dark:border-slate-700/60 px-5 py-4 space-y-4">
-                              {subActas.length > 0 && (
-                                <div>
-                                  <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-2">Subsidiado ({subActas.length})</p>
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                                    {subActas.map(a => <ActaCard key={a.id} a={a} />)}
-                                  </div>
-                                </div>
-                              )}
-                              {contActas.length > 0 && (
-                                <div>
-                                  <p className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-2">Contributivo ({contActas.length})</p>
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                                    {contActas.map(a => <ActaCard key={a.id} a={a} />)}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })
                   )}
                 </div>
-              );
-            })()}
+              </div>
+            )}
+
+            {!inlineActa && actas.length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {actas.map(a => {
+                  const totalProg = a.servicios.reduce((s, x) => s + x.programado, 0);
+                  const totalEjec = a.servicios.reduce((s, x) => s + x.ejecutado, 0);
+                  const cumpl = totalProg > 0 ? Math.min(Math.round((totalEjec / totalProg) * 100), 100) : 0;
+                  const color = cumpl >= 100 ? '#10b981' : cumpl >= 80 ? '#eab308' : '#ef4444';
+                  return (
+                    <button key={a.id} onClick={() => setInlineActa(sanitizeActaServicios({ ...a }))}
+                      className="glass-panel rounded-2xl p-5 text-left shadow-lg hover:shadow-xl transition-all group hover:-translate-y-0.5 w-full">
+                      <div className="flex justify-between items-start mb-3">
+                        <div>
+                          <p className="font-mono font-bold text-indigo-600 dark:text-indigo-400 text-sm">{a.numero}</p>
+                          <p className="font-semibold text-slate-800 dark:text-white text-sm leading-tight mt-0.5">{a.empresa}</p>
+                        </div>
+                        <span className="text-2xl font-bold" style={{ color }}>{cumpl}%</span>
+                      </div>
+                      <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 mb-3">
+                        <div className="h-1.5 rounded-full transition-all" style={{ width: `${cumpl}%`, backgroundColor: color }} />
+                      </div>
+                      <div className="flex flex-wrap gap-2 text-xs text-slate-500 dark:text-slate-400">
+                        {a.periodoEvaluado && <span className="bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">{a.periodoEvaluado}</span>}
+                        <span className="bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">{a.fechaActa}</span>
+                        <span className="bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">{a.servicios.length} servicios</span>
+                      </div>
+                      <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center">
+                        <span className="text-xs text-indigo-600 dark:text-indigo-400 font-medium group-hover:underline">
+                          Ver / Editar acta →
+                        </span>
+                        <button onClick={e => { e.stopPropagation(); handleDeleteActa(a.id); }}
+                          className="p-1 text-slate-300 hover:text-red-500 transition-colors rounded">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 

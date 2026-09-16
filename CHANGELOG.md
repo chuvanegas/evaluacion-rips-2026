@@ -1,15 +1,5 @@
 # Changelog — Evaluación Cápita Asistencial
 
-## v2.14 — 2026-09-16
-
-### Actas agrupadas por prestador con cajones colapsables
-- El tab **Actas de Evaluación** ya no muestra 191 chips desordenados — ahora agrupa las actas por IPS/NIT, igual que la lista de prestadores.
-- Cada grupo (colapsado por defecto) muestra en el header: nombre IPS, NIT, promedio de cumplimiento y conteo de actas por régimen (S:/C:).
-- Al abrir el cajón, las actas aparecen separadas en secciones **Subsidiado** y **Contributivo**, cada una en tarjetas con: número de acta, contrato, régimen, período, fecha, barra de progreso y % cumplimiento.
-- Buscador en tiempo real: filtra por IPS, NIT, número de acta, contrato o período evaluado.
-- Botón "Plantilla en blanco" movido a la barra de herramientas principal (ya no está enterrado en el panel vacío).
-- El botón de eliminar acta ahora solo es visible para administradores.
-
 ## v2.13 — 2026-09-16
 
 ### Renuncias: funcionario desde lista + auto-completado al abrir
