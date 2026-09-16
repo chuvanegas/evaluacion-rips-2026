@@ -4595,8 +4595,8 @@ function App() {
         };
 
         const handleSaveRenuncia = () => {
-          if (!renunciaForm.documentoPaciente || !renunciaForm.tipoServicio || !renunciaForm.periodoEvaluado) {
-            setMessage({ type: 'error', text: 'Completa los campos obligatorios: Documento, Tipo de Servicio y Período.' });
+          if (!renunciaForm.documentoPaciente || !renunciaForm.tipoServicio || !renunciaForm.periodoEvaluado || !renunciaForm.responsable) {
+            setMessage({ type: 'error', text: 'Completa los campos obligatorios: Documento, Tipo de Servicio, Período y Funcionario.' });
             return;
           }
           if (editingRenuncia) {
@@ -4618,7 +4618,20 @@ function App() {
                 <ClipboardList className="h-6 w-6 text-rose-500" /> Renuncias de Afiliados
               </h2>
               <button
-                onClick={() => { setRenunciaForm(RENUNCIA_BLANK); setEditingRenuncia(null); setShowRenunciaForm(true); }}
+                onClick={() => {
+                  const dp = detectedPrestadorId ? prestadores.find(p => p.id === detectedPrestadorId) : null;
+                  setRenunciaForm({
+                    ...RENUNCIA_BLANK,
+                    responsable: currentUser?.nombre || currentUser?.username || '',
+                    prestadorId: dp?.id || '',
+                    nit: dp?.nit || '',
+                    contrato: dp?.contrato || '',
+                    regimen: dp?.regimen || 'SUBSIDIADO',
+                    periodoEvaluado: scale ? `${['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][new Date().getMonth()]} ${new Date().getFullYear()}` : '',
+                  });
+                  setEditingRenuncia(null);
+                  setShowRenunciaForm(true);
+                }}
                 className="flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-semibold transition-colors shadow-md"
               >
                 <Plus className="h-4 w-4" /> Nueva Renuncia
@@ -4747,9 +4760,15 @@ function App() {
                       </div>
                       {/* Responsable */}
                       <div className="space-y-1">
-                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Responsable / Funcionario</label>
-                        <input type="text" placeholder="Nombre del funcionario" value={renunciaForm.responsable} onChange={e => setRenunciaForm(f => ({ ...f, responsable: e.target.value }))}
-                          className="w-full px-3 py-2.5 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-rose-500/30" />
+                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Responsable / Funcionario <span className="text-rose-500">*</span></label>
+                        <select value={renunciaForm.responsable} onChange={e => setRenunciaForm(f => ({ ...f, responsable: e.target.value }))}
+                          className="w-full px-3 py-2.5 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-rose-500/30">
+                          <option value="">— Seleccionar funcionario —</option>
+                          {funcionarios.map(fn => <option key={fn} value={fn}>{fn}</option>)}
+                          {renunciaForm.responsable && !funcionarios.includes(renunciaForm.responsable) && (
+                            <option value={renunciaForm.responsable}>{renunciaForm.responsable}</option>
+                          )}
+                        </select>
                       </div>
                     </div>
 

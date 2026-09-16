@@ -1,5 +1,16 @@
 # Changelog — Evaluación Cápita Asistencial
 
+## v2.13 — 2026-09-16
+
+### Renuncias: funcionario desde lista + auto-completado al abrir
+- El campo **Responsable / Funcionario** en el formulario de nueva renuncia ahora es un selector desplegable alimentado desde la lista de funcionarios registrados (antes era texto libre).
+- Al hacer clic en **"Nueva Renuncia"**, el formulario se pre-llena automáticamente con:
+  - **Funcionario**: el usuario actualmente logueado (`currentUser.nombre`)
+  - **Prestador / Contrato / Régimen**: el prestador detectado en los RIPS cargados (si existe)
+  - **Período**: el mes y año actual
+- El campo "Responsable" pasa a ser obligatorio — no se puede guardar una renuncia sin identificar quién la registró.
+- En PocketBase (`renuncias` key) ahora queda trazabilidad completa: prestador, tipo de servicio y funcionario responsable.
+
 ## v2.12 — 2026-09-15
 
 ### Corrección: Renuencias muestra los mismos servicios que la gráfica
