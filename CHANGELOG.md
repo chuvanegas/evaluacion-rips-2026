@@ -1,16 +1,5 @@
 # Changelog — Evaluación Cápita Asistencial
 
-## v2.14 — 2026-09-22
-
-### Panel Prestadores del Dashboard: agrupado por IPS
-- La lista de Prestadores en el Dashboard ya no muestra la misma IPS repetida por cada contrato — ahora agrupa por NIT y muestra cada institución **una sola vez**.
-- El header de cada grupo muestra: nombre IPS, NIT, municipio, badges S/C por régimen y total de actas.
-- **Clic en el header** → abre el cajón con todos los contratos de esa IPS, cada uno con:
-  - Badge de contrato y régimen (subsidiado verde / contributivo naranja)
-  - Lista de actas del contrato con número, período, mini barra de progreso, % cumplimiento y botón "Ver"
-  - Botón "+ Acta" por contrato
-- La búsqueda ahora filtra por nombre, NIT o número de contrato.
-
 ## v2.13 — 2026-09-16
 
 ### Renuncias: funcionario desde lista + auto-completado al abrir
