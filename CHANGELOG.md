@@ -1,5 +1,15 @@
 # Changelog — Evaluación Cápita Asistencial
 
+## v2.14 — 2026-09-22
+
+### Dashboard: Prestadores agrupados por IPS con cajón de contratos y actas
+- El panel **Prestadores** del Dashboard ahora agrupa los contratos por IPS (NIT): una IPS con contratos subsidiado y contributivo aparece como una sola fila, sin duplicados.
+- Clic en el header del grupo despliega un cajón que muestra cada contrato con su régimen (verde = SUBSIDIADO, naranja = CONTRIBUTIVO) y todas las actas asociadas con barra de progreso y % de cumplimiento.
+- Botón **+ Acta** por contrato genera el acta directamente desde el cajón.
+- Botón **Ver** en cada acta navega al editor inline en la pestaña Actas.
+- Badges **S** y **C** en el header indican cuántos regímenes tiene la IPS sin necesidad de abrir.
+- Total de actas visible en el header agrupado.
+
 ## v2.13 — 2026-09-16
 
 ### Renuncias: funcionario desde lista + auto-completado al abrir
