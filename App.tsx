@@ -251,7 +251,6 @@ function App() {
   const [editingActa, setEditingActa] = useState<Acta | null>(null);
   const [inlineActa, setInlineActa] = useState<Acta | null>(null); // inline editor in Actas tab
   const [selectedDashPrestador, setSelectedDashPrestador] = useState<string | null>(null);
-  const [dashExpandedNits, setDashExpandedNits] = useState<Set<string>>(new Set());
   const [searchPrestador, setSearchPrestador] = useState('');
   const [filterContrato, setFilterContrato] = useState('');
   const [filterRegimen, setFilterRegimen] = useState('');
@@ -2203,22 +2202,6 @@ function App() {
 
         {activeTab === 'dashboard' && (() => {
           const prestadoresAsistencial = prestadores;
-
-          // Grupos precalculados para el panel Prestadores (evita IIFEs dentro del JSX)
-          const dashQ = searchPrestador.toLowerCase();
-          const dashFiltrados = prestadoresAsistencial.filter(p =>
-            !dashQ || p.nombre.toLowerCase().includes(dashQ) ||
-            p.contrato.toLowerCase().includes(dashQ) ||
-            (p.nit || '').includes(dashQ)
-          );
-          const dashGruposObj: Record<string, Prestador[]> = {};
-          dashFiltrados.forEach(p => {
-            const key = p.nit || p.nombre;
-            if (!dashGruposObj[key]) dashGruposObj[key] = [];
-            dashGruposObj[key].push(p);
-          });
-          const dashGrupos = Object.entries(dashGruposObj);
-
           return (<>
 
         {/* --- Prestador Detectado Banner --- */}
@@ -2310,80 +2293,82 @@ function App() {
               </div>
             ) : (
               <div className="space-y-2 max-h-[480px] overflow-y-auto custom-scroll pr-1">
-                {dashGrupos.map(([nit, grupo]) => {
-                  const nombre = grupo[0].nombre;
-                  const municipio = grupo[0].municipio;
-                  const isOpen = dashExpandedNits.has(nit);
-                  const hasS = grupo.some(p => p.regimen !== 'CONTRIBUTIVO');
-                  const hasC = grupo.some(p => p.regimen === 'CONTRIBUTIVO');
-                  const totalActas = grupo.reduce((sum, p) =>
-                    sum + actas.filter(a => a.prestadorId === p.id || (a.nit === p.nit && a.contrato === p.contrato)).length, 0);
+                {prestadoresAsistencial.filter(p => {
+                  if (!searchPrestador.trim()) return true;
+                  const q = searchPrestador.toLowerCase();
+                  return p.nombre.toLowerCase().includes(q) || p.contrato.toLowerCase().includes(q);
+                }).map(p => {
+                  const pActas = [...new Map(actas.filter(a => a.prestadorId === p.id || (a.nit && a.nit === p.nit && a.contrato === p.contrato)).map(a => [a.id, a])).values()];
+                  const isSelected = selectedDashPrestador === p.id;
                   return (
-                    <div key={nit} className="rounded-xl border border-slate-200 dark:border-slate-700/60 overflow-hidden bg-slate-50/50 dark:bg-slate-800/30">
-                      <button
-                        onClick={() => setDashExpandedNits(prev => { const n = new Set(prev); n.has(nit) ? n.delete(nit) : n.add(nit); return n; })}
-                        className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors text-left"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <div className="font-semibold text-sm text-slate-800 dark:text-slate-100 truncate">{nombre}</div>
+                    <div key={p.id}
+                      className={`rounded-xl border transition-all cursor-pointer ${isSelected
+                        ? 'border-indigo-500/60 bg-indigo-50/60 dark:bg-indigo-500/10'
+                        : 'border-slate-200 dark:border-slate-700/60 hover:border-indigo-300 dark:hover:border-indigo-500/40 bg-slate-50/50 dark:bg-slate-800/30'}`}
+                      onClick={() => setSelectedDashPrestador(isSelected ? null : p.id)}
+                    >
+                      <div className="flex items-center justify-between px-3 py-2.5">
+                        <div>
+                          <div className="font-semibold text-sm text-slate-800 dark:text-slate-100">{p.nombre}</div>
                           <div className="flex gap-2 mt-0.5 flex-wrap">
-                            <span className="text-[10px] text-slate-400 font-mono">NIT: {nit}</span>
-                            {municipio && <span className="text-[10px] text-slate-400">📍 {municipio}</span>}
+                            <span className="text-[10px] text-slate-400 font-mono">NIT: {p.nit}</span>
+                            {p.contrato && <span className="text-[10px] text-slate-400">📋 {p.contrato}</span>}
+                            {p.regimen && (
+                              <span className={`text-[10px] font-bold ${p.regimen === 'CONTRIBUTIVO' ? 'text-orange-500' : 'text-emerald-500'}`}>
+                                {p.regimen}
+                              </span>
+                            )}
+                            {p.municipio && <span className="text-[10px] text-slate-400">📍 {p.municipio}</span>}
                           </div>
                         </div>
-                        <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                          {hasS && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400">S</span>}
-                          {hasC && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-orange-100 dark:bg-orange-500/15 text-orange-700 dark:text-orange-400">C</span>}
-                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${totalActas > 0 ? 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'}`}>
-                            {totalActas} acta{totalActas !== 1 ? 's' : ''}
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${pActas.length > 0 ? 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'}`}>
+                            {pActas.length} acta{pActas.length !== 1 ? 's' : ''}
                           </span>
-                          <ChevronDown className={`h-3.5 w-3.5 text-slate-400 transition-transform duration-150 ${isOpen ? 'rotate-180' : ''}`} />
+                          <span className={`text-slate-400 text-xs transition-transform ${isSelected ? 'rotate-180' : ''}`}>▾</span>
                         </div>
-                      </button>
-                      {isOpen && (
-                        <div className="border-t border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800">
-                          {grupo.map(p => {
-                            const pActas = actas.filter(a => a.prestadorId === p.id || (a.nit === p.nit && a.contrato === p.contrato));
-                            const isC = p.regimen === 'CONTRIBUTIVO';
-                            return (
-                              <div key={p.id} className="px-3 py-2.5 space-y-1.5">
-                                <div className="flex items-center justify-between">
-                                  <div className={`flex items-center gap-2 px-2 py-1 rounded-lg border text-[10px] font-medium ${isC ? 'bg-orange-50 dark:bg-orange-500/10 border-orange-100 dark:border-orange-500/20' : 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-100 dark:border-emerald-500/20'}`}>
-                                    <span className="font-mono text-slate-600 dark:text-slate-300">📋 {p.contrato}</span>
-                                    <span className={`font-bold ${isC ? 'text-orange-600 dark:text-orange-400' : 'text-emerald-600 dark:text-emerald-400'}`}>{p.regimen || 'SUBSIDIADO'}</span>
+                      </div>
+
+                      {/* Expanded: actas history + actions */}
+                      {isSelected && (
+                        <div className="border-t border-slate-200 dark:border-slate-700 px-3 py-2 space-y-2">
+                          {pActas.length === 0 ? (
+                            <p className="text-[11px] text-slate-400 italic">Sin actas generadas aún.</p>
+                          ) : (
+                            <div className="space-y-1">
+                              {pActas.map(a => {
+                                const totalProg = a.servicios.reduce((s, x) => s + x.programado, 0);
+                                const totalEjec = a.servicios.reduce((s, x) => s + x.ejecutado, 0);
+                                const cumpl = totalProg > 0 ? Math.min(Math.round((totalEjec / totalProg) * 100), 100) : 0;
+                                const color = cumpl >= 100 ? '#16a34a' : cumpl >= 80 ? '#ca8a04' : '#dc2626';
+                                return (
+                                  <div key={a.id} className="flex items-center justify-between bg-white dark:bg-slate-900/60 rounded-lg px-2.5 py-1.5 border border-slate-100 dark:border-slate-800">
+                                    <div>
+                                      <span className="text-[11px] font-mono font-bold text-indigo-600 dark:text-indigo-400">{a.numero}</span>
+                                      <span className="text-[10px] text-slate-400 ml-2">{a.periodoEvaluado}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-[11px] font-bold" style={{ color }}>{cumpl}%</span>
+                                      <button
+                                        onClick={e => { e.stopPropagation(); setInlineActa(sanitizeActaServicios({ ...a })); setActiveTab('actas'); }}
+                                        className="text-[10px] px-2 py-0.5 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 rounded transition-colors"
+                                      >
+                                        Ver
+                                      </button>
+                                    </div>
                                   </div>
-                                  <button onClick={e => { e.stopPropagation(); handleGenerarActa(p); }} className="text-[10px] px-2 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors font-medium">+ Acta</button>
-                                </div>
-                                {pActas.length === 0 ? (
-                                  <p className="text-[10px] text-slate-400 italic pl-1">Sin actas</p>
-                                ) : (
-                                  <div className="space-y-0.5 pl-1">
-                                    {pActas.map(a => {
-                                      const tp = a.servicios.reduce((s, x) => s + x.programado, 0);
-                                      const te = a.servicios.reduce((s, x) => s + x.ejecutado, 0);
-                                      const cumpl = tp > 0 ? Math.min(Math.round((te / tp) * 100), 100) : 0;
-                                      const col = cumpl >= 100 ? '#16a34a' : cumpl >= 80 ? '#ca8a04' : '#dc2626';
-                                      return (
-                                        <div key={a.id} className="flex items-center justify-between bg-white dark:bg-slate-900/60 rounded-lg px-2 py-1 border border-slate-100 dark:border-slate-800">
-                                          <div className="min-w-0 flex-1">
-                                            <span className="text-[10px] font-mono font-bold text-indigo-600 dark:text-indigo-400">{a.numero}</span>
-                                            {a.periodoEvaluado && <span className="text-[9px] text-slate-400 ml-1.5">{a.periodoEvaluado}</span>}
-                                          </div>
-                                          <div className="flex items-center gap-1.5 shrink-0">
-                                            <div className="w-10 h-1 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                                              <div className="h-1 rounded-full" style={{ width: `${cumpl}%`, backgroundColor: col }} />
-                                            </div>
-                                            <span className="text-[10px] font-bold w-8 text-right" style={{ color: col }}>{cumpl}%</span>
-                                            <button onClick={e => { e.stopPropagation(); setInlineActa(sanitizeActaServicios({ ...a })); setActiveTab('actas'); }} className="text-[9px] px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-300 rounded transition-colors">Ver</button>
-                                          </div>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
+                                );
+                              })}
+                            </div>
+                          )}
+                          <div className="flex gap-2 pt-1">
+                            <button
+                              onClick={e => { e.stopPropagation(); handleGenerarActa(p); }}
+                              className="flex-1 text-xs py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors font-medium"
+                            >
+                              + Nueva Acta
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
