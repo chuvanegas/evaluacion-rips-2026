@@ -4071,62 +4071,85 @@ function App() {
         const prog = a.servicios?.reduce((acc,sv)=>acc+sv.programado,0)??0;
         const ejec = a.servicios?.reduce((acc,sv)=>acc+Math.min(sv.ejecutado,sv.programado),0)??0;
         const cumpl = prog > 0 ? Math.round(ejec/prog*100) : 0;
-        const cumplColor = cumpl >= 100 ? 'text-emerald-600' : cumpl >= 70 ? 'text-amber-500' : 'text-red-500';
+        const cumplColor = cumpl >= 100 ? 'text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10' : cumpl >= 70 ? 'text-amber-600 bg-amber-50 dark:bg-amber-500/10' : 'text-red-600 bg-red-50 dark:bg-red-500/10';
         return (
           <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in" onClick={() => setMonitorPreviewActa(null)}>
-            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col border border-slate-200 dark:border-slate-800" onClick={e => e.stopPropagation()}>
-              <div className="flex justify-between items-center p-5 border-b border-slate-200 dark:border-slate-800">
-                <div>
-                  <h2 className="text-lg font-bold text-slate-800 dark:text-white">Acta N° {a.numero}</h2>
-                  <p className="text-sm text-slate-500">{a.empresa} · NIT: {a.nit}</p>
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+
+              {/* Header */}
+              <div className="flex justify-between items-start p-6 border-b border-slate-200 dark:border-slate-700">
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-widest text-indigo-500">Acta de Evaluación</p>
+                  <h2 className="text-xl font-bold text-slate-800 dark:text-white">N° {a.numero}</h2>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className={`text-2xl font-bold ${cumplColor}`}>{cumpl}%</span>
-                  <button onClick={() => setMonitorPreviewActa(null)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
-                    <X className="h-5 w-5 text-slate-500" />
-                  </button>
-                </div>
+                <button onClick={() => setMonitorPreviewActa(null)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors shrink-0">
+                  <X className="h-5 w-5 text-slate-400" />
+                </button>
               </div>
-              <div className="flex-1 overflow-auto custom-scroll p-5 space-y-4">
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
-                  {[
-                    { label: 'Contrato', val: a.contrato },
-                    { label: 'Régimen',  val: a.regimen || 'SUBSIDIADO' },
-                    { label: 'Período',  val: a.periodoEvaluado },
-                    { label: 'Vigencia', val: a.vigencia },
-                    { label: 'Fecha Acta', val: a.fechaActa },
-                    { label: 'Generada por', val: a.creadoPor || '—' },
-                  ].map(f => (
-                    <div key={f.label} className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3">
-                      <p className="text-xs text-slate-400 mb-0.5">{f.label}</p>
-                      <p className="font-medium text-slate-700 dark:text-slate-200 truncate">{f.val}</p>
+
+              <div className="flex-1 overflow-auto custom-scroll p-6 space-y-5">
+
+                {/* IPS / Contrato */}
+                <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+                  <div className="bg-slate-50 dark:bg-slate-800 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Prestador</div>
+                  <div className="px-4 py-3 space-y-1">
+                    <p className="font-bold text-slate-800 dark:text-white text-base">{a.empresa}</p>
+                    <div className="flex flex-wrap gap-x-6 gap-y-0.5 text-sm text-slate-500">
+                      <span>NIT: <strong className="text-slate-700 dark:text-slate-300">{a.nit}</strong></span>
+                      <span>Contrato: <strong className="text-slate-700 dark:text-slate-300">{a.contrato}</strong></span>
+                      <span>Régimen: <strong className={a.regimen === 'CONTRIBUTIVO' ? 'text-orange-500' : 'text-emerald-600'}>{a.regimen || 'SUBSIDIADO'}</strong></span>
                     </div>
-                  ))}
+                    <div className="flex flex-wrap gap-x-6 gap-y-0.5 text-sm text-slate-500">
+                      <span>Período: <strong className="text-slate-700 dark:text-slate-300">{a.periodoEvaluado}</strong></span>
+                      <span>Vigencia: <strong className="text-slate-700 dark:text-slate-300">{a.vigencia}</strong></span>
+                      <span>Fecha acta: <strong className="text-slate-700 dark:text-slate-300">{a.fechaActa}</strong></span>
+                    </div>
+                    {a.funcionario && <p className="text-sm text-slate-500">Funcionario: <strong className="text-slate-700 dark:text-slate-300">{a.funcionario}</strong></p>}
+                  </div>
                 </div>
+
+                {/* Resultado global */}
+                <div className={`rounded-xl p-4 flex items-center justify-between ${cumplColor}`}>
+                  <span className="font-semibold text-sm">Cumplimiento global</span>
+                  <span className="text-3xl font-bold">{cumpl}%</span>
+                </div>
+
+                {/* Tabla servicios */}
                 {a.servicios && a.servicios.length > 0 && (
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-200 dark:border-slate-700 text-xs text-slate-500 uppercase">
-                        <th className="text-left py-2">Servicio</th>
-                        <th className="text-right py-2">Prog.</th>
-                        <th className="text-right py-2">Ejec.</th>
-                        <th className="text-right py-2">%</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {a.servicios.map((sv, i) => {
-                        const sp = sv.programado > 0 ? Math.round(Math.min(sv.ejecutado,sv.programado)/sv.programado*100) : 0;
-                        return (
-                          <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/30">
-                            <td className="py-1.5 text-slate-700 dark:text-slate-300">{sv.tipo}</td>
-                            <td className="py-1.5 text-right font-mono text-slate-500">{sv.programado}</td>
-                            <td className="py-1.5 text-right font-mono text-slate-500">{sv.ejecutado}</td>
-                            <td className={`py-1.5 text-right font-bold ${sp>=100?'text-emerald-600':sp>=70?'text-amber-500':'text-red-500'}`}>{sp}%</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                  <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+                    <div className="bg-slate-50 dark:bg-slate-800 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Servicios</div>
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-slate-200 dark:border-slate-700 text-xs text-slate-400 uppercase">
+                          <th className="text-left px-4 py-2">Tipo de Servicio</th>
+                          <th className="text-right px-4 py-2">Programado</th>
+                          <th className="text-right px-4 py-2">Ejecutado</th>
+                          <th className="text-right px-4 py-2">%</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {a.servicios.map((sv, i) => {
+                          const sp = sv.programado > 0 ? Math.round(Math.min(sv.ejecutado, sv.programado) / sv.programado * 100) : 0;
+                          return (
+                            <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                              <td className="px-4 py-2.5 text-slate-700 dark:text-slate-300 font-medium">{sv.tipo}</td>
+                              <td className="px-4 py-2.5 text-right font-mono text-slate-500">{sv.programado.toLocaleString()}</td>
+                              <td className="px-4 py-2.5 text-right font-mono text-slate-500">{sv.ejecutado.toLocaleString()}</td>
+                              <td className={`px-4 py-2.5 text-right font-bold ${sp >= 100 ? 'text-emerald-600' : sp >= 70 ? 'text-amber-500' : 'text-red-500'}`}>{sp}%</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot className="border-t-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+                        <tr>
+                          <td className="px-4 py-2.5 font-bold text-slate-700 dark:text-slate-200">TOTAL</td>
+                          <td className="px-4 py-2.5 text-right font-bold font-mono text-slate-700 dark:text-slate-200">{prog.toLocaleString()}</td>
+                          <td className="px-4 py-2.5 text-right font-bold font-mono text-slate-700 dark:text-slate-200">{ejec.toLocaleString()}</td>
+                          <td className={`px-4 py-2.5 text-right font-bold text-lg ${cumpl >= 100 ? 'text-emerald-600' : cumpl >= 70 ? 'text-amber-500' : 'text-red-500'}`}>{cumpl}%</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
                 )}
               </div>
             </div>
@@ -4329,21 +4352,21 @@ function App() {
 
                       {/* Ranking actas por usuario */}
                       {(() => {
-                        const rankMap: Record<string, { nombre: string; total: number }> = {};
+                        const rankMap: Record<string, number> = {};
                         actas.forEach(a => {
-                          const key = a.creadoPor || '(sin registro)';
-                          if (!rankMap[key]) {
-                            const u = users.find(u => u.username === key);
-                            rankMap[key] = { nombre: u ? u.nombre : key, total: 0 };
-                          }
-                          rankMap[key].total++;
+                          // creadoPor si existe, sino funcionario como fallback para actas históricas
+                          const nombre = (a.creadoPor
+                            ? (users.find(u => u.username === a.creadoPor)?.nombre || a.creadoPor)
+                            : a.funcionario || '(sin registro)'
+                          ).trim() || '(sin registro)';
+                          rankMap[nombre] = (rankMap[nombre] || 0) + 1;
                         });
-                        const ranking = Object.entries(rankMap).sort((a, b) => b[1].total - a[1].total);
-                        const maxTotal = ranking[0]?.[1].total || 1;
+                        const ranking = Object.entries(rankMap).sort((a, b) => b[1] - a[1]);
+                        const maxTotal = ranking[0]?.[1] || 1;
                         const medals = ['🥇', '🥈', '🥉'];
                         const barColors = ['bg-amber-400', 'bg-slate-400', 'bg-orange-400'];
                         return (
-                          <div className="glass-panel rounded-2xl p-5 space-y-3 md:col-span-2 xl:col-span-3">
+                          <div className="glass-panel rounded-2xl p-5 space-y-4 md:col-span-2 xl:col-span-3">
                             <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
                               <Trophy className="h-4 w-4 text-amber-500" /> Ranking — Actas generadas por usuario
                               <span className="ml-auto text-xs font-normal text-slate-400">{actas.length} actas en total</span>
@@ -4351,29 +4374,25 @@ function App() {
                             {ranking.length === 0 ? (
                               <p className="text-xs text-slate-400">Sin datos aún.</p>
                             ) : (
-                              <div className="space-y-2.5">
-                                {ranking.map(([username, info], idx) => {
-                                  const pct = Math.round((info.total / maxTotal) * 100);
+                              <div className="space-y-3">
+                                {ranking.map(([nombre, total], idx) => {
+                                  const pct = Math.round((total / maxTotal) * 100);
                                   return (
-                                    <div key={username} className="space-y-1">
-                                      <div className="flex items-center gap-2 text-sm">
-                                        <span className="w-6 text-base shrink-0">{medals[idx] || `${idx + 1}.`}</span>
-                                        <span className="font-medium text-slate-700 dark:text-slate-200 flex-1 truncate">{info.nombre}</span>
-                                        <span className="text-xs text-slate-400 font-mono shrink-0 hidden sm:inline">{username}</span>
-                                        <span className={`font-bold text-sm shrink-0 ${idx === 0 ? 'text-amber-500' : 'text-slate-600 dark:text-slate-300'}`}>{info.total}</span>
-                                      </div>
-                                      <div className="w-full h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                                        <div className={`h-full rounded-full transition-all duration-500 ${idx < 3 ? barColors[idx] : 'bg-indigo-400'}`} style={{ width: `${pct}%` }} />
+                                    <div key={nombre} className="flex items-center gap-3">
+                                      <span className="text-lg w-7 shrink-0 text-center">{medals[idx] || `${idx + 1}.`}</span>
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-baseline justify-between mb-1">
+                                          <span className="font-semibold text-slate-700 dark:text-slate-200 truncate text-sm">{nombre}</span>
+                                          <span className={`font-bold text-base shrink-0 ml-3 ${idx === 0 ? 'text-amber-500' : idx === 1 ? 'text-slate-500' : idx === 2 ? 'text-orange-500' : 'text-indigo-500'}`}>{total}</span>
+                                        </div>
+                                        <div className="w-full h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                                          <div className={`h-full rounded-full transition-all duration-700 ${idx < 3 ? barColors[idx] : 'bg-indigo-400'}`} style={{ width: `${pct}%` }} />
+                                        </div>
                                       </div>
                                     </div>
                                   );
                                 })}
                               </div>
-                            )}
-                            {actas.some(a => !a.creadoPor) && (
-                              <p className="text-xs text-slate-400 border-t border-slate-200 dark:border-slate-700 pt-2">
-                                ⚠️ {actas.filter(a => !a.creadoPor).length} actas previas sin registro de autor.
-                              </p>
                             )}
                           </div>
                         );
