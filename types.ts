@@ -159,4 +159,5 @@ export interface Acta {
   repLegalIPS: string;
   repLegalEPS: string;
   createdAt: string;
+  creadoPor?: string;
 }

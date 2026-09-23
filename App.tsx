@@ -7,7 +7,7 @@ import {
   Upload, FileText, Database, Trash2, Save, Download,
   Activity, Users, TrendingUp, AlertTriangle, CheckCircle, Server,
   BarChart3, UserCheck, FileJson, Sun, Moon, ChevronLeft, ChevronRight, ChevronDown, Calendar, Stethoscope, FileSpreadsheet, FileWarning, X, Scissors, Search,
-  Settings, Plus, Pencil, Check, Building2, ClipboardList, LogOut, ShieldCheck, User, Lock, Eye, EyeOff, HardDrive
+  Settings, Plus, Pencil, Check, Building2, ClipboardList, LogOut, ShieldCheck, User, Lock, Eye, EyeOff, HardDrive, Trophy
 } from 'lucide-react';
 import {
   normalizeId, parseDateFromLine, TIPOS_SERVICIOS_DEFAULT, TIPOS_ASISTENCIAL, TIPOS_ESPECIALIDADES, TIPOS_CAPITA_AMPLIADA, TIPOS_PAI, CUPS_TIPO_MAP,
@@ -1001,7 +1001,8 @@ function App() {
       observaciones: '',
       repLegalIPS: p.repLegalIPS || '',
       repLegalEPS: firmasGlobales.repLegalEPSI,
-      createdAt: today
+      createdAt: today,
+      creadoPor: currentUser.username
     };
     setInlineActa(newActa);
     setActiveTab('actas');
@@ -2063,6 +2064,7 @@ function App() {
   );
 
   const isAdmin = currentUser.role === 'admin';
+  const isSuperAdmin = isAdmin && currentUser.username === 'Administrador';
   const hasPerm = (key: string) => isAdmin || (currentUser.permissions ?? []).includes(key);
 
   return (
@@ -3306,7 +3308,7 @@ function App() {
                 { key: 'cups',        label: 'CUPS Personalizados', icon: <FileJson className="h-4 w-4" />,    show: hasPerm('mantenimiento') },
                 { key: 'servicios',   label: 'Tipos de Servicio',   icon: <Stethoscope className="h-4 w-4" />, show: hasPerm('mantenimiento') },
                 { key: 'usuarios',    label: 'Usuarios',            icon: <Users className="h-4 w-4" />,       show: hasPerm('usuarios') },
-                { key: 'monitor',     label: 'Monitor',             icon: <Activity className="h-4 w-4" />,    show: isAdmin },
+                { key: 'monitor',     label: 'Monitor',             icon: <Activity className="h-4 w-4" />,    show: isSuperAdmin },
               ] as { key: 'prestadores'|'cups'|'servicios'|'usuarios'|'monitor', label: string, icon: React.ReactNode, show: boolean }[])
               .filter(t => t.show)
               .map(({ key, label, icon }) => (
@@ -4149,7 +4151,7 @@ function App() {
       )}
 
             {/* --- MONITOR (Admin only) --- */}
-            {maintTab === 'monitor' && isAdmin && (() => {
+            {maintTab === 'monitor' && isSuperAdmin && (() => {
               const fmt = (b: number) => b >= 1048576 ? `${(b/1048576).toFixed(2)} MB` : b >= 1024 ? `${(b/1024).toFixed(1)} KB` : `${b} B`;
               const pct = (used: number, total: number) => total > 0 ? Math.min(100, Math.round(used/total*100)) : 0;
               const s = monitorStats;
@@ -4262,7 +4264,7 @@ function App() {
             })()}
 
             {/* ── Panel duplicados — bloque separado del Monitor IIFE ── */}
-            {maintTab === 'monitor' && isAdmin && (() => {
+            {maintTab === 'monitor' && isSuperAdmin && (() => {
               const calcPct = (a: Acta) => { const prog = a.servicios?.reduce((acc,sv)=>acc+sv.programado,0)??0; const ejec = a.servicios?.reduce((acc,sv)=>acc+Math.min(sv.ejecutado,sv.programado),0)??0; return prog>0?ejec/prog:0; };
               const dupObj: Record<string, Acta[]> = {};
               actas.forEach(a => {
@@ -4335,6 +4337,60 @@ function App() {
                         );
                       })}
                     </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* ── Ranking de usuarios que generan actas (visible a todos los admin) ── */}
+            {maintTab === 'monitor' && isAdmin && (() => {
+              const rankMap: Record<string, { nombre: string; total: number }> = {};
+              actas.forEach(a => {
+                const key = a.creadoPor || '(sin registro)';
+                if (!rankMap[key]) {
+                  const u = users.find(u => u.username === key);
+                  rankMap[key] = { nombre: u ? u.nombre : key, total: 0 };
+                }
+                rankMap[key].total++;
+              });
+              const ranking = Object.entries(rankMap).sort((a, b) => b[1].total - a[1].total);
+              const maxTotal = ranking[0]?.[1].total || 1;
+              const medals = ['🥇', '🥈', '🥉'];
+              return (
+                <div className="glass-panel rounded-2xl p-5 space-y-4 mt-4">
+                  <div className="flex items-center gap-2">
+                    <Trophy className="h-5 w-5 text-amber-500" />
+                    <h3 className="font-bold text-slate-800 dark:text-white">Ranking — Actas generadas por usuario</h3>
+                    <span className="text-xs text-slate-400 ml-auto">{actas.length} actas en total</span>
+                  </div>
+                  {ranking.length === 0 ? (
+                    <p className="text-sm text-slate-400">Sin datos aún — las actas generadas a partir de ahora quedarán registradas.</p>
+                  ) : (
+                    <div className="space-y-2.5">
+                      {ranking.map(([username, info], idx) => {
+                        const pct = Math.round((info.total / maxTotal) * 100);
+                        const barColors = ['bg-amber-400', 'bg-slate-400', 'bg-orange-400'];
+                        const bar = idx < 3 ? barColors[idx] : 'bg-indigo-400';
+                        return (
+                          <div key={username} className="space-y-1">
+                            <div className="flex items-center gap-2 text-sm">
+                              <span className="w-6 text-base">{medals[idx] || `${idx + 1}.`}</span>
+                              <span className="font-medium text-slate-700 dark:text-slate-200 flex-1 truncate">{info.nombre}</span>
+                              <span className="text-xs text-slate-400 font-mono shrink-0">{username}</span>
+                              <span className={`font-bold text-sm shrink-0 ${idx === 0 ? 'text-amber-500' : 'text-slate-600 dark:text-slate-300'}`}>{info.total}</span>
+                            </div>
+                            <div className="w-full h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                              <div className={`h-full rounded-full transition-all duration-500 ${bar}`} style={{ width: `${pct}%` }} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {actas.some(a => !a.creadoPor) && (
+                    <p className="text-xs text-slate-400 border-t border-slate-200 dark:border-slate-700 pt-3">
+                      ⚠️ {actas.filter(a => !a.creadoPor).length} actas previas sin registro de autor — se contabilizan en "(sin registro)".
+                    </p>
                   )}
                 </div>
               );

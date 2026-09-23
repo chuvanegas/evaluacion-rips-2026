@@ -1,5 +1,13 @@
 # Changelog — Evaluación Cápita Asistencial
 
+## v2.17 — 2026-09-23
+
+### Monitor y Duplicados: acceso exclusivo a Administrador + Ranking de actas
+- **Monitor de Recursos** y **panel Actas Duplicadas** (con botón "Limpiar duplicados") solo son visibles para el usuario `Administrador` (superadmin). Otros admins no pueden acceder a estas funciones.
+- **Bug crítico corregido:** El Monitor siempre aparecía en blanco porque el IIFE estaba anidado dentro del bloque `{showDuplicates && ...}` del modal. Al no estar el modal abierto, el contenido nunca renderizaba. Movido fuera del bloque condicional.
+- **Ranking de actas por usuario:** Nuevo panel en la pestaña Monitor (visible a todos los administradores) que muestra un ranking ordenado de mayor a menor de cuántas actas ha generado cada usuario. Incluye: medalla 🥇🥈🥉 para el podio, nombre completo, username y barra de progreso proporcional.
+- **Trazabilidad de autoría:** El campo `creadoPor` (username) se guarda en cada acta nueva. Las actas anteriores sin registro aparecen agrupadas en "(sin registro)" con aviso en el panel.
+
 ## v2.16 — 2026-09-23
 
 ### Alerta al crear acta cuando el mismo NIT ya tiene evaluación en el período
