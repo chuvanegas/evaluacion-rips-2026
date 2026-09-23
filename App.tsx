@@ -260,6 +260,7 @@ function App() {
   const [inlineActa, setInlineActa] = useState<Acta | null>(null); // inline editor in Actas tab
   const [selectedDashPrestador, setSelectedDashPrestador] = useState<string | null>(null);
   const [dashExpandedNits, setDashExpandedNits] = useState<Set<string>>(new Set());
+  const [monitorPreviewActa, setMonitorPreviewActa] = useState<Acta | null>(null);
   const [searchPrestador, setSearchPrestador] = useState('');
   const [filterContrato, setFilterContrato] = useState('');
   const [filterRegimen, setFilterRegimen] = useState('');
@@ -4064,6 +4065,75 @@ function App() {
         </div>
       )}
 
+      {/* --- Monitor Acta Preview Modal --- */}
+      {monitorPreviewActa && (() => {
+        const a = monitorPreviewActa;
+        const prog = a.servicios?.reduce((acc,sv)=>acc+sv.programado,0)??0;
+        const ejec = a.servicios?.reduce((acc,sv)=>acc+Math.min(sv.ejecutado,sv.programado),0)??0;
+        const cumpl = prog > 0 ? Math.round(ejec/prog*100) : 0;
+        const cumplColor = cumpl >= 100 ? 'text-emerald-600' : cumpl >= 70 ? 'text-amber-500' : 'text-red-500';
+        return (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in" onClick={() => setMonitorPreviewActa(null)}>
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col border border-slate-200 dark:border-slate-800" onClick={e => e.stopPropagation()}>
+              <div className="flex justify-between items-center p-5 border-b border-slate-200 dark:border-slate-800">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-800 dark:text-white">Acta N° {a.numero}</h2>
+                  <p className="text-sm text-slate-500">{a.empresa} · NIT: {a.nit}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className={`text-2xl font-bold ${cumplColor}`}>{cumpl}%</span>
+                  <button onClick={() => setMonitorPreviewActa(null)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
+                    <X className="h-5 w-5 text-slate-500" />
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1 overflow-auto custom-scroll p-5 space-y-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
+                  {[
+                    { label: 'Contrato', val: a.contrato },
+                    { label: 'Régimen',  val: a.regimen || 'SUBSIDIADO' },
+                    { label: 'Período',  val: a.periodoEvaluado },
+                    { label: 'Vigencia', val: a.vigencia },
+                    { label: 'Fecha Acta', val: a.fechaActa },
+                    { label: 'Generada por', val: a.creadoPor || '—' },
+                  ].map(f => (
+                    <div key={f.label} className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3">
+                      <p className="text-xs text-slate-400 mb-0.5">{f.label}</p>
+                      <p className="font-medium text-slate-700 dark:text-slate-200 truncate">{f.val}</p>
+                    </div>
+                  ))}
+                </div>
+                {a.servicios && a.servicios.length > 0 && (
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-200 dark:border-slate-700 text-xs text-slate-500 uppercase">
+                        <th className="text-left py-2">Servicio</th>
+                        <th className="text-right py-2">Prog.</th>
+                        <th className="text-right py-2">Ejec.</th>
+                        <th className="text-right py-2">%</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {a.servicios.map((sv, i) => {
+                        const sp = sv.programado > 0 ? Math.round(Math.min(sv.ejecutado,sv.programado)/sv.programado*100) : 0;
+                        return (
+                          <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                            <td className="py-1.5 text-slate-700 dark:text-slate-300">{sv.tipo}</td>
+                            <td className="py-1.5 text-right font-mono text-slate-500">{sv.programado}</td>
+                            <td className="py-1.5 text-right font-mono text-slate-500">{sv.ejecutado}</td>
+                            <td className={`py-1.5 text-right font-bold ${sp>=100?'text-emerald-600':sp>=70?'text-amber-500':'text-red-500'}`}>{sp}%</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* --- Duplicates Modal --- */}
       {showDuplicates && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
@@ -4257,6 +4327,58 @@ function App() {
                         </div>
                       </div>
 
+                      {/* Ranking actas por usuario */}
+                      {(() => {
+                        const rankMap: Record<string, { nombre: string; total: number }> = {};
+                        actas.forEach(a => {
+                          const key = a.creadoPor || '(sin registro)';
+                          if (!rankMap[key]) {
+                            const u = users.find(u => u.username === key);
+                            rankMap[key] = { nombre: u ? u.nombre : key, total: 0 };
+                          }
+                          rankMap[key].total++;
+                        });
+                        const ranking = Object.entries(rankMap).sort((a, b) => b[1].total - a[1].total);
+                        const maxTotal = ranking[0]?.[1].total || 1;
+                        const medals = ['🥇', '🥈', '🥉'];
+                        const barColors = ['bg-amber-400', 'bg-slate-400', 'bg-orange-400'];
+                        return (
+                          <div className="glass-panel rounded-2xl p-5 space-y-3 md:col-span-2 xl:col-span-3">
+                            <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                              <Trophy className="h-4 w-4 text-amber-500" /> Ranking — Actas generadas por usuario
+                              <span className="ml-auto text-xs font-normal text-slate-400">{actas.length} actas en total</span>
+                            </div>
+                            {ranking.length === 0 ? (
+                              <p className="text-xs text-slate-400">Sin datos aún.</p>
+                            ) : (
+                              <div className="space-y-2.5">
+                                {ranking.map(([username, info], idx) => {
+                                  const pct = Math.round((info.total / maxTotal) * 100);
+                                  return (
+                                    <div key={username} className="space-y-1">
+                                      <div className="flex items-center gap-2 text-sm">
+                                        <span className="w-6 text-base shrink-0">{medals[idx] || `${idx + 1}.`}</span>
+                                        <span className="font-medium text-slate-700 dark:text-slate-200 flex-1 truncate">{info.nombre}</span>
+                                        <span className="text-xs text-slate-400 font-mono shrink-0 hidden sm:inline">{username}</span>
+                                        <span className={`font-bold text-sm shrink-0 ${idx === 0 ? 'text-amber-500' : 'text-slate-600 dark:text-slate-300'}`}>{info.total}</span>
+                                      </div>
+                                      <div className="w-full h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                                        <div className={`h-full rounded-full transition-all duration-500 ${idx < 3 ? barColors[idx] : 'bg-indigo-400'}`} style={{ width: `${pct}%` }} />
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                            {actas.some(a => !a.creadoPor) && (
+                              <p className="text-xs text-slate-400 border-t border-slate-200 dark:border-slate-700 pt-2">
+                                ⚠️ {actas.filter(a => !a.creadoPor).length} actas previas sin registro de autor.
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })()}
+
                     </div>
                   )}
                 </div>
@@ -4331,7 +4453,7 @@ function App() {
                                     <span className="shrink-0">{esMejor?'✓ conservar':'✗ duplicada'}</span>
                                     <div className="ml-auto flex items-center gap-1 shrink-0">
                                       <button
-                                        onClick={() => { setInlineActa(sanitizeActaServicios({...a})); setActiveTab('actas'); }}
+                                        onClick={() => setMonitorPreviewActa(a)}
                                         title="Ver acta"
                                         className="p-1 rounded-lg hover:bg-white/60 dark:hover:bg-white/10 transition-colors text-slate-500 hover:text-indigo-600"
                                       >
@@ -4357,60 +4479,6 @@ function App() {
                         );
                       })}
                     </div>
-                  )}
-                </div>
-              );
-            })()}
-
-            {/* ── Ranking de usuarios que generan actas (visible a todos los admin) ── */}
-            {maintTab === 'monitor' && isAdmin && (() => {
-              const rankMap: Record<string, { nombre: string; total: number }> = {};
-              actas.forEach(a => {
-                const key = a.creadoPor || '(sin registro)';
-                if (!rankMap[key]) {
-                  const u = users.find(u => u.username === key);
-                  rankMap[key] = { nombre: u ? u.nombre : key, total: 0 };
-                }
-                rankMap[key].total++;
-              });
-              const ranking = Object.entries(rankMap).sort((a, b) => b[1].total - a[1].total);
-              const maxTotal = ranking[0]?.[1].total || 1;
-              const medals = ['🥇', '🥈', '🥉'];
-              return (
-                <div className="glass-panel rounded-2xl p-5 space-y-4 mt-4">
-                  <div className="flex items-center gap-2">
-                    <Trophy className="h-5 w-5 text-amber-500" />
-                    <h3 className="font-bold text-slate-800 dark:text-white">Ranking — Actas generadas por usuario</h3>
-                    <span className="text-xs text-slate-400 ml-auto">{actas.length} actas en total</span>
-                  </div>
-                  {ranking.length === 0 ? (
-                    <p className="text-sm text-slate-400">Sin datos aún — las actas generadas a partir de ahora quedarán registradas.</p>
-                  ) : (
-                    <div className="space-y-2.5">
-                      {ranking.map(([username, info], idx) => {
-                        const pct = Math.round((info.total / maxTotal) * 100);
-                        const barColors = ['bg-amber-400', 'bg-slate-400', 'bg-orange-400'];
-                        const bar = idx < 3 ? barColors[idx] : 'bg-indigo-400';
-                        return (
-                          <div key={username} className="space-y-1">
-                            <div className="flex items-center gap-2 text-sm">
-                              <span className="w-6 text-base">{medals[idx] || `${idx + 1}.`}</span>
-                              <span className="font-medium text-slate-700 dark:text-slate-200 flex-1 truncate">{info.nombre}</span>
-                              <span className="text-xs text-slate-400 font-mono shrink-0">{username}</span>
-                              <span className={`font-bold text-sm shrink-0 ${idx === 0 ? 'text-amber-500' : 'text-slate-600 dark:text-slate-300'}`}>{info.total}</span>
-                            </div>
-                            <div className="w-full h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                              <div className={`h-full rounded-full transition-all duration-500 ${bar}`} style={{ width: `${pct}%` }} />
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                  {actas.some(a => !a.creadoPor) && (
-                    <p className="text-xs text-slate-400 border-t border-slate-200 dark:border-slate-700 pt-3">
-                      ⚠️ {actas.filter(a => !a.creadoPor).length} actas previas sin registro de autor — se contabilizan en "(sin registro)".
-                    </p>
                   )}
                 </div>
               );
