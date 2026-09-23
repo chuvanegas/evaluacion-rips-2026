@@ -4319,16 +4319,36 @@ function App() {
                               <span className={`text-[10px] font-bold ${parts[1]==='CONTRIBUTIVO'?'text-orange-500':'text-emerald-600'}`}>{parts[1]}</span>
                               <span className="text-[10px] text-slate-500">{parts[2]}</span>
                             </div>
-                            <div className="space-y-0.5 pl-2">
+                            <div className="space-y-1 pl-2">
                               {grupo.map(a => {
                                 const cumpl = Math.round(calcPct(a)*100);
                                 const esMejor = a.id === mejor.id;
                                 return (
-                                  <div key={a.id} className={`flex items-center gap-2 text-[11px] rounded px-2 py-0.5 ${esMejor?'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300':'bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 line-through opacity-70'}`}>
-                                    <span className="font-mono font-bold">{a.numero}</span>
-                                    <span className="text-[10px]">{a.contrato}</span>
-                                    <span className="ml-auto font-bold">{cumpl}%</span>
-                                    <span>{esMejor?'✓ conservar':'✗ eliminar'}</span>
+                                  <div key={a.id} className={`flex items-center gap-2 text-[11px] rounded-lg px-2 py-1.5 ${esMejor?'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300':'bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400'}`}>
+                                    <span className={`font-mono font-bold ${!esMejor?'line-through opacity-60':''}`}>{a.numero}</span>
+                                    <span className={`text-[10px] ${!esMejor?'line-through opacity-60':''}`}>{a.contrato}</span>
+                                    <span className={`font-bold ${!esMejor?'line-through opacity-60':''}`}>{cumpl}%</span>
+                                    <span className="shrink-0">{esMejor?'✓ conservar':'✗ duplicada'}</span>
+                                    <div className="ml-auto flex items-center gap-1 shrink-0">
+                                      <button
+                                        onClick={() => { setInlineActa(sanitizeActaServicios({...a})); setActiveTab('actas'); }}
+                                        title="Ver acta"
+                                        className="p-1 rounded-lg hover:bg-white/60 dark:hover:bg-white/10 transition-colors text-slate-500 hover:text-indigo-600"
+                                      >
+                                        <Eye className="h-3.5 w-3.5" />
+                                      </button>
+                                      <button
+                                        onClick={() => {
+                                          if (!window.confirm(`¿Eliminar el acta ${a.numero} (${cumpl}% — ${a.contrato})?`)) return;
+                                          setActas(prev => prev.filter(x => x.id !== a.id));
+                                          setMessage({ type: 'success', text: `Acta ${a.numero} eliminada.` });
+                                        }}
+                                        title="Eliminar acta"
+                                        className="p-1 rounded-lg hover:bg-white/60 dark:hover:bg-white/10 transition-colors text-slate-500 hover:text-red-600"
+                                      >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </button>
+                                    </div>
                                   </div>
                                 );
                               })}
