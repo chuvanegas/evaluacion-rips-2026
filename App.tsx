@@ -51,18 +51,7 @@ function deduplicarActas(raw: import('./types').Acta[]): import('./types').Acta[
     const ex = byContratoRegPeriodo.get(key);
     if (!ex || pct(a) > pct(ex)) byContratoRegPeriodo.set(key, a);
   });
-  // Paso 4: dedup por nit + régimen + período
-  // Cubre el caso donde el mismo prestador tiene dos contratos con numeración ligeramente diferente
-  // (ej: ASB-44078-2026-11 y ASB-44078-2026-11-4) evaluados en el mismo período → queda la de mayor %
-  // Solo aplica cuando el NIT está presente y no está vacío
-  const byNitRegPeriodo = new Map<string, import('./types').Acta>();
-  [...byContratoRegPeriodo.values()].forEach(a => {
-    if (!a.nit) { byNitRegPeriodo.set(a.id, a); return; }
-    const key = `${a.nit}||${a.regimen || 'SUBSIDIADO'}||${a.periodoEvaluado}`;
-    const ex = byNitRegPeriodo.get(key);
-    if (!ex || pct(a) > pct(ex)) byNitRegPeriodo.set(key, a);
-  });
-  return [...byNitRegPeriodo.values()];
+  return [...byContratoRegPeriodo.values()];
 }
 
 const DEFAULT_USERS: AppUser[] = [
