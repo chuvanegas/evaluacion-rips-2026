@@ -4254,6 +4254,91 @@ function App() {
 
                     </div>
                   )}
+
+                  {/* ── Depuración de actas duplicadas ── */}
+                  {(() => {
+                    const pct2 = (a: Acta) => { const p = a.servicios.reduce((s,sv)=>s+sv.programado,0); const e = a.servicios.reduce((s,sv)=>s+Math.min(sv.ejecutado,sv.programado),0); return p>0?e/p:0; };
+                    const grupos: Record<string, Acta[]> = {};
+                    actas.forEach(a => {
+                      if (!a.nit) return;
+                      const k = `${a.nit}||${a.regimen||'SUBSIDIADO'}||${a.periodoEvaluado}`;
+                      if (!grupos[k]) grupos[k] = [];
+                      grupos[k].push(a);
+                    });
+                    const duplicados = Object.entries(grupos).filter(([,g]) => g.length > 1);
+                    const totalSobran = duplicados.reduce((s,[,g])=>s+g.length-1, 0);
+
+                    return (
+                      <div className="glass-panel rounded-2xl p-5 space-y-4 border border-amber-200 dark:border-amber-500/30">
+                        <div className="flex items-center justify-between flex-wrap gap-3">
+                          <div className="flex items-center gap-2">
+                            <AlertTriangle className="h-5 w-5 text-amber-500" />
+                            <h3 className="font-bold text-slate-800 dark:text-white">Actas Duplicadas</h3>
+                            {duplicados.length === 0
+                              ? <span className="text-xs bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded-full font-medium">Sin duplicados</span>
+                              : <span className="text-xs bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full font-medium">{totalSobran} actas a eliminar en {duplicados.length} grupo{duplicados.length!==1?'s':''}</span>
+                            }
+                          </div>
+                          {duplicados.length > 0 && (
+                            <button
+                              onClick={() => {
+                                const confirmar = window.confirm(
+                                  `Se eliminarán ${totalSobran} actas duplicadas (se conserva la de mayor % por NIT + régimen + período).\n\n¿Confirmar limpieza?`
+                                );
+                                if (!confirmar) return;
+                                // Por cada grupo, queda la de mayor %, el resto se elimina
+                                const idsEliminar = new Set<string>();
+                                duplicados.forEach(([,g]) => {
+                                  const mejor = g.reduce((a,b) => pct2(a)>=pct2(b)?a:b);
+                                  g.forEach(a => { if (a.id !== mejor.id) idsEliminar.add(a.id); });
+                                });
+                                setActas(prev => prev.filter(a => !idsEliminar.has(a.id)));
+                                setMessage({ type: 'success', text: `Limpieza completada: ${idsEliminar.size} actas duplicadas eliminadas.` });
+                              }}
+                              className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-sm font-medium transition-colors shadow-sm"
+                            >
+                              <Trash2 className="h-4 w-4" /> Limpiar duplicados
+                            </button>
+                          )}
+                        </div>
+
+                        {duplicados.length > 0 && (
+                          <div className="space-y-2 max-h-72 overflow-y-auto custom-scroll">
+                            {duplicados.map(([key, grupo]) => {
+                              const [nit, regimen, periodo] = key.split('||');
+                              const mejor = grupo.reduce((a,b)=>pct2(a)>=pct2(b)?a:b);
+                              const nombre = grupo[0].empresa || grupo[0].nit;
+                              return (
+                                <div key={key} className="bg-amber-50 dark:bg-amber-500/10 rounded-xl p-3 border border-amber-100 dark:border-amber-500/20 space-y-1.5">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="font-semibold text-sm text-slate-800 dark:text-slate-100 truncate max-w-xs">{nombre}</span>
+                                    <span className="text-[10px] font-mono text-slate-500">NIT: {nit}</span>
+                                    <span className={`text-[10px] font-bold ${regimen==='CONTRIBUTIVO'?'text-orange-500':'text-emerald-600'}`}>{regimen}</span>
+                                    <span className="text-[10px] text-slate-500">{periodo}</span>
+                                  </div>
+                                  <div className="space-y-0.5 pl-2">
+                                    {grupo.map(a => {
+                                      const p = Math.round(pct2(a)*100);
+                                      const esMejor = a.id === mejor.id;
+                                      return (
+                                        <div key={a.id} className={`flex items-center gap-2 text-[11px] rounded px-2 py-0.5 ${esMejor?'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300':'bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 line-through opacity-70'}`}>
+                                          <span className="font-mono font-bold">{a.numero}</span>
+                                          <span className="text-[10px]">{a.contrato}</span>
+                                          <span className="ml-auto font-bold">{p}%</span>
+                                          <span>{esMejor?'✓ conservar':'✗ eliminar'}</span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+
                 </div>
               );
             })()}
