@@ -4145,6 +4145,9 @@ function App() {
                </p>
             </div>
           </div>
+        </div>
+      )}
+
             {/* --- MONITOR (Admin only) --- */}
             {maintTab === 'monitor' && isAdmin && (() => {
               const fmt = (b: number) => b >= 1048576 ? `${(b/1048576).toFixed(2)} MB` : b >= 1024 ? `${(b/1024).toFixed(1)} KB` : `${b} B`;
@@ -4337,8 +4340,6 @@ function App() {
               );
             })()}
 
-        </div>
-      )}
         {/* ===== ACTAS TAB ===== */}
         {activeTab === 'actas' && (
           <div className="space-y-4 animate-in fade-in duration-300">
