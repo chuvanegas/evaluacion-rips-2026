@@ -51,7 +51,18 @@ function deduplicarActas(raw: import('./types').Acta[]): import('./types').Acta[
     const ex = byContratoRegPeriodo.get(key);
     if (!ex || pct(a) > pct(ex)) byContratoRegPeriodo.set(key, a);
   });
-  return [...byContratoRegPeriodo.values()];
+  // Paso 4: dedup por nit + régimen + período
+  // Cubre el caso donde el mismo prestador tiene dos contratos con numeración ligeramente diferente
+  // (ej: ASB-44078-2026-11 y ASB-44078-2026-11-4) evaluados en el mismo período → queda la de mayor %
+  // Solo aplica cuando el NIT está presente y no está vacío
+  const byNitRegPeriodo = new Map<string, import('./types').Acta>();
+  [...byContratoRegPeriodo.values()].forEach(a => {
+    if (!a.nit) { byNitRegPeriodo.set(a.id, a); return; }
+    const key = `${a.nit}||${a.regimen || 'SUBSIDIADO'}||${a.periodoEvaluado}`;
+    const ex = byNitRegPeriodo.get(key);
+    if (!ex || pct(a) > pct(ex)) byNitRegPeriodo.set(key, a);
+  });
+  return [...byNitRegPeriodo.values()];
 }
 
 const DEFAULT_USERS: AppUser[] = [
@@ -929,19 +940,23 @@ function App() {
            .map(a => [a.id, a])
     ).values()];
 
-    // Validar: ya existe acta para este contrato + régimen + período
+    // Validar: ya existe acta para este prestador en el mismo período
+    // Busca primero por contrato exacto, luego por NIT + régimen (contratos con numeración distinta)
     const regimen = p.regimen || 'SUBSIDIADO';
-    const actaPeriodoExistente = prestadorActas.find(
-      a => a.periodoEvaluado === periodoTexto &&
-           (a.regimen || 'SUBSIDIADO') === regimen &&
-           a.contrato === p.contrato
+    const todasActasMismoPeriodo = actas.filter(
+      a => a.periodoEvaluado === periodoTexto && (a.regimen || 'SUBSIDIADO') === regimen
     );
+    const actaPeriodoExistente =
+      todasActasMismoPeriodo.find(a => a.contrato === p.contrato) ||
+      (p.nit ? todasActasMismoPeriodo.find(a => a.nit === p.nit) : undefined);
     if (actaPeriodoExistente) {
       const cumplPct = (() => { const prog = actaPeriodoExistente.servicios.reduce((s, sv) => s + sv.programado, 0); const ejec = actaPeriodoExistente.servicios.reduce((s, sv) => s + Math.min(sv.ejecutado, sv.programado), 0); return prog > 0 ? Math.round(ejec / prog * 100) : 0; })();
+      const mismoContrato = actaPeriodoExistente.contrato === p.contrato;
       const reemplazar = window.confirm(
         `⚠️ Ya se cuenta con una evaluación para:\n\n` +
-        `  • Contrato: ${p.contrato}\n` +
         `  • Prestador: ${p.nombre}\n` +
+        `  • NIT: ${p.nit}\n` +
+        `  • Contrato registrado: ${actaPeriodoExistente.contrato}${!mismoContrato ? ` (contrato diferente al seleccionado: ${p.contrato})` : ''}\n` +
         `  • Período: ${periodoTexto}\n` +
         `  • Régimen: ${regimen}\n` +
         `  • Acta: ${actaPeriodoExistente.numero} (${cumplPct}% cumplimiento)\n\n` +

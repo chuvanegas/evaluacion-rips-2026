@@ -1,5 +1,12 @@
 # Changelog — Evaluación Cápita Asistencial
 
+## v2.16 — 2026-09-23
+
+### Deduplicación por NIT: actas del mismo prestador con contratos de numeración similar
+- **Bug:** Actas como `ASB-44078-2026-11-1` y `ASB-44078-2026-11-4-1` (mismo NIT, mismo régimen, mismo período pero diferente número de contrato) pasaban sin depurar por los tres pasos anteriores de `deduplicarActas`.
+- **Fix:** `deduplicarActas` tiene un cuarto paso que agrupa por `nit + régimen + período` y conserva la de mayor % de cumplimiento. Aplica solo cuando el NIT está presente; si no hay NIT, la acta se conserva sin cambios.
+- **Alerta mejorada:** Al generar un acta nueva, el sistema busca duplicados también por NIT + régimen + período (no solo por contrato exacto). Si detecta un contrato distinto con mismo NIT, el aviso lo indica explícitamente: `Contrato registrado: XXX (contrato diferente al seleccionado: YYY)`.
+
 ## v2.15 — 2026-09-23
 
 ### Deduplicación y alerta de actas duplicadas
