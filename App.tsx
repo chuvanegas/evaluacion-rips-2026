@@ -2064,7 +2064,7 @@ function App() {
   );
 
   const isAdmin = currentUser.role === 'admin';
-  const isSuperAdmin = isAdmin && currentUser.username === 'Administrador';
+  const isSuperAdmin = isAdmin && currentUser.username === 'admin';
   const hasPerm = (key: string) => isAdmin || (currentUser.permissions ?? []).includes(key);
 
   return (
