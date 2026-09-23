@@ -4409,8 +4409,8 @@ function App() {
               const calcPct = (a: Acta) => { const prog = a.servicios?.reduce((acc,sv)=>acc+sv.programado,0)??0; const ejec = a.servicios?.reduce((acc,sv)=>acc+Math.min(sv.ejecutado,sv.programado),0)??0; return prog>0?ejec/prog:0; };
               const dupObj: Record<string, Acta[]> = {};
               actas.forEach(a => {
-                if (!a.nit) return;
-                const k = `${a.nit}||${a.regimen||'SUBSIDIADO'}||${a.periodoEvaluado}`;
+                if (!a.contrato) return;
+                const k = `${a.contrato}||${a.regimen||'SUBSIDIADO'}||${a.periodoEvaluado}`;
                 if (!dupObj[k]) dupObj[k] = [];
                 dupObj[k].push(a);
               });
