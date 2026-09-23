@@ -1,5 +1,13 @@
 # Changelog — Evaluación Cápita Asistencial
 
+## v2.15 — 2026-09-23
+
+### Deduplicación y alerta de actas duplicadas
+- **Auto-limpieza de duplicados:** `deduplicarActas` ahora tiene un tercer paso que elimina actas con el mismo contrato, mismo régimen y mismo período evaluado, conservando la de mayor % de cumplimiento. Los duplicados existentes se limpian automáticamente al cargar o sincronizar.
+- **Alerta al generar acta duplicada:** Al intentar crear una acta para un contrato + régimen + período que ya tiene una evaluación, el sistema muestra una alerta detallada:
+  *"Ya se cuenta con una evaluación para: Contrato XXX / Prestador XXX / Período XXX / Régimen XXX / Acta XXX (N% cumplimiento). ¿Desea reemplazar?"*
+  Si el usuario cancela, no se genera la nueva acta.
+
 ## v2.14 — 2026-09-22
 
 ### Dashboard: Prestadores agrupados por IPS con cajón de contratos y actas

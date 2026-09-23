@@ -43,7 +43,15 @@ function deduplicarActas(raw: import('./types').Acta[]): import('./types').Acta[
     const ex = byNumeroYPrest.get(key);
     if (!ex || pct(a) > pct(ex)) byNumeroYPrest.set(key, a);
   });
-  return [...byNumeroYPrest.values()];
+  // Paso 3: dedup por contrato + régimen + período (mismo período evaluado para el mismo contrato)
+  // Cuando hay dos actas del mismo contrato, mismo régimen y mismo período → queda la de mayor %
+  const byContratoRegPeriodo = new Map<string, import('./types').Acta>();
+  [...byNumeroYPrest.values()].forEach(a => {
+    const key = `${a.contrato}||${a.regimen || 'SUBSIDIADO'}||${a.periodoEvaluado}`;
+    const ex = byContratoRegPeriodo.get(key);
+    if (!ex || pct(a) > pct(ex)) byContratoRegPeriodo.set(key, a);
+  });
+  return [...byContratoRegPeriodo.values()];
 }
 
 const DEFAULT_USERS: AppUser[] = [
@@ -921,21 +929,26 @@ function App() {
            .map(a => [a.id, a])
     ).values()];
 
-    // Validar: ya existe acta para este prestador en el período seleccionado
-    if (periodoTexto) {
-      const actaPeriodoExistente = prestadorActas.find(a => a.periodoEvaluado === periodoTexto);
-      if (actaPeriodoExistente) {
-        const pct = (() => { const prog = actaPeriodoExistente.servicios.reduce((s, sv) => s + sv.programado, 0); const ejec = actaPeriodoExistente.servicios.reduce((s, sv) => s + Math.min(sv.ejecutado, sv.programado), 0); return prog > 0 ? Math.round(ejec / prog * 100) : 0; })();
-        const sobreescribir = window.confirm(
-          `Ya existe el acta "${actaPeriodoExistente.numero}" para ${p.nombre}\n` +
-          `Período: ${periodoTexto}\n` +
-          `Cumplimiento actual: ${pct}%\n\n` +
-          `¿Deseas crear una nueva acta y reemplazar la existente?`
-        );
-        if (!sobreescribir) return;
-        // Remove the existing acta for this period before creating new one
-        setActas(prev => prev.filter(a => a.id !== actaPeriodoExistente.id));
-      }
+    // Validar: ya existe acta para este contrato + régimen + período
+    const regimen = p.regimen || 'SUBSIDIADO';
+    const actaPeriodoExistente = prestadorActas.find(
+      a => a.periodoEvaluado === periodoTexto &&
+           (a.regimen || 'SUBSIDIADO') === regimen &&
+           a.contrato === p.contrato
+    );
+    if (actaPeriodoExistente) {
+      const cumplPct = (() => { const prog = actaPeriodoExistente.servicios.reduce((s, sv) => s + sv.programado, 0); const ejec = actaPeriodoExistente.servicios.reduce((s, sv) => s + Math.min(sv.ejecutado, sv.programado), 0); return prog > 0 ? Math.round(ejec / prog * 100) : 0; })();
+      const reemplazar = window.confirm(
+        `⚠️ Ya se cuenta con una evaluación para:\n\n` +
+        `  • Contrato: ${p.contrato}\n` +
+        `  • Prestador: ${p.nombre}\n` +
+        `  • Período: ${periodoTexto}\n` +
+        `  • Régimen: ${regimen}\n` +
+        `  • Acta: ${actaPeriodoExistente.numero} (${cumplPct}% cumplimiento)\n\n` +
+        `¿Desea reemplazar el acta existente con una nueva evaluación?`
+      );
+      if (!reemplazar) return;
+      setActas(prev => prev.filter(a => a.id !== actaPeriodoExistente.id));
     }
 
     // Generate a number that doesn't already exist
