@@ -31,6 +31,12 @@ git -c http.proxy="" -c https.proxy="" push --force \
 > El proxy del entorno bloquea pushes directos; usar siempre `-c http.proxy="" -c https.proxy=""`.
 > Los tokens reales están en el historial de conversación de Claude — pedirlos al usuario si no están en contexto.
 
+### Fix tracking ref tras push
+Después de cada push con URL con token, el tracking ref puede quedar desconfigurado. Corregir con:
+```bash
+git fetch origin && git branch --set-upstream-to=origin/claude/general-improvements-TGzCd claude/general-improvements-TGzCd
+```
+
 ---
 
 ## Base de datos — PocketBase en VPS Contabo (v2.10+)
@@ -92,7 +98,7 @@ Los datos de Supabase (`wczamyidhyqwtxvjgwgu.supabase.co`) fueron migrados a Poc
 ## Arquitectura
 
 ```
-App.tsx                  ← componente raíz, lógica principal (~4000+ líneas)
+App.tsx                  ← componente raíz, lógica principal (~4200+ líneas)
 index.tsx                ← punto de entrada React
 index.html               ← HTML con print CSS y portal de impresión
 types.ts                 ← interfaces TypeScript (RipsRecord, Acta, Prestador, etc.)
@@ -129,7 +135,9 @@ Dashboard → barra "Ejecutado (Real)"
 - `detectedPrestadorId` — ID del prestador detectado en los archivos cargados
 - `isAuditMode` — `true` cuando hay registros pero no hay prestador seleccionado
 - `supabaseStatus` — estado del ping periódico a PocketBase (`'ok'|'error'|'checking'|'unknown'`)
-- `expandedNits` — Set de NITs de prestadores con el cajón abierto en la lista
+- `expandedNits` — Set de NITs abiertos en la lista de prestadores (pestaña Prestadores)
+- `dashExpandedNits` — Set de NITs abiertos en el panel Prestadores del Dashboard
+- `selectedDashPrestador` — legacy (ya no se usa para selección en dashboard)
 
 ---
 
@@ -167,7 +175,7 @@ Clave de dedup: `${paciente}|${codMed}|${fecha}` — una dispensación única po
 ### Exclusión de OXÍGENO
 Se excluyen líneas donde `nombreMed` coincide con `/OXIGENO|OXIGEN|GAS\s+MED|OXYGEN/i`.
 
-### Detección de secciones (App.tsx ~línea 1255)
+### Detección de secciones (App.tsx ~línea 1265)
 ```
 "ARCHIVO-MEDICAMENTOS" → section = "MEDICAMENTOS"
 "ARCHIVO-OTROS SERVICIOS" → section = "SERVICIOS"
@@ -191,6 +199,19 @@ Se excluyen líneas donde `nombreMed` coincide con `/OXIGENO|OXIGEN|GAS\s+MED|OX
 - `ActaServicio.ejecutado` viene del conteo de `registros` filtrados por tipo
 - El botón "Recalcular Servicios" actualiza los valores ejecutados con los RIPS cargados
 - El aviso "NO se guardará automáticamente" solo aparece en pestaña **Formulario**
+
+### Deduplicación de actas (`deduplicarActas`) — v2.15
+Función en App.tsx (~línea 29). Corre en carga inicial, sync y poll. Tres pasos en cascada:
+1. **Por `id` exacto** — misma instancia guardada dos veces → queda una.
+2. **Por `prestadorId||numero`** — misma acta regenerada → queda la de mayor %.
+3. **Por `contrato||regimen||periodoEvaluado`** — mismo contrato + régimen + período → queda la de mayor %. Elimina duplicados creados antes de v2.15.
+
+### Validación al generar acta (`handleGenerarActa`) — v2.15
+Si ya existe un acta para el mismo `contrato + regimen + periodoEvaluado`, muestra alerta:
+> ⚠️ Ya se cuenta con una evaluación para: Contrato / Prestador / Período / Acta (N%)
+> ¿Desea reemplazar?
+
+Si el usuario cancela, no se genera la nueva. Si confirma, se elimina la existente.
 
 ---
 
@@ -218,13 +239,13 @@ Se excluyen líneas donde `nombreMed` coincide con `/OXIGENO|OXIGEN|GAS\s+MED|OX
 ### Dedup de prestadores
 Clave secundaria: `${nit}|${contrato}` — evita duplicados por ID diferente.
 
-### Dedup de actas (`deduplicarActas`)
-1. Por `id` exacto.
-2. Por `prestadorId||numero` — queda la de mayor % de cumplimiento.
+### Dedup de actas
+Ver sección **Deduplicación de actas** arriba.
 
 ---
 
 ## Lista de Prestadores — Cajones colapsables (v2.11+)
+*Pestaña Prestadores (gestión completa)*
 
 - Los prestadores están agrupados por NIT
 - **Por defecto colapsados** — header muestra nombre, NIT, ubicación, badges S:/C: y total de actas
@@ -234,6 +255,38 @@ Clave secundaria: `${nit}|${contrato}` — evita duplicados por ID diferente.
   - Clic en mini tarjeta → abre el acta
   - Contratos completos con botones (Cargar Metas, Acta, editar, eliminar)
 - `expandedNits: Set<string>` — controla qué grupos están abiertos
+
+---
+
+## Dashboard — Panel Prestadores (v2.14+)
+*Panel lateral derecho del Dashboard*
+
+- Agrupa los contratos por NIT/IPS: una IPS con contratos subsidiado y contributivo aparece como una sola fila.
+- **Clic en el header** despliega cajón con cada contrato coloreado (verde = SUBSIDIADO, naranja = CONTRIBUTIVO) y sus actas con barra de progreso y %.
+- Botón **+ Acta** por contrato; botón **Ver** por acta navega al editor inline.
+- Badges **S** y **C** en el header indican regímenes disponibles.
+- Estado: `dashExpandedNits: Set<string>` — controla qué grupos están abiertos.
+- Grupos precalculados ANTES del `return (<>` en el IIFE del tab dashboard (patrón crítico — no definir dentro del JSX).
+
+---
+
+## Renuencias (búsquedas fallidas) — v2.12+
+
+- La sección "Renuencias y Búsquedas Fallidas" usa `chartData` como fuente de verdad: cualquier servicio que aparece en la gráfica aparece también en renuencias.
+- Bug anterior (v2.11 y antes): filtraba por tipo de contrato del prestador y omitía PEDIATRÍA, PSICOLOGÍA, NUTRICIÓN cuando el tipo caía a `ASISTENCIAL`.
+- El total de cada servicio suma `RIPS + renuencias ingresadas`.
+
+---
+
+## Renuncias — Trazabilidad completa (v2.13+)
+
+- El campo **Responsable** es un `<select>` alimentado desde la lista de funcionarios registrados (antes era texto libre).
+- Al abrir el formulario "Nueva Renuncia" se auto-rellena:
+  - **Funcionario**: `currentUser.nombre` (usuario logueado)
+  - **Prestador / Contrato / Régimen**: prestador detectado en RIPS (si existe)
+  - **Período**: mes y año actual
+- El campo Responsable es obligatorio — no se guarda sin identificar quién la registró.
+- En PocketBase (`renuncias` key) queda trazabilidad: prestador, tipo de servicio, funcionario responsable.
 
 ---
 
@@ -259,10 +312,24 @@ El formulario se popula desde `p.metas` del prestador seleccionado.
 
 ---
 
+## Reglas críticas de React (lecciones de crashes anteriores)
+
+1. **Nunca definir componentes React dentro de otra función de render.** React los trata como tipos nuevos en cada render → desmonta y remonta → estado perdido → crash.
+2. **Todo estado referenciado en JSX debe estar definido.** Un revert que elimina estado pero deja el JSX que lo usa genera `Cannot read properties of undefined` al cargar.
+3. **Todos los iconos lucide-react usados en JSX deben estar importados.** Un `<ChevronDown />` sin importar lanza `ReferenceError` en runtime que deja la página en blanco sin mensaje de error visible. Verificar siempre la línea de imports al agregar iconos nuevos.
+4. **Precomputar grupos/datos ANTES del `return (<>` en IIFEs de tabs.** Calcular dentro del JSX (especialmente con `Map` o funciones complejas) puede causar errores de parsing del TSX o crashes silenciosos.
+5. **No usar `Map<K,V>` como tipo anotado dentro de TSX.** Usar `Record<string, T>` o anotar fuera del JSX. El parser de TSX puede confundir los genéricos con tags JSX.
+
+---
+
 ## Versiones
 
 | Versión | Tag git | Descripción |
 |---|---|---|
+| **2.15** | `v2.15` | Deduplicación de actas por contrato+régimen+período. Alerta detallada al crear acta duplicada. |
+| **2.14** | `v2.14` | Dashboard Prestadores agrupados por IPS/NIT con cajón de contratos y actas. |
+| **2.13** | `v2.13` | Renuncias: Responsable desde lista de funcionarios, auto-relleno al abrir formulario. |
+| **2.12** | `v2.12` | Renuencias usa chartData como fuente de verdad; total incluye renuencias + RIPS. |
 | **2.11** | `v2.11` | Cajones colapsables en lista de prestadores con mini vista SUBSIDIADO/CONTRIBUTIVO. |
 | **2.10** | `v2.10` | Migración de Supabase a PocketBase en VPS Contabo propio. |
 | **2.9** | `v2.9` | Monitor de estado PocketBase con indicador verde/rojo en header, ping cada 2 min. |
@@ -278,11 +345,11 @@ El formulario se popula desde `p.metas` del prestador seleccionado.
 
 ```bash
 # Volver a una versión
-git checkout v2.11
+git checkout v2.15
 
 # Crear tag nuevo
-git tag v2.11 && git -c http.proxy="" -c https.proxy="" push \
-  "https://<TOKEN>@github.com/chuvanegas/evaluacion-rips-2026.git" v2.11
+git tag v2.15 && git -c http.proxy="" -c https.proxy="" push \
+  "https://<TOKEN>@github.com/chuvanegas/evaluacion-rips-2026.git" v2.15
 ```
 
 ---
@@ -292,6 +359,6 @@ git tag v2.11 && git -c http.proxy="" -c https.proxy="" push \
 | Botón | Ubicación | Estado |
 |---|---|---|
 | "Nuevo Prestador" | Cabecera de la lista | ASISTENCIAL en 0 |
-| Reset tras guardar | `handleSavePrestador` (~línea 755) | ASISTENCIAL en 0 |
+| Reset tras guardar | `handleSavePrestador` (~línea 770) | ASISTENCIAL en 0 |
 | "+ Contrato" | Header del grupo NIT | ASISTENCIAL en 0 (corregido v2.4) |
 | **Editar (lápiz)** | Fila de contrato | Carga datos existentes — correcto |
