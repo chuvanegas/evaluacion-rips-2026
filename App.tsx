@@ -4151,22 +4151,10 @@ function App() {
               const pct = (used: number, total: number) => total > 0 ? Math.min(100, Math.round(used/total*100)) : 0;
               const s = monitorStats;
               const heapPct    = s ? pct(s.heapUsed, s.heapLimit) : 0;
-              const lsPct      = s ? pct(s.lsUsed, 5242880) : 0;
+              const lsPct      = s ? pct(s.lsUsed, 5242880) : 0;   // localStorage ~5 MB limit
               const stPct      = s ? pct(s.storageUsage, s.storageQuota) : 0;
               const upFmt = (sec: number) => { const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60),ss=sec%60; return `${h}h ${m}m ${ss}s`; };
               const barColor = (p: number) => p < 60 ? 'bg-emerald-500' : p < 85 ? 'bg-amber-500' : 'bg-red-500';
-
-              // Precomputar duplicados (NIT + régimen + período)
-              const calcPct = (a: Acta) => { const prog = a.servicios.reduce((acc,sv)=>acc+sv.programado,0); const ejec = a.servicios.reduce((acc,sv)=>acc+Math.min(sv.ejecutado,sv.programado),0); return prog>0?ejec/prog:0; };
-              const dupGruposObj: Record<string, Acta[]> = {};
-              actas.forEach(a => {
-                if (!a.nit) return;
-                const k = `${a.nit}||${a.regimen||'SUBSIDIADO'}||${a.periodoEvaluado}`;
-                if (!dupGruposObj[k]) dupGruposObj[k] = [];
-                dupGruposObj[k].push(a);
-              });
-              const dupGrupos = Object.entries(dupGruposObj).filter(e => e[1].length > 1);
-              const dupTotalSobran = dupGrupos.reduce((acc, e) => acc + e[1].length - 1, 0);
 
               return (
                 <div className="space-y-5 animate-in fade-in duration-300">
@@ -4266,80 +4254,85 @@ function App() {
 
                     </div>
                   )}
+                </div>
+              );
+            })()}
 
-                  {/* ── Depuración de actas duplicadas ── */}
-                  <div className="glass-panel rounded-2xl p-5 space-y-4 border border-amber-200 dark:border-amber-500/30">
-                    <div className="flex items-center justify-between flex-wrap gap-3">
-                      <div className="flex items-center gap-2">
-                        <AlertTriangle className="h-5 w-5 text-amber-500" />
-                        <h3 className="font-bold text-slate-800 dark:text-white">Actas Duplicadas</h3>
-                        {dupGrupos.length === 0
-                          ? <span className="text-xs bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded-full font-medium">Sin duplicados detectados</span>
-                          : <span className="text-xs bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full font-medium">{dupTotalSobran} actas a eliminar en {dupGrupos.length} grupo{dupGrupos.length!==1?'s':''}</span>
-                        }
-                      </div>
-                      {dupGrupos.length > 0 && (
-                        <button
-                          onClick={() => {
-                            const confirmar = window.confirm(
-                              `Se eliminarán ${dupTotalSobran} actas duplicadas (se conserva la de mayor % por NIT + régimen + período).\n\n¿Confirmar limpieza?`
-                            );
-                            if (!confirmar) return;
-                            const idsEliminar = new Set<string>();
-                            dupGrupos.forEach(entry => {
-                              const grupo = entry[1];
-                              const mejor = grupo.reduce((a,b) => calcPct(a)>=calcPct(b)?a:b);
-                              grupo.forEach(a => { if (a.id !== mejor.id) idsEliminar.add(a.id); });
-                            });
-                            setActas(prev => prev.filter(a => !idsEliminar.has(a.id)));
-                            setMessage({ type: 'success', text: `Limpieza completada: ${idsEliminar.size} actas duplicadas eliminadas.` });
-                          }}
-                          className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-sm font-medium transition-colors shadow-sm"
-                        >
-                          <Trash2 className="h-4 w-4" /> Limpiar duplicados
-                        </button>
-                      )}
+            {/* ── Panel duplicados — bloque separado del Monitor IIFE ── */}
+            {maintTab === 'monitor' && isAdmin && (() => {
+              const calcPct = (a: Acta) => { const prog = a.servicios?.reduce((acc,sv)=>acc+sv.programado,0)??0; const ejec = a.servicios?.reduce((acc,sv)=>acc+Math.min(sv.ejecutado,sv.programado),0)??0; return prog>0?ejec/prog:0; };
+              const dupObj: Record<string, Acta[]> = {};
+              actas.forEach(a => {
+                if (!a.nit) return;
+                const k = `${a.nit}||${a.regimen||'SUBSIDIADO'}||${a.periodoEvaluado}`;
+                if (!dupObj[k]) dupObj[k] = [];
+                dupObj[k].push(a);
+              });
+              const dupGrupos = Object.entries(dupObj).filter(e => e[1].length > 1);
+              const dupSobran = dupGrupos.reduce((acc, e) => acc + e[1].length - 1, 0);
+              return (
+                <div className="glass-panel rounded-2xl p-5 space-y-4 border border-amber-200 dark:border-amber-500/30 mt-4">
+                  <div className="flex items-center justify-between flex-wrap gap-3">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="h-5 w-5 text-amber-500" />
+                      <h3 className="font-bold text-slate-800 dark:text-white">Actas Duplicadas</h3>
+                      {dupGrupos.length === 0
+                        ? <span className="text-xs bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded-full font-medium">Sin duplicados detectados</span>
+                        : <span className="text-xs bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full font-medium">{dupSobran} actas a eliminar en {dupGrupos.length} grupo{dupGrupos.length!==1?'s':''}</span>
+                      }
                     </div>
                     {dupGrupos.length > 0 && (
-                      <div className="space-y-2 max-h-72 overflow-y-auto custom-scroll">
-                        {dupGrupos.map(entry => {
-                          const key = entry[0];
-                          const grupo = entry[1];
-                          const parts = key.split('||');
-                          const nitKey = parts[0];
-                          const regimenKey = parts[1];
-                          const periodoKey = parts[2];
-                          const mejor = grupo.reduce((a,b)=>calcPct(a)>=calcPct(b)?a:b);
-                          const nombre = grupo[0].empresa || grupo[0].nit;
-                          return (
-                            <div key={key} className="bg-amber-50 dark:bg-amber-500/10 rounded-xl p-3 border border-amber-100 dark:border-amber-500/20 space-y-1.5">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-semibold text-sm text-slate-800 dark:text-slate-100 truncate max-w-xs">{nombre}</span>
-                                <span className="text-[10px] font-mono text-slate-500">NIT: {nitKey}</span>
-                                <span className={`text-[10px] font-bold ${regimenKey==='CONTRIBUTIVO'?'text-orange-500':'text-emerald-600'}`}>{regimenKey}</span>
-                                <span className="text-[10px] text-slate-500">{periodoKey}</span>
-                              </div>
-                              <div className="space-y-0.5 pl-2">
-                                {grupo.map(a => {
-                                  const cumpl = Math.round(calcPct(a)*100);
-                                  const esMejor = a.id === mejor.id;
-                                  return (
-                                    <div key={a.id} className={`flex items-center gap-2 text-[11px] rounded px-2 py-0.5 ${esMejor?'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300':'bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 line-through opacity-70'}`}>
-                                      <span className="font-mono font-bold">{a.numero}</span>
-                                      <span className="text-[10px]">{a.contrato}</span>
-                                      <span className="ml-auto font-bold">{cumpl}%</span>
-                                      <span>{esMejor?'✓ conservar':'✗ eliminar'}</span>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
+                      <button
+                        onClick={() => {
+                          if (!window.confirm(`Se eliminarán ${dupSobran} actas duplicadas (se conserva la de mayor % por NIT + régimen + período).\n\n¿Confirmar limpieza?`)) return;
+                          const idsEliminar = new Set<string>();
+                          dupGrupos.forEach(entry => {
+                            const grupo = entry[1];
+                            const mejor = grupo.reduce((a,b) => calcPct(a)>=calcPct(b)?a:b);
+                            grupo.forEach(a => { if (a.id !== mejor.id) idsEliminar.add(a.id); });
+                          });
+                          setActas(prev => prev.filter(a => !idsEliminar.has(a.id)));
+                          setMessage({ type: 'success', text: `Limpieza completada: ${idsEliminar.size} actas duplicadas eliminadas.` });
+                        }}
+                        className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-sm font-medium transition-colors shadow-sm"
+                      >
+                        <Trash2 className="h-4 w-4" /> Limpiar duplicados
+                      </button>
                     )}
                   </div>
-
+                  {dupGrupos.length > 0 && (
+                    <div className="space-y-2 max-h-72 overflow-y-auto custom-scroll">
+                      {dupGrupos.map(entry => {
+                        const parts = entry[0].split('||');
+                        const grupo = entry[1];
+                        const mejor = grupo.reduce((a,b)=>calcPct(a)>=calcPct(b)?a:b);
+                        return (
+                          <div key={entry[0]} className="bg-amber-50 dark:bg-amber-500/10 rounded-xl p-3 border border-amber-100 dark:border-amber-500/20 space-y-1.5">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-semibold text-sm text-slate-800 dark:text-slate-100 truncate max-w-xs">{grupo[0].empresa||grupo[0].nit}</span>
+                              <span className="text-[10px] font-mono text-slate-500">NIT: {parts[0]}</span>
+                              <span className={`text-[10px] font-bold ${parts[1]==='CONTRIBUTIVO'?'text-orange-500':'text-emerald-600'}`}>{parts[1]}</span>
+                              <span className="text-[10px] text-slate-500">{parts[2]}</span>
+                            </div>
+                            <div className="space-y-0.5 pl-2">
+                              {grupo.map(a => {
+                                const cumpl = Math.round(calcPct(a)*100);
+                                const esMejor = a.id === mejor.id;
+                                return (
+                                  <div key={a.id} className={`flex items-center gap-2 text-[11px] rounded px-2 py-0.5 ${esMejor?'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300':'bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 line-through opacity-70'}`}>
+                                    <span className="font-mono font-bold">{a.numero}</span>
+                                    <span className="text-[10px]">{a.contrato}</span>
+                                    <span className="ml-auto font-bold">{cumpl}%</span>
+                                    <span>{esMejor?'✓ conservar':'✗ eliminar'}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               );
             })()}
