@@ -186,6 +186,7 @@ function App() {
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<{type: 'success' | 'error' | 'info', text: string} | null>(null);
   const [supabaseStatus, setSupabaseStatus] = useState<'ok' | 'error' | 'checking' | 'unknown'>('unknown');
+  const [serverPing, setServerPing] = useState<{ ms: number | null; status: 'ok'|'error'|'checking'; checkedAt: string; totalRecords: number | null } | null>(null);
   
   // Modal State
   const [showDuplicates, setShowDuplicates] = useState(false);
@@ -503,6 +504,35 @@ function App() {
     };
     check();
     const id = setInterval(check, 120000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Ping Contabo VPS — mide latencia y total de registros en PocketBase
+  useEffect(() => {
+    const PB_URL = 'https://evaluacion-db.duckdns.org';
+    const check = async () => {
+      setServerPing(prev => ({ ms: prev?.ms ?? null, status: 'checking', checkedAt: prev?.checkedAt ?? '', totalRecords: prev?.totalRecords ?? null }));
+      const t0 = performance.now();
+      try {
+        const res = await fetch(`${PB_URL}/api/health`, { cache: 'no-store' });
+        const ms = Math.round(performance.now() - t0);
+        if (res.ok) {
+          // Intentar obtener total registros de app_storage
+          let totalRecords: number | null = null;
+          try {
+            const r = await fetch(`${PB_URL}/api/collections/app_storage/records?perPage=1`, { cache: 'no-store' });
+            if (r.ok) { const d = await r.json(); totalRecords = d.totalItems ?? null; }
+          } catch { /* sin acceso anónimo — ignorar */ }
+          setServerPing({ ms, status: 'ok', checkedAt: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' }), totalRecords });
+        } else {
+          setServerPing({ ms, status: 'error', checkedAt: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' }), totalRecords: null });
+        }
+      } catch {
+        setServerPing({ ms: null, status: 'error', checkedAt: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' }), totalRecords: null });
+      }
+    };
+    check();
+    const id = setInterval(check, 60000);
     return () => clearInterval(id);
   }, []);
 
@@ -4328,6 +4358,43 @@ function App() {
                           <div className="text-xs text-slate-400">Cuota total: {fmt(s.storageQuota)}</div>
                         </div>
                         <p className="text-xs text-slate-400 pt-1 border-t border-slate-200 dark:border-slate-700">Incluye: localStorage, IndexedDB, Cache API</p>
+                      </div>
+
+                      {/* Servidor Contabo / PocketBase */}
+                      <div className="glass-panel rounded-2xl p-5 space-y-3 md:col-span-2 xl:col-span-3">
+                        <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                          <Server className="h-4 w-4 text-cyan-500" /> Servidor Contabo — PocketBase
+                          {serverPing && (
+                            <span className={`ml-auto text-xs font-medium px-2 py-0.5 rounded-full ${serverPing.status === 'ok' ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400' : serverPing.status === 'error' ? 'bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400' : 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400'}`}>
+                              {serverPing.status === 'ok' ? '● En línea' : serverPing.status === 'error' ? '● Sin respuesta' : '● Verificando...'}
+                            </span>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                          {[
+                            {
+                              label: 'Latencia',
+                              val: serverPing?.status === 'checking' ? '...' : serverPing?.ms != null ? `${serverPing.ms} ms` : '—',
+                              color: serverPing?.ms != null ? (serverPing.ms < 300 ? 'text-emerald-500' : serverPing.ms < 700 ? 'text-amber-500' : 'text-red-500') : 'text-slate-400',
+                            },
+                            { label: 'VPS', val: 'Contabo EU', color: 'text-cyan-500' },
+                            { label: 'Base de datos', val: 'PocketBase', color: 'text-indigo-500' },
+                            { label: 'SSL', val: 'Let\'s Encrypt', color: 'text-emerald-500' },
+                          ].map(item => (
+                            <div key={item.label} className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3 text-center">
+                              <p className={`text-lg font-bold ${item.color}`}>{item.val}</p>
+                              <p className="text-xs text-slate-500 mt-0.5">{item.label}</p>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs text-slate-500 border-t border-slate-200 dark:border-slate-700 pt-3">
+                          <div className="flex items-center gap-1.5"><span className="text-slate-400">🌐 Host:</span> <span className="font-mono text-slate-600 dark:text-slate-300">evaluacion-db.duckdns.org</span></div>
+                          <div className="flex items-center gap-1.5"><span className="text-slate-400">🖧 IP:</span> <span className="font-mono text-slate-600 dark:text-slate-300">207.180.243.127</span></div>
+                          <div className="flex items-center gap-1.5"><span className="text-slate-400">🕐 Verificado:</span> <span className="text-slate-600 dark:text-slate-300">{serverPing?.checkedAt || '—'}</span></div>
+                          <div className="flex items-center gap-1.5"><span className="text-slate-400">🗃️ Colección:</span> <span className="font-mono text-slate-600 dark:text-slate-300">app_storage</span></div>
+                          <div className="flex items-center gap-1.5"><span className="text-slate-400">🔒 Proxy:</span> <span className="text-slate-600 dark:text-slate-300">nginx + SSL 443→8090</span></div>
+                          <div className="flex items-center gap-1.5"><span className="text-slate-400">🔄 Certbot:</span> <span className="text-emerald-600 dark:text-emerald-400">Renovación automática</span></div>
+                        </div>
                       </div>
 
                       {/* Registros */}
