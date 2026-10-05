@@ -2144,7 +2144,7 @@ function App() {
                   }}
                 >
                   <span className={`w-2 h-2 rounded-full ${supabaseStatus === 'checking' ? 'animate-pulse' : ''}`} style={{ background: supabaseStatus === 'ok' ? '#22c55e' : supabaseStatus === 'error' ? '#ef4444' : '#eab308' }} />
-                  <span className="hidden sm:inline">{supabaseStatus === 'ok' ? 'DB OK' : supabaseStatus === 'error' ? 'DB Error' : 'DB...'}</span>
+                  <span className="hidden sm:inline">{supabaseStatus === 'ok' ? '🖥️ Servidor · BD activa' : supabaseStatus === 'error' ? '🖥️ Servidor · BD error' : '🖥️ Servidor · BD...'}</span>
                 </span>
               )}
               <button
