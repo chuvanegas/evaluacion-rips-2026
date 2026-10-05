@@ -187,6 +187,7 @@ function App() {
   const [message, setMessage] = useState<{type: 'success' | 'error' | 'info', text: string} | null>(null);
   const [supabaseStatus, setSupabaseStatus] = useState<'ok' | 'error' | 'checking' | 'unknown'>('unknown');
   const [serverPing, setServerPing] = useState<{ ms: number | null; status: 'ok'|'error'|'checking'; checkedAt: string; totalRecords: number | null } | null>(null);
+  const [serverMetrics, setServerMetrics] = useState<{ ram: { used: number; total: number; pct: number }; disk: { used: string; total: string; pct: number }; ts: string } | null>(null);
   
   // Modal State
   const [showDuplicates, setShowDuplicates] = useState(false);
@@ -507,28 +508,34 @@ function App() {
     return () => clearInterval(id);
   }, []);
 
-  // Ping Contabo VPS — mide latencia y total de registros en PocketBase
+  // Ping Contabo VPS — mide latencia y obtiene métricas del servidor
   useEffect(() => {
     const PB_URL = 'https://evaluacion-db.duckdns.org';
+    const now = () => new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     const check = async () => {
       setServerPing(prev => ({ ms: prev?.ms ?? null, status: 'checking', checkedAt: prev?.checkedAt ?? '', totalRecords: prev?.totalRecords ?? null }));
       const t0 = performance.now();
       try {
         const res = await fetch(`${PB_URL}/api/health`, { cache: 'no-store' });
         const ms = Math.round(performance.now() - t0);
+        const ts = now();
         if (res.ok) {
-          // Intentar obtener total registros de app_storage
           let totalRecords: number | null = null;
           try {
             const r = await fetch(`${PB_URL}/api/collections/app_storage/records?perPage=1`, { cache: 'no-store' });
             if (r.ok) { const d = await r.json(); totalRecords = d.totalItems ?? null; }
-          } catch { /* sin acceso anónimo — ignorar */ }
-          setServerPing({ ms, status: 'ok', checkedAt: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' }), totalRecords });
+          } catch { /* sin acceso anónimo */ }
+          setServerPing({ ms, status: 'ok', checkedAt: ts, totalRecords });
+          // Intentar leer métricas del servidor (requiere configuración en el VPS)
+          try {
+            const mr = await fetch(`${PB_URL}/metrics.json`, { cache: 'no-store' });
+            if (mr.ok) setServerMetrics(await mr.json());
+          } catch { /* endpoint no configurado aún */ }
         } else {
-          setServerPing({ ms, status: 'error', checkedAt: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' }), totalRecords: null });
+          setServerPing({ ms, status: 'error', checkedAt: ts, totalRecords: null });
         }
       } catch {
-        setServerPing({ ms: null, status: 'error', checkedAt: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' }), totalRecords: null });
+        setServerPing({ ms: null, status: 'error', checkedAt: now(), totalRecords: null });
       }
     };
     check();
@@ -4370,28 +4377,80 @@ function App() {
                             </span>
                           )}
                         </div>
+                        {/* Tiles: latencia + RAM + disco */}
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                          {[
-                            {
-                              label: 'Latencia',
-                              val: serverPing?.status === 'checking' ? '...' : serverPing?.ms != null ? `${serverPing.ms} ms` : '—',
-                              color: serverPing?.ms != null ? (serverPing.ms < 300 ? 'text-emerald-500' : serverPing.ms < 700 ? 'text-amber-500' : 'text-red-500') : 'text-slate-400',
-                            },
-                            { label: 'VPS', val: 'Contabo EU', color: 'text-cyan-500' },
-                            { label: 'Base de datos', val: 'PocketBase', color: 'text-indigo-500' },
-                            { label: 'SSL', val: 'Let\'s Encrypt', color: 'text-emerald-500' },
-                          ].map(item => (
-                            <div key={item.label} className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3 text-center">
-                              <p className={`text-lg font-bold ${item.color}`}>{item.val}</p>
-                              <p className="text-xs text-slate-500 mt-0.5">{item.label}</p>
-                            </div>
-                          ))}
+                          <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3 text-center">
+                            <p className={`text-lg font-bold ${serverPing?.ms != null ? (serverPing.ms < 300 ? 'text-emerald-500' : serverPing.ms < 700 ? 'text-amber-500' : 'text-red-500') : 'text-slate-400'}`}>
+                              {serverPing?.status === 'checking' ? '...' : serverPing?.ms != null ? `${serverPing.ms} ms` : '—'}
+                            </p>
+                            <p className="text-xs text-slate-500 mt-0.5">Latencia API</p>
+                          </div>
+                          <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3 text-center">
+                            <p className={`text-lg font-bold ${serverMetrics ? (serverMetrics.ram.pct < 60 ? 'text-emerald-500' : serverMetrics.ram.pct < 85 ? 'text-amber-500' : 'text-red-500') : 'text-slate-400'}`}>
+                              {serverMetrics ? `${serverMetrics.ram.pct}%` : '—'}
+                            </p>
+                            <p className="text-xs text-slate-500 mt-0.5">RAM {serverMetrics ? `${serverMetrics.ram.used}/${serverMetrics.ram.total} MB` : 'no disponible'}</p>
+                          </div>
+                          <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3 text-center">
+                            <p className={`text-lg font-bold ${serverMetrics ? (serverMetrics.disk.pct < 60 ? 'text-emerald-500' : serverMetrics.disk.pct < 85 ? 'text-amber-500' : 'text-red-500') : 'text-slate-400'}`}>
+                              {serverMetrics ? `${serverMetrics.disk.pct}%` : '—'}
+                            </p>
+                            <p className="text-xs text-slate-500 mt-0.5">Disco {serverMetrics ? `${serverMetrics.disk.used}/${serverMetrics.disk.total}` : 'no disponible'}</p>
+                          </div>
+                          <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3 text-center">
+                            <p className="text-lg font-bold text-cyan-500">VPS</p>
+                            <p className="text-xs text-slate-500 mt-0.5">Contabo EU</p>
+                          </div>
                         </div>
+
+                        {/* Barras RAM y Disco */}
+                        {serverMetrics ? (
+                          <div className="space-y-2.5">
+                            {[
+                              { label: `RAM — ${serverMetrics.ram.used} MB usados de ${serverMetrics.ram.total} MB`, pct: serverMetrics.ram.pct },
+                              { label: `Disco — ${serverMetrics.disk.used} usados de ${serverMetrics.disk.total}`, pct: serverMetrics.disk.pct },
+                            ].map(b => (
+                              <div key={b.label} className="space-y-1">
+                                <div className="flex justify-between text-xs text-slate-500">
+                                  <span>{b.label}</span>
+                                  <span className="font-bold">{b.pct}%</span>
+                                </div>
+                                <div className="w-full h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                                  <div className={`h-full rounded-full transition-all duration-500 ${b.pct < 60 ? 'bg-emerald-500' : b.pct < 85 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${b.pct}%` }} />
+                                </div>
+                              </div>
+                            ))}
+                            <p className="text-xs text-slate-400">Actualizado: {serverMetrics.ts}</p>
+                          </div>
+                        ) : (
+                          <div className="rounded-xl border border-dashed border-amber-300 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-400 space-y-1">
+                            <p className="font-semibold">⚠️ Métricas RAM/Disco no disponibles</p>
+                            <p>Requiere configurar el agente de métricas en el VPS. Ejecuta en el servidor:</p>
+                            <pre className="mt-1 font-mono text-[10px] bg-amber-100/60 dark:bg-amber-500/10 rounded p-2 whitespace-pre-wrap select-all">{`# 1. Crear script
+cat > /usr/local/bin/metrics.sh << 'EOF'
+#!/bin/bash
+RAM=$(free -m | awk 'NR==2{printf "{\\"used\\":%s,\\"total\\":%s,\\"pct\\":%d}",$3,$2,$3*100/$2}')
+DISK=$(df / | awk 'NR==2{p=int($5);printf "{\\"used\\":\\"%s\\",\\"total\\":\\"%s\\",\\"pct\\":%d}",$3,$2,p}')
+echo "{\\"ram\\":$RAM,\\"disk\\":$DISK,\\"ts\\":\\"$(date -u +%H:%M:%S UTC)\\"}" > /var/www/html/metrics.json
+EOF
+chmod +x /usr/local/bin/metrics.sh
+
+# 2. Ejecutar cada 60 s (cron)
+echo "* * * * * root /usr/local/bin/metrics.sh; sleep 30; /usr/local/bin/metrics.sh" >> /etc/crontab
+
+# 3. Agregar CORS en nginx (dentro del server block):
+# location /metrics.json {
+#   add_header Access-Control-Allow-Origin *;
+#   root /var/www/html;
+# }`}</pre>
+                          </div>
+                        )}
+
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs text-slate-500 border-t border-slate-200 dark:border-slate-700 pt-3">
                           <div className="flex items-center gap-1.5"><span className="text-slate-400">🌐 Host:</span> <span className="font-mono text-slate-600 dark:text-slate-300">evaluacion-db.duckdns.org</span></div>
                           <div className="flex items-center gap-1.5"><span className="text-slate-400">🖧 IP:</span> <span className="font-mono text-slate-600 dark:text-slate-300">207.180.243.127</span></div>
                           <div className="flex items-center gap-1.5"><span className="text-slate-400">🕐 Verificado:</span> <span className="text-slate-600 dark:text-slate-300">{serverPing?.checkedAt || '—'}</span></div>
-                          <div className="flex items-center gap-1.5"><span className="text-slate-400">🗃️ Colección:</span> <span className="font-mono text-slate-600 dark:text-slate-300">app_storage</span></div>
+                          <div className="flex items-center gap-1.5"><span className="text-slate-400">🗃️ DB:</span> <span className="font-mono text-slate-600 dark:text-slate-300">PocketBase · app_storage</span></div>
                           <div className="flex items-center gap-1.5"><span className="text-slate-400">🔒 Proxy:</span> <span className="text-slate-600 dark:text-slate-300">nginx + SSL 443→8090</span></div>
                           <div className="flex items-center gap-1.5"><span className="text-slate-400">🔄 Certbot:</span> <span className="text-emerald-600 dark:text-emerald-400">Renovación automática</span></div>
                         </div>
