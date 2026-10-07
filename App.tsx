@@ -2360,15 +2360,25 @@ function App() {
 
           interface RCon { contrato: string; prestador: string; nit: string }
           const radContratos: RCon[] = radData?.contratos || [];
+          // Regímenes ya evaluados: acta existente con mismo contrato + régimen
+          const regYaEvaluado = (contrato: string, reg: string) => {
+            const regLabel = reg === 'RC' ? 'CONTRIBUTIVO' : 'SUBSIDIADO';
+            return actas.some(a => a.contrato === contrato && (a.regimen || 'SUBSIDIADO').toUpperCase() === regLabel);
+          };
+
           const listos = radContratos.map(c => {
-            const regs = [...new Set(
+            const allRegs = [...new Set(
               (radData?.registros || [])
                 .filter((r: any) => r.contrato === c.contrato &&
                   ((r.periodo_anio === 2026 && r.periodo_mes >= 3) || (r.periodo_anio === 2027 && r.periodo_mes <= 2)))
                 .map((r: any) => r.regimen || 'RS')
             )] as string[];
-            return { ...c, regs };
-          }).filter(c => c.regs.length > 0);
+            // Solo regímenes sin acta ya existente
+            const regs = allRegs.filter(reg => !regYaEvaluado(c.contrato, reg));
+            // Regímenes ya evaluados (para mostrar badge informativo)
+            const yaEval = allRegs.filter(reg => regYaEvaluado(c.contrato, reg));
+            return { ...c, regs, yaEval };
+          }).filter(c => c.regs.length > 0 || c.yaEval.length > 0);
 
           const handleEval = async (c: RCon, reg: string) => {
             const key = `${c.contrato}|${reg}`;
@@ -2405,11 +2415,22 @@ function App() {
                   <CheckCircle2 className="h-4 w-4 text-emerald-500" />
                   Listos para evaluar
                   {radFetching && <RefreshCw className="h-3 w-3 text-slate-400 animate-spin" />}
-                  {listos.length > 0 && (
-                    <span className="text-[10px] font-medium bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded-full">
-                      {listos.length} contrato{listos.length !== 1 ? 's' : ''}
-                    </span>
-                  )}
+                  {(() => {
+                    const pendientes = listos.filter(c => c.regs.length > 0).length;
+                    const yaEvalCnt = listos.filter(c => c.yaEval.length > 0).length;
+                    return (<>
+                      {pendientes > 0 && (
+                        <span className="text-[10px] font-medium bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded-full">
+                          {pendientes} pendiente{pendientes !== 1 ? 's' : ''}
+                        </span>
+                      )}
+                      {yaEvalCnt > 0 && (
+                        <span className="text-[10px] font-medium bg-slate-100 dark:bg-slate-700 text-slate-500 px-2 py-0.5 rounded-full">
+                          {yaEvalCnt} con acta
+                        </span>
+                      )}
+                    </>);
+                  })()}
                 </h2>
                 <button
                   onClick={() => {
@@ -2449,13 +2470,30 @@ function App() {
                     const mRC = mesesDisp(c.contrato, 'RC');
                     const ulRS = mRS.length > 0 ? MESES_N[mRS[mRS.length-1].mes-1] : null;
                     const ulRC = mRC.length > 0 ? MESES_N[mRC[mRC.length-1].mes-1] : null;
+                    const soloYaEval = c.regs.length === 0; // todos los regímenes ya evaluados
                     return (
-                      <div key={c.contrato} className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/50 hover:border-emerald-200 dark:hover:border-emerald-500/30 transition-colors group">
+                      <div key={c.contrato} className={`flex items-center gap-2 p-2.5 rounded-xl border transition-colors ${
+                        soloYaEval
+                          ? 'bg-slate-50/60 dark:bg-slate-800/30 border-slate-100 dark:border-slate-700/30 opacity-60'
+                          : 'bg-slate-50 dark:bg-slate-800/60 border-slate-100 dark:border-slate-700/50 hover:border-emerald-200 dark:hover:border-emerald-500/30'
+                      }`}>
                         <div className="flex-1 min-w-0">
                           <div className="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate">{c.prestador || c.contrato}</div>
                           <div className="text-[9px] font-mono text-slate-400">{c.contrato}</div>
                         </div>
-                        <div className="flex gap-1 shrink-0">
+                        <div className="flex gap-1 shrink-0 items-center flex-wrap justify-end">
+                          {/* Badges de regímenes ya evaluados */}
+                          {c.yaEval.map((reg: string) => (
+                            <span key={reg} className={`flex items-center gap-0.5 px-2 py-1 rounded-lg text-[10px] font-medium border ${
+                              reg === 'RC'
+                                ? 'border-orange-200 dark:border-orange-500/30 text-orange-500 bg-orange-50 dark:bg-orange-500/10'
+                                : 'border-emerald-200 dark:border-emerald-500/30 text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10'
+                            }`}>
+                              <Check className="h-2.5 w-2.5" />
+                              {reg === 'RC' ? 'Contributivo' : 'Subsidiado'} ✓ acta
+                            </span>
+                          ))}
+                          {/* Botones de regímenes pendientes */}
                           {c.regs.includes('RS') && (
                             <button
                               onClick={() => handleEval(c, 'RS')}
