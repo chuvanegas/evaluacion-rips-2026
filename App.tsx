@@ -548,6 +548,20 @@ function App() {
     return () => clearInterval(id);
   }, []);
 
+  // Auto-cargar datos de radicación al abrir el Monitor (superadmin)
+  useEffect(() => {
+    if (activeTab !== 'mantenimiento' || maintTab !== 'monitor') return;
+    if (radData || radFetching) return;
+    const isSuper = currentUser?.role === 'admin' && currentUser?.username === 'admin';
+    if (!isSuper) return;
+    setRadFetching(true); setRadError(null);
+    fetch('https://radicacion.vercel.app/api/evaluar', { headers: { 'x-token': 'DUSAKAWI-RIPS-2026' }, cache: 'no-store' })
+      .then(r => r.ok ? r.json() : r.text().then(t => Promise.reject(`Error ${r.status}: ${t}`)))
+      .then(d => { setRadData(d); setRadLastFetch(new Date().toLocaleTimeString('es-CO')); })
+      .catch((e: any) => setRadError(String(e?.message || e)))
+      .finally(() => setRadFetching(false));
+  }, [activeTab, maintTab]);
+
   // Auto-actualizar scale según meses detectados en los RIPS cargados
   useEffect(() => {
     const monthSet = new Set<string>();
@@ -4638,102 +4652,125 @@ echo "* * * * * root /usr/local/bin/metrics.sh; sleep 30; /usr/local/bin/metrics
             {maintTab === 'monitor' && isSuperAdmin && (() => {
               const RAD_TOKEN = 'DUSAKAWI-RIPS-2026';
               const RAD_BASE  = 'https://radicacion.vercel.app';
+              const MESES_N   = ['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'];
+              const REG_LABEL: Record<string, string> = { RS: 'Subsidiado', RC: 'Contributivo' };
 
-              const fetchRad = async () => {
+              const doFetchRad = () => {
                 setRadFetching(true); setRadError(null);
-                try {
-                  const r = await fetch(`${RAD_BASE}/api/evaluar`, { headers: { 'x-token': RAD_TOKEN }, cache: 'no-store' });
-                  if (!r.ok) { setRadError(`Error ${r.status}: ${await r.text()}`); return; }
-                  const d = await r.json();
-                  setRadData(d);
-                  setRadLastFetch(new Date().toLocaleTimeString('es-CO'));
-                } catch (e: any) { setRadError(e.message || 'Sin conexión'); }
-                finally { setRadFetching(false); }
+                fetch(`${RAD_BASE}/api/evaluar`, { headers: { 'x-token': RAD_TOKEN }, cache: 'no-store' })
+                  .then(r => r.ok ? r.json() : r.text().then(t => Promise.reject(`Error ${r.status}: ${t}`)))
+                  .then(d => { setRadData(d); setRadLastFetch(new Date().toLocaleTimeString('es-CO')); })
+                  .catch((e: any) => setRadError(String(e?.message || e)))
+                  .finally(() => setRadFetching(false));
               };
 
-              // Trimestre logic: 1T=March, 2T=Apr-Jun, 3T=Jul-Sep, 4T=Oct-Dec, OtroSi=Jan-Feb 2027
-              const TRIMESTRES: { id: string; label: string; anio: number; meses: number[] }[] = [
-                { id: '1T', label: '1er Trim. (Mar)',              anio: 2026, meses: [3] },
-                { id: '2T', label: '2do Trim. (Abr-May-Jun)',      anio: 2026, meses: [4,5,6] },
-                { id: '3T', label: '3er Trim. (Jul-Ago-Sep)',      anio: 2026, meses: [7,8,9] },
-                { id: '4T', label: '4to Trim. (Oct-Nov-Dic)',      anio: 2026, meses: [10,11,12] },
-                { id: 'OS', label: 'Otro Sí (Ene-Feb 2027)',       anio: 2027, meses: [1,2] },
+              // Trimestres: informational columns only
+              const TRIMS = [
+                { id: '1T', label: 'Mar',       anio: 2026, meses: [3] },
+                { id: '2T', label: 'Abr-Jun',   anio: 2026, meses: [4,5,6] },
+                { id: '3T', label: 'Jul-Sep',   anio: 2026, meses: [7,8,9] },
+                { id: '4T', label: 'Oct-Dic',   anio: 2026, meses: [10,11,12] },
+                { id: 'OS', label: 'Ene-Feb\'27', anio: 2027, meses: [1,2] },
               ];
 
-              const tieneRad = (contrato: string, anio: number, mes: number, reg: string) =>
-                (radData?.registros || []).some(r =>
-                  r.contrato === contrato && r.periodo_anio === anio && r.periodo_mes === mes &&
-                  (!reg || r.regimen === reg));
+              const registrosPor = (contrato: string, anio: number, mes: number, reg: string) =>
+                (radData?.registros || []).filter((r: any) =>
+                  r.contrato === contrato && r.periodo_anio === anio && r.periodo_mes === mes && r.regimen === reg);
 
-              const trimCompleto = (contrato: string, t: typeof TRIMESTRES[0], reg: string) =>
-                t.meses.every(m => tieneRad(contrato, t.anio, m, reg));
+              const trimStatus = (contrato: string, t: typeof TRIMS[0], reg: string): 'ok' | 'parcial' | 'no' => {
+                const conRad = t.meses.filter(m => registrosPor(contrato, t.anio, m, reg).length > 0);
+                if (conRad.length === t.meses.length) return 'ok';
+                if (conRad.length > 0) return 'parcial';
+                return 'no';
+              };
 
-              // Contratos agrupados por prestador (nit)
-              interface RadContrato { contrato: string; prestador: string; nit: string; municipio: string; inicio?: string; fin?: string }
+              // Meses disponibles para un contrato+regimen desde marzo 2026
+              const mesesDisponibles = (contrato: string, reg: string) => {
+                const out: { anio: number; mes: number }[] = [];
+                // 2026: marzo a diciembre
+                for (let m = 3; m <= 12; m++) {
+                  if (registrosPor(contrato, 2026, m, reg).length > 0) out.push({ anio: 2026, mes: m });
+                }
+                // 2027: enero y febrero (Otro sí)
+                for (let m = 1; m <= 2; m++) {
+                  if (registrosPor(contrato, 2027, m, reg).length > 0) out.push({ anio: 2027, mes: m });
+                }
+                return out;
+              };
+
+              interface RadContrato { contrato: string; prestador: string; nit: string; municipio: string }
               const contratos: RadContrato[] = radData?.contratos || [];
 
-              // Solo contratos que estén vigentes en al least 1 trimestre relevante
-              const contratosConTrims = contratos.map(c => {
-                const regimenes = [...new Set((radData?.registros || [])
-                  .filter((r: any) => r.contrato === c.contrato)
-                  .map((r: any) => r.regimen || 'RS'))] as string[];
-                const listos = TRIMESTRES.flatMap(t =>
-                  regimenes.filter(reg => trimCompleto(c.contrato, t, reg)).map(reg => ({ ...t, reg }))
-                );
-                return { ...c, regimenes, listos };
-              }).filter(c => c.regimenes.length > 0);
+              // Calcular regimenes con al menos 1 mes radicado desde marzo
+              const rows = contratos.map(c => {
+                const regs = [...new Set(
+                  (radData?.registros || [])
+                    .filter((r: any) => r.contrato === c.contrato &&
+                      ((r.periodo_anio === 2026 && r.periodo_mes >= 3) || (r.periodo_anio === 2027 && r.periodo_mes <= 2)))
+                    .map((r: any) => r.regimen || 'RS')
+                )] as string[];
+                return { ...c, regs, mesesPor: (reg: string) => mesesDisponibles(c.contrato, reg) };
+              }).filter(c => c.regs.length > 0);
 
-              const handleEvaluar = async (c: RadContrato & { regimenes: string[]; listos: any[] }, t: typeof TRIMESTRES[0], reg: string) => {
-                const key = `${c.contrato}|${t.id}|${reg}`;
+              const handleEvaluar = async (c: RadContrato, reg: string, meses: { anio: number; mes: number }[]) => {
+                const key = `${c.contrato}|${reg}`;
                 setRadEvaluando(key);
                 const archivos: File[] = [];
-                for (const mes of t.meses) {
+                for (const { anio, mes } of meses) {
                   try {
-                    const url = `${RAD_BASE}/api/rips-ext?contrato=${encodeURIComponent(c.contrato)}&anio=${t.anio}&mes=${mes}&regimen=${reg}&formato=txt`;
+                    const url = `${RAD_BASE}/api/rips-ext?contrato=${encodeURIComponent(c.contrato)}&anio=${anio}&mes=${mes}&regimen=${reg}&formato=txt`;
                     const resp = await fetch(url, { headers: { 'x-token': RAD_TOKEN } });
-                    if (!resp.ok) { setMessage({ type: 'error', text: `Error descargando RIPS ${mes}/${t.anio}: ${resp.status}` }); setRadEvaluando(null); return; }
+                    if (!resp.ok) {
+                      setMessage({ type: 'error', text: `Error RIPS ${MESES_N[mes-1]}/${anio}: HTTP ${resp.status}` });
+                      setRadEvaluando(null); return;
+                    }
                     const txt = await resp.text();
-                    const MESES_N = ['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'];
-                    archivos.push(new File([txt], `RIPS_${c.contrato}_${MESES_N[mes-1]}${t.anio}.txt`, { type: 'text/plain' }));
-                  } catch (e: any) { setMessage({ type: 'error', text: `Error RIPS ${mes}: ${e.message}` }); setRadEvaluando(null); return; }
+                    archivos.push(new File([txt], `RIPS_${c.contrato}_${MESES_N[mes-1]}${anio}.txt`, { type: 'text/plain' }));
+                  } catch (e: any) {
+                    setMessage({ type: 'error', text: `Error RIPS ${MESES_N[mes-1]}: ${e.message}` });
+                    setRadEvaluando(null); return;
+                  }
                 }
                 setRadEvaluando(null);
                 if (archivos.length === 0) { setMessage({ type: 'error', text: 'No se pudieron descargar los RIPS.' }); return; }
-                // Cargar como si fueran archivos subidos por el usuario
-                const dt = new DataTransfer();
-                archivos.forEach(f => dt.items.add(f));
-                // Buscar prestador en la app por NIT
                 const pFound = prestadores.find(p => p.nit === c.nit);
                 if (pFound) handleLoadPrestadorMetas(pFound);
                 setRegistros([]);
+                const dt = new DataTransfer();
+                archivos.forEach(f => dt.items.add(f));
                 await processFiles(dt.files, null, null);
                 setActiveTab('dashboard');
-                setMessage({ type: 'success', text: `RIPS ${t.label} (${reg}) cargados desde radicación. Revisa el dashboard.` });
+                const resumen = meses.map(({ anio, mes }) => MESES_N[mes-1]).join(', ');
+                setMessage({ type: 'success', text: `RIPS cargados: ${resumen} (${REG_LABEL[reg]||reg}). Revisa el dashboard.` });
               };
 
               return (
                 <div className="glass-panel rounded-2xl p-5 space-y-4 border border-indigo-200 dark:border-indigo-500/30 mt-4">
+                  {/* Header */}
                   <div className="flex items-center justify-between flex-wrap gap-3">
                     <div className="flex items-center gap-2">
                       <Activity className="h-5 w-5 text-indigo-500" />
-                      <h3 className="font-bold text-slate-800 dark:text-white">Radicación — Estado por Trimestre</h3>
-                      <span className="text-xs text-slate-400 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-full">
-                        {radData ? `${contratosConTrims.length} contratos · radicacion.vercel.app` : 'No cargado'}
-                      </span>
+                      <h3 className="font-bold text-slate-800 dark:text-white">Radicación RIPS</h3>
+                      {radData && (
+                        <span className="text-xs text-slate-400 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-full">
+                          {rows.length} contratos con radicación · radicacion.vercel.app
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-2">
-                      {radLastFetch && <span className="text-xs text-slate-400">Última consulta: {radLastFetch}</span>}
+                      {radLastFetch && <span className="text-xs text-slate-400">Actualizado: {radLastFetch}</span>}
                       <button
-                        onClick={fetchRad}
+                        onClick={doFetchRad}
                         disabled={radFetching}
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 text-white rounded-xl text-xs font-medium transition-colors"
                       >
                         <RefreshCw className={`h-3.5 w-3.5 ${radFetching ? 'animate-spin' : ''}`} />
-                        {radFetching ? 'Cargando...' : 'Cargar datos'}
+                        {radFetching ? 'Cargando...' : radData ? 'Actualizar' : 'Cargar datos'}
                       </button>
                     </div>
                   </div>
 
+                  {/* Error */}
                   {radError && (
                     <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 rounded-xl p-3">
                       <AlertTriangle className="h-4 w-4 shrink-0" />
@@ -4741,87 +4778,101 @@ echo "* * * * * root /usr/local/bin/metrics.sh; sleep 30; /usr/local/bin/metrics
                     </div>
                   )}
 
-                  {!radData && !radError && !radFetching && (
-                    <p className="text-sm text-slate-500 dark:text-slate-400 py-2">
-                      Presiona "Cargar datos" para consultar el estado de radicación de RIPS por contrato y trimestre.
-                    </p>
+                  {/* Skeleton while loading */}
+                  {radFetching && !radData && (
+                    <div className="space-y-2">
+                      {[1,2,3].map(i => <div key={i} className="h-10 bg-slate-100 dark:bg-slate-700 rounded-xl animate-pulse" />)}
+                    </div>
                   )}
 
-                  {radData && contratosConTrims.length === 0 && (
-                    <p className="text-sm text-slate-500 dark:text-slate-400 py-2">Sin radicaciones registradas en el sistema.</p>
+                  {/* Empty */}
+                  {!radFetching && radData && rows.length === 0 && (
+                    <p className="text-sm text-slate-500 dark:text-slate-400 py-2">Sin radicaciones registradas desde marzo 2026.</p>
                   )}
 
-                  {radData && contratosConTrims.length > 0 && (
+                  {/* Prompt */}
+                  {!radFetching && !radData && !radError && (
+                    <p className="text-sm text-slate-500 dark:text-slate-400 py-2">Cargando datos de radicación...</p>
+                  )}
+
+                  {/* Table */}
+                  {radData && rows.length > 0 && (
                     <div className="overflow-x-auto">
-                      <table className="w-full text-xs">
+                      <table className="w-full text-xs border-separate border-spacing-0">
                         <thead>
-                          <tr className="border-b border-slate-200 dark:border-slate-700">
-                            <th className="text-left pb-2 pr-3 font-semibold text-slate-600 dark:text-slate-300">Contrato / Prestador</th>
-                            {TRIMESTRES.map(t => (
-                              <th key={t.id} className="text-center pb-2 px-1 font-semibold text-slate-600 dark:text-slate-300 min-w-[90px]">{t.id}</th>
-                            ))}
+                          <tr>
+                            <th className="text-left pb-2 pr-3 font-semibold text-slate-600 dark:text-slate-300 text-[11px]">Prestador / Contrato</th>
+                            <th className="text-center pb-2 px-1 font-semibold text-slate-500 dark:text-slate-400 text-[10px]">1T<br/><span className="font-normal">Mar</span></th>
+                            <th className="text-center pb-2 px-1 font-semibold text-slate-500 dark:text-slate-400 text-[10px]">2T<br/><span className="font-normal">Abr-Jun</span></th>
+                            <th className="text-center pb-2 px-1 font-semibold text-slate-500 dark:text-slate-400 text-[10px]">3T<br/><span className="font-normal">Jul-Sep</span></th>
+                            <th className="text-center pb-2 px-1 font-semibold text-slate-500 dark:text-slate-400 text-[10px]">4T<br/><span className="font-normal">Oct-Dic</span></th>
+                            <th className="text-center pb-2 px-1 font-semibold text-slate-500 dark:text-slate-400 text-[10px]">OS<br/><span className="font-normal">E-F'27</span></th>
+                            <th className="text-center pb-2 px-2 font-semibold text-slate-600 dark:text-slate-300 text-[11px]">Evaluar</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {contratosConTrims.map(c => (
-                            <tr key={c.contrato} className="border-b border-slate-100 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700/30">
-                              <td className="py-2 pr-3">
-                                <div className="font-semibold text-slate-800 dark:text-slate-100 truncate max-w-[200px]">{c.prestador || c.contrato}</div>
-                                <div className="text-[10px] font-mono text-slate-400 mt-0.5">{c.contrato}</div>
-                                <div className="flex gap-1 mt-0.5">
-                                  {c.regimenes.map((r: string) => (
-                                    <span key={r} className={`text-[9px] font-bold px-1 rounded ${r==='RC'?'bg-orange-100 dark:bg-orange-500/20 text-orange-600':'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600'}`}>{r}</span>
-                                  ))}
-                                </div>
+                          {rows.map(c => (
+                            <tr key={c.contrato} className="border-b border-slate-100 dark:border-slate-700/40 hover:bg-indigo-50/40 dark:hover:bg-indigo-500/5">
+                              <td className="py-2 pr-3 align-top">
+                                <div className="font-semibold text-slate-800 dark:text-slate-100 leading-tight" style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.prestador || c.contrato}</div>
+                                <div className="text-[9px] font-mono text-slate-400 mt-0.5">{c.contrato}</div>
                               </td>
-                              {TRIMESTRES.map(t => {
-                                const listosT = c.listos.filter((l: any) => l.id === t.id);
-                                if (listosT.length === 0) {
-                                  const parciales = c.regimenes.filter((reg: string) =>
-                                    t.meses.some(m => tieneRad(c.contrato, t.anio, m, reg)) &&
-                                    !trimCompleto(c.contrato, t, reg)
-                                  );
-                                  return (
-                                    <td key={t.id} className="text-center py-2 px-1">
-                                      {parciales.length > 0
-                                        ? <span className="text-amber-500 text-[11px]" title="Radicación parcial">⬤ {parciales.join('/')}</span>
-                                        : <span className="text-slate-300 dark:text-slate-600 text-[11px]">—</span>
-                                      }
-                                    </td>
-                                  );
-                                }
+                              {TRIMS.map(t => {
+                                const stReg = c.regs.map((reg: string) => ({ reg, st: trimStatus(c.contrato, t, reg) }));
+                                const hasOk = stReg.some(x => x.st === 'ok');
+                                const hasParc = stReg.some(x => x.st === 'parcial');
                                 return (
-                                  <td key={t.id} className="text-center py-2 px-1">
-                                    <div className="flex flex-col items-center gap-1">
-                                      {listosT.map((l: any) => {
-                                        const key = `${c.contrato}|${t.id}|${l.reg}`;
-                                        const cargando = radEvaluando === key;
-                                        return (
-                                          <button
-                                            key={l.reg}
-                                            onClick={() => handleEvaluar(c, t, l.reg)}
-                                            disabled={!!radEvaluando}
-                                            title={`Evaluar ${t.label} (${l.reg})`}
-                                            className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold transition-colors ${cargando ? 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-500 animate-pulse' : 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-500/30'} disabled:opacity-60`}
-                                          >
-                                            {cargando ? <RefreshCw className="h-2.5 w-2.5 animate-spin" /> : <CheckCircle2 className="h-2.5 w-2.5" />}
-                                            {l.reg}
-                                          </button>
-                                        );
-                                      })}
-                                    </div>
+                                  <td key={t.id} className="text-center py-2 px-1 align-middle">
+                                    {hasOk
+                                      ? <span className="text-emerald-500 text-base leading-none" title="Radicación completa">✓</span>
+                                      : hasParc
+                                        ? <span className="text-amber-400 text-[11px]" title="Parcial">◑</span>
+                                        : <span className="text-slate-200 dark:text-slate-700 text-[11px]">—</span>
+                                    }
                                   </td>
                                 );
                               })}
+                              <td className="py-2 px-2 align-middle">
+                                <div className="flex flex-col gap-1">
+                                  {c.regs.map((reg: string) => {
+                                    const meses = c.mesesPor(reg);
+                                    if (meses.length === 0) return null;
+                                    const key = `${c.contrato}|${reg}`;
+                                    const cargando = radEvaluando === key;
+                                    const label = REG_LABEL[reg] || reg;
+                                    const ultimo = meses[meses.length - 1];
+                                    return (
+                                      <button
+                                        key={reg}
+                                        onClick={() => handleEvaluar(c, reg, meses)}
+                                        disabled={!!radEvaluando}
+                                        title={`Cargar RIPS ${label} — Mar hasta ${MESES_N[ultimo.mes-1]} (${meses.length} mes${meses.length!==1?'es':''})`}
+                                        className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold whitespace-nowrap transition-colors ${
+                                          cargando
+                                            ? 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-500 animate-pulse'
+                                            : reg === 'RC'
+                                              ? 'bg-orange-100 dark:bg-orange-500/20 text-orange-700 dark:text-orange-400 hover:bg-orange-200'
+                                              : 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200'
+                                        } disabled:opacity-50`}
+                                      >
+                                        {cargando
+                                          ? <><RefreshCw className="h-2.5 w-2.5 animate-spin" /> Descargando...</>
+                                          : <><CheckCircle2 className="h-2.5 w-2.5" /> {label}</>
+                                        }
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
-                      <p className="text-[10px] text-slate-400 mt-3">
-                        <span className="text-emerald-600">✓</span> Listo para evaluar &nbsp;·&nbsp;
-                        <span className="text-amber-500">⬤</span> Radicación parcial &nbsp;·&nbsp;
-                        <span className="text-slate-400">—</span> Sin radicación &nbsp;·&nbsp;
-                        Clic en botón verde = carga RIPS automáticamente en el dashboard
+                      <p className="text-[10px] text-slate-400 mt-3 flex gap-3">
+                        <span><span className="text-emerald-500 font-bold">✓</span> Trimestre completo</span>
+                        <span><span className="text-amber-400 font-bold">◑</span> Parcial</span>
+                        <span><span className="text-slate-400">—</span> Sin radicación</span>
+                        <span className="ml-auto">Botón "Evaluar" carga todos los RIPS desde Mar hasta el último mes radicado</span>
                       </p>
                     </div>
                   )}
