@@ -2581,42 +2581,64 @@ function App() {
                       </div>
                       <button onClick={() => { setRadSelector(null); }} className="p-1 text-slate-400 hover:text-slate-600"><X className="h-3.5 w-3.5" /></button>
                     </div>
-                    {/* Accesos rápidos por trimestre — solo trims sin acta */}
-                    <div className="flex flex-wrap gap-1.5 mb-3">
+                    {/* Trimestres agrupados con sus meses */}
+                    <div className="space-y-2 mb-4">
                       {TRIMS.map(t => {
-                        const tieneAlgo = t.meses.some(m => tieneReg(c.contrato, t.anio, m, reg));
-                        if (!tieneAlgo) return null;
-                        if (trimActa(c.contrato, reg, t)) return null; // Ya evaluado
-                        const isSelTrim = t.meses.every(m => selMeses.has(mkKey(t.anio, m)));
+                        const mesesDelTrim = t.meses.filter(m => tieneReg(c.contrato, t.anio, m, reg));
+                        if (mesesDelTrim.length === 0) return null;
+                        const yaEval = trimActa(c.contrato, reg, t);
+                        const trimCompleto2 = t.meses.every(m => tieneReg(c.contrato, t.anio, m, reg));
+                        const isSelTrim = mesesDelTrim.every(m => selMeses.has(mkKey(t.anio, m)));
+                        const yearSuffix = t.anio === 2027 ? " '27" : '';
                         return (
-                          <button key={t.id} onClick={() => selTrim(t)}
-                            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors ${isSelTrim ? (regColor === 'orange' ? 'bg-orange-500 text-white border-orange-500' : 'bg-emerald-500 text-white border-emerald-500') : 'border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-indigo-400'}`}
-                          >{t.label}</button>
+                          <div key={t.id} className={`rounded-lg border ${yaEval ? 'border-slate-200 dark:border-slate-700 opacity-50' : 'border-slate-200 dark:border-slate-700'}`}>
+                            {/* Header del trimestre */}
+                            <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-t-lg ${yaEval ? 'bg-slate-100 dark:bg-slate-800' : 'bg-white/60 dark:bg-slate-800/60'}`}>
+                              <span className={`text-[10px] font-black w-8 ${yaEval ? 'text-slate-400' : (regColor === 'orange' ? 'text-orange-600' : 'text-emerald-600')}`}>{t.label}</span>
+                              {yaEval ? (
+                                <span className="flex items-center gap-1 text-[9px] text-slate-400"><Check className="h-2.5 w-2.5" /> Ya evaluado</span>
+                              ) : (
+                                <>
+                                  {trimCompleto2 && (
+                                    <button onClick={() => selTrim(t)}
+                                      className={`text-[9px] font-bold px-2 py-0.5 rounded-md transition-colors ${isSelTrim ? (regColor === 'orange' ? 'bg-orange-500 text-white' : 'bg-emerald-500 text-white') : (regColor === 'orange' ? 'text-orange-600 hover:bg-orange-100 dark:hover:bg-orange-500/20' : 'text-emerald-600 hover:bg-emerald-100 dark:hover:bg-emerald-500/20')}`}
+                                    >{isSelTrim ? '✓ Seleccionado' : 'Seleccionar todo'}</button>
+                                  )}
+                                  {!trimCompleto2 && <span className="text-[9px] text-slate-400">Parcial ({mesesDelTrim.length}/{t.meses.length} mes{t.meses.length !== 1 ? 'es' : ''})</span>}
+                                </>
+                              )}
+                            </div>
+                            {/* Meses del trimestre */}
+                            {!yaEval && (
+                              <div className="flex gap-1.5 px-2.5 py-2 flex-wrap">
+                                {mesesDelTrim.map(mes => {
+                                  const k = mkKey(t.anio, mes);
+                                  const selM = selMeses.has(k);
+                                  return (
+                                    <button key={k} onClick={() => toggleMes(t.anio, mes)}
+                                      className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold border-2 transition-all active:scale-95 ${selM ? (regColor === 'orange' ? 'bg-orange-500 border-orange-500 text-white' : 'bg-emerald-500 border-emerald-500 text-white') : 'border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:border-slate-400 bg-white dark:bg-slate-800'}`}
+                                    >{MESES_N[mes - 1]}{yearSuffix}</button>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
                         );
                       })}
+                    </div>
+                    {/* Botón Todo + Descargar */}
+                    <div className="flex items-center gap-2 flex-wrap">
                       <button onClick={selTodo}
-                        className="px-2.5 py-1 rounded-lg text-[10px] font-bold border border-indigo-400 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 transition-colors"
-                      >Todo</button>
+                        className="px-3 py-1.5 rounded-lg text-[10px] font-bold border border-indigo-400 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 transition-colors"
+                      >Seleccionar todo</button>
+                      <button
+                        onClick={doDownload}
+                        disabled={selMeses.size === 0 || cargandoSel}
+                        className={`flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold text-white shadow-sm transition-all active:scale-95 ${regColor === 'orange' ? 'bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300' : 'bg-emerald-500 hover:bg-emerald-600 disabled:bg-emerald-300'} disabled:opacity-60`}
+                      >
+                        {cargandoSel ? <><RefreshCw className="h-3.5 w-3.5 animate-spin" /> Descargando {selMeses.size} mes{selMeses.size !== 1 ? 'es' : ''}...</> : <><Download className="h-3.5 w-3.5" /> Descargar {selMeses.size} mes{selMeses.size !== 1 ? 'es' : ''} seleccionado{selMeses.size !== 1 ? 's' : ''}</>}
+                      </button>
                     </div>
-                    {/* Meses individuales */}
-                    <div className="flex flex-wrap gap-1.5 mb-4">
-                      {disponibles.map(({ anio, mes }) => {
-                        const k = mkKey(anio, mes);
-                        const sel = selMeses.has(k);
-                        return (
-                          <button key={k} onClick={() => toggleMes(anio, mes)}
-                            className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold border-2 transition-all active:scale-95 ${sel ? (regColor === 'orange' ? 'bg-orange-500 border-orange-500 text-white' : 'bg-emerald-500 border-emerald-500 text-white') : 'border-slate-300 dark:border-slate-600 text-slate-500 hover:border-slate-400'}`}
-                          >{MESES_N[mes - 1]}{anio === 2027 ? "'27" : ''}</button>
-                        );
-                      })}
-                    </div>
-                    <button
-                      onClick={doDownload}
-                      disabled={selMeses.size === 0 || cargandoSel}
-                      className={`flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold text-white shadow-sm transition-all active:scale-95 ${regColor === 'orange' ? 'bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300' : 'bg-emerald-500 hover:bg-emerald-600 disabled:bg-emerald-300'} disabled:opacity-60`}
-                    >
-                      {cargandoSel ? <><RefreshCw className="h-3.5 w-3.5 animate-spin" /> Descargando {selMeses.size} mes{selMeses.size !== 1 ? 'es' : ''}...</> : <><Download className="h-3.5 w-3.5" /> Descargar {selMeses.size} mes{selMeses.size !== 1 ? 'es' : ''} seleccionado{selMeses.size !== 1 ? 's' : ''}</>}
-                    </button>
                   </div>
                 );
               })()}
