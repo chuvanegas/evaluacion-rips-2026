@@ -151,6 +151,10 @@ function LoginScreen({ users, onLogin, theme }: { users: AppUser[]; onLogin: (u:
 function App() {
   // Evita guardar en Supabase durante la carga inicial
   const cloudInitialized = React.useRef(false);
+  // Período pre-establecido desde el panel de radicación (override cuando periodoTexto está vacío)
+  const radPeriodoOverride = React.useRef<string | null>(null);
+  // Prestador pendiente de generar acta después de procesar RIPS desde radicación
+  const radPendingActa = React.useRef<any>(null);
 
   // --- State ---
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -268,7 +272,7 @@ function App() {
   const [radError, setRadError] = useState<string | null>(null);
   const [radLastFetch, setRadLastFetch] = useState<string | null>(null);
   const [radEvaluando, setRadEvaluando] = useState<string | null>(null);
-  const [radFilesReady, setRadFilesReady] = useState<{ contrato: string; reg: string; prestador: string; files: File[]; meses: string[]; pFound: any } | null>(null);
+  const [radFilesReady, setRadFilesReady] = useState<{ contrato: string; reg: string; prestador: string; files: File[]; meses: string[]; pFound: any; periodoStr: string } | null>(null);
   const [radSelector, setRadSelector] = useState<{ c: any; reg: string; selMeses: Set<string> } | null>(null);
   const [searchPrestador, setSearchPrestador] = useState('');
   const [filterContrato, setFilterContrato] = useState('');
@@ -579,6 +583,12 @@ function App() {
     });
     const n = monthSet.size;
     if (n > 0) setScale(n);
+    // Generar acta pendiente desde panel de radicación
+    if (radPendingActa.current && registros.length > 0) {
+      const p = radPendingActa.current;
+      radPendingActa.current = null;
+      handleGenerarActa(p);
+    }
   }, [registros]);
 
   // Reset pagination when data changes
@@ -998,8 +1008,10 @@ function App() {
     // Validar: ya existe acta para este prestador en el mismo período
     // Busca primero por contrato exacto, luego por NIT + régimen (contratos con numeración distinta)
     const regimen = p.regimen || 'SUBSIDIADO';
+    // Usar override de período cuando viene del panel de radicación (RIPS sin fechas en registros)
+    const periodoEfectivo = periodoTexto || radPeriodoOverride.current || '';
     const todasActasMismoPeriodo = actas.filter(
-      a => a.periodoEvaluado === periodoTexto && (a.regimen || 'SUBSIDIADO') === regimen
+      a => a.periodoEvaluado === periodoEfectivo && (a.regimen || 'SUBSIDIADO') === regimen
     );
     const actaPeriodoExistente =
       todasActasMismoPeriodo.find(a => a.contrato === p.contrato) ||
@@ -1012,7 +1024,7 @@ function App() {
         `  • Prestador: ${p.nombre}\n` +
         `  • NIT: ${p.nit}\n` +
         `  • Contrato registrado: ${actaPeriodoExistente.contrato}${!mismoContrato ? ` (contrato diferente al seleccionado: ${p.contrato})` : ''}\n` +
-        `  • Período: ${periodoTexto}\n` +
+        `  • Período: ${periodoEfectivo}\n` +
         `  • Régimen: ${regimen}\n` +
         `  • Acta: ${actaPeriodoExistente.numero} (${cumplPct}% cumplimiento)\n\n` +
         `¿Desea reemplazar el acta existente con una nueva evaluación?`
@@ -1054,7 +1066,7 @@ function App() {
       departamento: p.departamento,
       contrato: p.contrato,
       regimen: p.regimen || 'SUBSIDIADO',
-      periodoEvaluado: periodoTexto,
+      periodoEvaluado: periodoEfectivo,
       vigencia: p.vigencia || new Date().getFullYear().toString(),
       coordinador: firmasGlobales.coordinador,
       funcionario: funcionarios[0] || '',
@@ -1070,6 +1082,7 @@ function App() {
       createdAt: today,
       creadoPor: currentUser.username
     };
+    radPeriodoOverride.current = null; // limpiar override
     setInlineActa(newActa);
     setActiveTab('actas');
   };
@@ -2424,25 +2437,36 @@ function App() {
             setRadEvaluando(key);
             const archivos: File[] = [];
             const mesesLabels: string[] = [];
+            const mesesESLabels: string[] = [];
             const mesesOrdenados = [...selMeses].map(k2 => {
               const [a, m] = k2.split('-').map(Number);
               return { anio: a, mes: m };
             }).sort((a, b) => a.anio - b.anio || a.mes - b.mes);
+            const MESES_FULL = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
             for (const { anio, mes } of mesesOrdenados) {
               try {
                 const url = `${RAD_BASE}/api/rips-ext?contrato=${encodeURIComponent(c.contrato)}&anio=${anio}&mes=${mes}&regimen=${reg}&formato=txt`;
                 const resp = await fetch(url, { headers: { 'x-token': RAD_TOKEN } });
                 if (!resp.ok) { setMessage({ type: 'error', text: `Error RIPS ${MESES_N[mes-1]}/${anio}: HTTP ${resp.status}` }); setRadEvaluando(null); return; }
                 const txt = await resp.text();
+                if (!txt || txt.trim().length === 0) {
+                  setMessage({ type: 'error', text: `Sin datos RIPS para ${MESES_FULL[mes-1]} ${anio} — contrato ${c.contrato}` });
+                  setRadEvaluando(null); return;
+                }
                 archivos.push(new File([txt], `RIPS_${c.contrato}_${MESES_N[mes-1]}${anio}.txt`, { type: 'text/plain' }));
                 mesesLabels.push(MESES_N[mes - 1]);
+                mesesESLabels.push(`${MESES_FULL[mes - 1]} ${anio}`);
               } catch (e: any) { setMessage({ type: 'error', text: `Error RIPS ${MESES_N[mes-1]}: ${e.message}` }); setRadEvaluando(null); return; }
             }
             setRadEvaluando(null);
             if (archivos.length === 0) { setMessage({ type: 'error', text: 'No se descargaron RIPS.' }); return; }
-            const pFound = prestadores.find(p => p.nit === c.nit);
+            // NIT como string para comparar correctamente
+            const pFound = prestadores.find(p => String(p.nit) === String(c.nit) && p.contrato === c.contrato)
+              || prestadores.find(p => String(p.nit) === String(c.nit));
+            // Período en español para pre-llenar el acta
+            const periodoStr = mesesESLabels.join(', ');
             setRadSelector(null);
-            setRadFilesReady({ contrato: c.contrato, reg, prestador: c.prestador, files: archivos, meses: mesesLabels, pFound });
+            setRadFilesReady({ contrato: c.contrato, reg, prestador: c.prestador, files: archivos, meses: mesesLabels, pFound, periodoStr });
           };
 
           if (!radData && !radFetching && !radError) return null;
@@ -2673,6 +2697,7 @@ function App() {
                     <div className="flex gap-2 ml-6 flex-wrap">
                       <button
                         onClick={async () => {
+                          radPeriodoOverride.current = rf.periodoStr || null;
                           if (rf.pFound) handleLoadPrestadorMetas(rf.pFound);
                           setRegistros([]);
                           const dt = new DataTransfer();
@@ -2687,13 +2712,16 @@ function App() {
                       </button>
                       <button
                         onClick={async () => {
-                          if (rf.pFound) handleLoadPrestadorMetas(rf.pFound);
+                          radPeriodoOverride.current = rf.periodoStr || null;
+                          if (rf.pFound) {
+                            handleLoadPrestadorMetas(rf.pFound);
+                            radPendingActa.current = rf.pFound; // se dispara en useEffect cuando lleguen los registros
+                          }
                           setRegistros([]);
                           const dt = new DataTransfer();
                           rf.files.forEach(f => dt.items.add(f));
                           await processFiles(dt.files, null, null);
                           setRadFilesReady(null);
-                          setShowActaModal(true);
                           setMessage({ type: 'success', text: `✓ RIPS procesados: ${rf.meses.join(', ')} (${regLabel})` });
                         }}
                         className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-all active:scale-95"
