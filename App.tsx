@@ -44,10 +44,23 @@ function deduplicarActas(raw: import('./types').Acta[]): import('./types').Acta[
     if (!ex || pct(a) > pct(ex)) byNumeroYPrest.set(key, a);
   });
   // Paso 3: dedup por contrato + régimen + período (mismo período evaluado para el mismo contrato)
-  // Cuando hay dos actas del mismo contrato, mismo régimen y mismo período → queda la de mayor %
+  // Extrae meses del período para comparar semánticamente (robusto a variaciones de formato)
+  const MESES_DEDUP = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  const periodoKey = (periodo: string) => {
+    const words = (periodo || '').toLowerCase().replace(/[,]/g, ' ').split(/\s+/);
+    const meses: string[] = [];
+    for (let i = 0; i < words.length; i++) {
+      const idx = MESES_DEDUP.indexOf(words[i]);
+      if (idx >= 0 && i + 1 < words.length && /^\d{4}$/.test(words[i + 1])) {
+        meses.push(`${idx + 1}/${words[i + 1]}`);
+        i++;
+      }
+    }
+    return meses.sort().join('|') || (periodo || '').trim().toLowerCase();
+  };
   const byContratoRegPeriodo = new Map<string, import('./types').Acta>();
   [...byNumeroYPrest.values()].forEach(a => {
-    const key = `${a.contrato}||${a.regimen || 'SUBSIDIADO'}||${(a.periodoEvaluado || '').trim().toLowerCase()}`;
+    const key = `${a.contrato}||${(a.regimen || 'SUBSIDIADO').toUpperCase()}||${periodoKey(a.periodoEvaluado)}`;
     const ex = byContratoRegPeriodo.get(key);
     if (!ex || pct(a) > pct(ex)) byContratoRegPeriodo.set(key, a);
   });
@@ -511,17 +524,23 @@ function App() {
             return result;
           });
         }
-        if (data['actas']?.length > 0) {
+        if (data['actas']?.length > 0 || true) {
           setActas(prev => {
-            const cloudA: Acta[] = data['actas'];
+            const cloudA: Acta[] = data['actas'] || [];
+            if (cloudA.length === 0) return prev;
             const cloudIds = new Set(cloudA.map((a: Acta) => a.id));
             const merged = new Map<string, Acta>();
-            [...cloudA, ...prev].forEach(a => { if (!merged.has(a.id)) merged.set(a.id, a); });
-            const result = [...merged.values()];
-            // Also push if local has actas cloud doesn't know about yet
+            // Prev primero (puede tener renumeraciones), cloud encima para actas nuevas de otros PCs
+            [...prev, ...cloudA].forEach(a => { if (!merged.has(a.id)) merged.set(a.id, a); });
+            // Deduplicar el merge para que actas eliminadas no vuelvan de la nube
+            const result = deduplicarActas([...merged.values()]);
             const hasLocalOnly = prev.some(a => !cloudIds.has(a.id));
             if (result.length === prev.length && !hasLocalOnly) return prev;
             localStorage.setItem('actas', JSON.stringify(result));
+            // Subir resultado limpio a la nube para que el próximo poll no restaure eliminadas
+            if (result.length < prev.length || result.some((a, i) => a.numero !== (prev[i]?.numero))) {
+              setTimeout(() => { if (cloudInitialized.current) CloudStorage.set('actas', result); }, 500);
+            }
             return result;
           });
         }
@@ -682,6 +701,9 @@ function App() {
       const eliminadas = actas.length - clean.length;
       deduplicandoActas.current = true;
       setActas(clean);
+      // Guardar inmediatamente en la nube para que el poll no restaure los eliminados
+      if (cloudInitialized.current) CloudStorage.set('actas', clean);
+      localStorage.setItem('actas', JSON.stringify(clean));
       setMessage({ type: 'info', text: `🧹 Se eliminaron ${eliminadas} acta${eliminadas !== 1 ? 's' : ''} duplicada${eliminadas !== 1 ? 's' : ''} (se conservó la de mayor % en cada caso).` });
     }
   }, [actas]);
