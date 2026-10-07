@@ -548,12 +548,13 @@ function App() {
     return () => clearInterval(id);
   }, []);
 
-  // Auto-cargar datos de radicación al abrir el Monitor (superadmin)
+  // Auto-cargar datos de radicación al abrir el Dashboard o el Monitor (admin)
   useEffect(() => {
-    if (activeTab !== 'mantenimiento' || maintTab !== 'monitor') return;
+    const onDash = activeTab === 'dashboard';
+    const onMonitor = activeTab === 'mantenimiento' && maintTab === 'monitor';
+    if (!onDash && !onMonitor) return;
     if (radData || radFetching) return;
-    const isSuper = currentUser?.role === 'admin' && currentUser?.username === 'admin';
-    if (!isSuper) return;
+    if (currentUser?.role !== 'admin') return;
     setRadFetching(true); setRadError(null);
     fetch('https://radicacion.vercel.app/api/evaluar', { headers: { 'x-token': 'DUSAKAWI-RIPS-2026' }, cache: 'no-store' })
       .then(r => r.ok ? r.json() : r.text().then(t => Promise.reject(`Error ${r.status}: ${t}`)))
@@ -2336,6 +2337,169 @@ function App() {
                   <X className="h-4 w-4" />
                 </button>
               </div>
+            </div>
+          );
+        })()}
+
+        {/* --- Listos para evaluar (Radicación) --- */}
+        {isAdmin && (() => {
+          const RAD_TOKEN = 'DUSAKAWI-RIPS-2026';
+          const RAD_BASE  = 'https://radicacion.vercel.app';
+          const MESES_N   = ['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'];
+
+          const mesesDisp = (contrato: string, reg: string) => {
+            const out: { anio: number; mes: number }[] = [];
+            for (let m = 3; m <= 12; m++) {
+              if ((radData?.registros || []).some((r: any) => r.contrato === contrato && r.periodo_anio === 2026 && r.periodo_mes === m && r.regimen === reg)) out.push({ anio: 2026, mes: m });
+            }
+            for (let m = 1; m <= 2; m++) {
+              if ((radData?.registros || []).some((r: any) => r.contrato === contrato && r.periodo_anio === 2027 && r.periodo_mes === m && r.regimen === reg)) out.push({ anio: 2027, mes: m });
+            }
+            return out;
+          };
+
+          interface RCon { contrato: string; prestador: string; nit: string }
+          const radContratos: RCon[] = radData?.contratos || [];
+          const listos = radContratos.map(c => {
+            const regs = [...new Set(
+              (radData?.registros || [])
+                .filter((r: any) => r.contrato === c.contrato &&
+                  ((r.periodo_anio === 2026 && r.periodo_mes >= 3) || (r.periodo_anio === 2027 && r.periodo_mes <= 2)))
+                .map((r: any) => r.regimen || 'RS')
+            )] as string[];
+            return { ...c, regs };
+          }).filter(c => c.regs.length > 0);
+
+          const handleEval = async (c: RCon, reg: string) => {
+            const key = `${c.contrato}|${reg}`;
+            setRadEvaluando(key);
+            const meses = mesesDisp(c.contrato, reg);
+            const archivos: File[] = [];
+            for (const { anio, mes } of meses) {
+              try {
+                const url = `${RAD_BASE}/api/rips-ext?contrato=${encodeURIComponent(c.contrato)}&anio=${anio}&mes=${mes}&regimen=${reg}&formato=txt`;
+                const resp = await fetch(url, { headers: { 'x-token': RAD_TOKEN } });
+                if (!resp.ok) { setMessage({ type: 'error', text: `Error RIPS ${MESES_N[mes-1]}/${anio}: HTTP ${resp.status}` }); setRadEvaluando(null); return; }
+                const txt = await resp.text();
+                archivos.push(new File([txt], `RIPS_${c.contrato}_${MESES_N[mes-1]}${anio}.txt`, { type: 'text/plain' }));
+              } catch (e: any) { setMessage({ type: 'error', text: `Error RIPS ${MESES_N[mes-1]}: ${e.message}` }); setRadEvaluando(null); return; }
+            }
+            setRadEvaluando(null);
+            if (archivos.length === 0) { setMessage({ type: 'error', text: 'No se pudieron descargar los RIPS.' }); return; }
+            const pFound = prestadores.find(p => p.nit === c.nit);
+            if (pFound) handleLoadPrestadorMetas(pFound);
+            setRegistros([]);
+            const dt = new DataTransfer();
+            archivos.forEach(f => dt.items.add(f));
+            await processFiles(dt.files, null, null);
+            const resumen = meses.map(({ mes }) => MESES_N[mes-1]).join('-');
+            setMessage({ type: 'success', text: `✓ RIPS cargados: ${resumen} (${reg === 'RC' ? 'Contributivo' : 'Subsidiado'}) — Revisa la gráfica.` });
+          };
+
+          if (!radData && !radFetching && !radError) return null;
+
+          return (
+            <div className={`glass-panel rounded-2xl p-4 border ${listos.length > 0 ? 'border-emerald-200 dark:border-emerald-500/30' : 'border-slate-200 dark:border-slate-700/50'}`}>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                  Listos para evaluar
+                  {radFetching && <RefreshCw className="h-3 w-3 text-slate-400 animate-spin" />}
+                  {listos.length > 0 && (
+                    <span className="text-[10px] font-medium bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded-full">
+                      {listos.length} contrato{listos.length !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                </h2>
+                <button
+                  onClick={() => {
+                    setRadData(null); setRadError(null); setRadFetching(true);
+                    fetch('https://radicacion.vercel.app/api/evaluar', { headers: { 'x-token': RAD_TOKEN }, cache: 'no-store' })
+                      .then(r => r.ok ? r.json() : r.text().then(t => Promise.reject(`Error ${r.status}: ${t}`)))
+                      .then(d => { setRadData(d); setRadLastFetch(new Date().toLocaleTimeString('es-CO')); })
+                      .catch((e: any) => setRadError(String(e?.message || e)))
+                      .finally(() => setRadFetching(false));
+                  }}
+                  disabled={radFetching}
+                  className="p-1 text-slate-400 hover:text-indigo-500 disabled:opacity-40 transition-colors"
+                  title="Actualizar datos de radicación"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${radFetching ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
+
+              {radError && (
+                <p className="text-xs text-red-500 bg-red-50 dark:bg-red-500/10 rounded-lg px-3 py-2">{radError}</p>
+              )}
+
+              {radFetching && !radData && (
+                <div className="space-y-2">
+                  {[1,2,3].map(i => <div key={i} className="h-9 bg-slate-100 dark:bg-slate-700/60 rounded-xl animate-pulse" />)}
+                </div>
+              )}
+
+              {radData && listos.length === 0 && (
+                <p className="text-xs text-slate-400 py-1">No hay contratos con RIPS radicados desde marzo 2026.</p>
+              )}
+
+              {listos.length > 0 && (
+                <div className="space-y-1.5 max-h-72 overflow-y-auto custom-scroll pr-1">
+                  {listos.map(c => {
+                    const mRS = mesesDisp(c.contrato, 'RS');
+                    const mRC = mesesDisp(c.contrato, 'RC');
+                    const ulRS = mRS.length > 0 ? MESES_N[mRS[mRS.length-1].mes-1] : null;
+                    const ulRC = mRC.length > 0 ? MESES_N[mRC[mRC.length-1].mes-1] : null;
+                    return (
+                      <div key={c.contrato} className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/50 hover:border-emerald-200 dark:hover:border-emerald-500/30 transition-colors group">
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate">{c.prestador || c.contrato}</div>
+                          <div className="text-[9px] font-mono text-slate-400">{c.contrato}</div>
+                        </div>
+                        <div className="flex gap-1 shrink-0">
+                          {c.regs.includes('RS') && (
+                            <button
+                              onClick={() => handleEval(c, 'RS')}
+                              disabled={!!radEvaluando}
+                              title={`Subsidiado — MAR→${ulRS} (${mRS.length} mes${mRS.length!==1?'es':''})`}
+                              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all whitespace-nowrap shadow-sm ${
+                                radEvaluando === `${c.contrato}|RS`
+                                  ? 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-500 animate-pulse shadow-none'
+                                  : 'bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white'
+                              } disabled:opacity-50`}
+                            >
+                              {radEvaluando === `${c.contrato}|RS`
+                                ? <><RefreshCw className="h-2.5 w-2.5 animate-spin" /> Descargando...</>
+                                : <><CheckCircle2 className="h-2.5 w-2.5" /> Subsidiado{ulRS ? ` →${ulRS}` : ''}</>
+                              }
+                            </button>
+                          )}
+                          {c.regs.includes('RC') && (
+                            <button
+                              onClick={() => handleEval(c, 'RC')}
+                              disabled={!!radEvaluando}
+                              title={`Contributivo — MAR→${ulRC} (${mRC.length} mes${mRC.length!==1?'es':''})`}
+                              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all whitespace-nowrap shadow-sm ${
+                                radEvaluando === `${c.contrato}|RC`
+                                  ? 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-500 animate-pulse shadow-none'
+                                  : 'bg-orange-500 hover:bg-orange-600 active:scale-95 text-white'
+                              } disabled:opacity-50`}
+                            >
+                              {radEvaluando === `${c.contrato}|RC`
+                                ? <><RefreshCw className="h-2.5 w-2.5 animate-spin" /> Descargando...</>
+                                : <><CheckCircle2 className="h-2.5 w-2.5" /> Contributivo{ulRC ? ` →${ulRC}` : ''}</>
+                              }
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {radLastFetch && (
+                <p className="text-[9px] text-slate-400 mt-2 text-right">radicacion.vercel.app · {radLastFetch}</p>
+              )}
             </div>
           );
         })()}
