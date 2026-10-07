@@ -155,6 +155,8 @@ function App() {
   const radPeriodoOverride = React.useRef<string | null>(null);
   // Prestador pendiente de generar acta después de procesar RIPS desde radicación
   const radPendingActa = React.useRef<any>(null);
+  // Bandera para evitar loop infinito en dedup automático de actas
+  const deduplicandoActas = React.useRef(false);
 
   // --- State ---
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -640,6 +642,18 @@ function App() {
     setPageRips(1);
   }, [searchTerm]);
 
+  // Deduplicación automática de actas: si hay duplicados, limpia y guarda
+  useEffect(() => {
+    if (deduplicandoActas.current) { deduplicandoActas.current = false; return; }
+    const clean = deduplicarActas(actas);
+    if (clean.length < actas.length) {
+      const eliminadas = actas.length - clean.length;
+      deduplicandoActas.current = true;
+      setActas(clean);
+      setMessage({ type: 'info', text: `🧹 Se eliminaron ${eliminadas} acta${eliminadas !== 1 ? 's' : ''} duplicada${eliminadas !== 1 ? 's' : ''} (se conservó la de mayor % en cada caso).` });
+    }
+  }, [actas]);
+
   // Auto-load acta template when switching to Actas tab
   useEffect(() => {
     if (activeTab !== 'actas') return;
@@ -1047,12 +1061,19 @@ function App() {
     const regimen = p.regimen || 'SUBSIDIADO';
     // Usar override de período cuando viene del panel de radicación (RIPS sin fechas en registros)
     const periodoEfectivo = periodoTexto || radPeriodoOverride.current || '';
-    const todasActasMismoPeriodo = actas.filter(
-      a => a.periodoEvaluado === periodoEfectivo && (a.regimen || 'SUBSIDIADO') === regimen
-    );
+    // Normalizar: quitar espacios extra y pasar a minúsculas para comparar período
+    const normPeriodo = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
+    const periodoNorm = normPeriodo(periodoEfectivo);
+    const todasActasMismoPeriodo = actas.filter(a => {
+      if ((a.regimen || 'SUBSIDIADO') !== regimen) return false;
+      if (!periodoNorm) return false;
+      // Coincide si el período normalizado es igual o si se incluyen los mismos meses
+      const aNorm = normPeriodo(a.periodoEvaluado || '');
+      return aNorm === periodoNorm;
+    });
     const actaPeriodoExistente =
       todasActasMismoPeriodo.find(a => a.contrato === p.contrato) ||
-      (p.nit ? todasActasMismoPeriodo.find(a => a.nit === p.nit) : undefined);
+      (p.nit ? todasActasMismoPeriodo.find(a => String(a.nit) === String(p.nit)) : undefined);
     if (actaPeriodoExistente) {
       const cumplPct = (() => { const prog = actaPeriodoExistente.servicios.reduce((s, sv) => s + sv.programado, 0); const ejec = actaPeriodoExistente.servicios.reduce((s, sv) => s + Math.min(sv.ejecutado, sv.programado), 0); return prog > 0 ? Math.round(ejec / prog * 100) : 0; })();
       const mismoContrato = actaPeriodoExistente.contrato === p.contrato;
