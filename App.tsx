@@ -47,11 +47,43 @@ function deduplicarActas(raw: import('./types').Acta[]): import('./types').Acta[
   // Cuando hay dos actas del mismo contrato, mismo régimen y mismo período → queda la de mayor %
   const byContratoRegPeriodo = new Map<string, import('./types').Acta>();
   [...byNumeroYPrest.values()].forEach(a => {
-    const key = `${a.contrato}||${a.regimen || 'SUBSIDIADO'}||${a.periodoEvaluado}`;
+    const key = `${a.contrato}||${a.regimen || 'SUBSIDIADO'}||${(a.periodoEvaluado || '').trim().toLowerCase()}`;
     const ex = byContratoRegPeriodo.get(key);
     if (!ex || pct(a) > pct(ex)) byContratoRegPeriodo.set(key, a);
   });
-  return [...byContratoRegPeriodo.values()];
+  // Paso 4: renumerar actas por contrato para eliminar huecos en la secuencia
+  // Ej: si quedan -2 y -3 después de borrar -1, se renumeran a -1 y -2
+  const deduped = [...byContratoRegPeriodo.values()];
+  const porContrato = new Map<string, import('./types').Acta[]>();
+  deduped.forEach(a => {
+    const key = `${a.contrato}||${a.regimen || 'SUBSIDIADO'}`;
+    if (!porContrato.has(key)) porContrato.set(key, []);
+    porContrato.get(key)!.push(a);
+  });
+  const resultado: import('./types').Acta[] = [];
+  porContrato.forEach((lista) => {
+    // Ordenar por número de secuencia (último segmento numérico del numero)
+    lista.sort((a, b) => {
+      const seqA = parseInt(a.numero.split('-').pop() || '0', 10);
+      const seqB = parseInt(b.numero.split('-').pop() || '0', 10);
+      return seqA - seqB;
+    });
+    // Renumerar si hay huecos: base = todo excepto el último segmento
+    lista.forEach((a, idx) => {
+      const partes = a.numero.split('-');
+      const ultimoEsNum = /^\d+$/.test(partes[partes.length - 1]);
+      if (ultimoEsNum) {
+        const base = partes.slice(0, -1).join('-');
+        const nuevoNumero = `${base}-${idx + 1}`;
+        if (nuevoNumero !== a.numero) {
+          resultado.push({ ...a, numero: nuevoNumero });
+          return;
+        }
+      }
+      resultado.push(a);
+    });
+  });
+  return resultado;
 }
 
 const DEFAULT_USERS: AppUser[] = [
