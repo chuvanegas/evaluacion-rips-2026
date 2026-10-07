@@ -274,6 +274,7 @@ function App() {
   const [radEvaluando, setRadEvaluando] = useState<string | null>(null);
   const [radFilesReady, setRadFilesReady] = useState<{ contrato: string; reg: string; prestador: string; files: File[]; meses: string[]; pFound: any; periodoStr: string } | null>(null);
   const [radSelector, setRadSelector] = useState<{ c: any; reg: string; selMeses: Set<string> } | null>(null);
+  const [radSearch, setRadSearch] = useState('');
   const [searchPrestador, setSearchPrestador] = useState('');
   const [filterContrato, setFilterContrato] = useState('');
   const [filterRegimen, setFilterRegimen] = useState('');
@@ -590,6 +591,42 @@ function App() {
       handleGenerarActa(p);
     }
   }, [registros]);
+
+  // Alerta de pendientes cuando se cargan datos de radicación
+  useEffect(() => {
+    if (!radData || currentUser?.role !== 'admin') return;
+    const TRIMS_A = [
+      { anio: 2026, meses: [3],        mesesES: ['Marzo 2026'] },
+      { anio: 2026, meses: [4,5,6],    mesesES: ['Abril 2026','Mayo 2026','Junio 2026'] },
+      { anio: 2026, meses: [7,8,9],    mesesES: ['Julio 2026','Agosto 2026','Septiembre 2026'] },
+      { anio: 2026, meses: [10,11,12], mesesES: ['Octubre 2026','Noviembre 2026','Diciembre 2026'] },
+      { anio: 2027, meses: [1,2],      mesesES: ['Enero 2027','Febrero 2027'] },
+    ];
+    const regs2 = (radData.registros || []);
+    const cons2 = (radData.contratos || []);
+    let pend = 0;
+    cons2.forEach((c: any) => {
+      ['RS','RC'].forEach(reg => {
+        TRIMS_A.forEach(t => {
+          const completo = t.meses.every(m => regs2.some((r: any) => r.contrato === c.contrato && r.periodo_anio === t.anio && r.periodo_mes === m && r.regimen === reg));
+          if (!completo) return;
+          const regLabel = reg === 'RC' ? 'CONTRIBUTIVO' : 'SUBSIDIADO';
+          const nit = c.nit ? String(c.nit) : null;
+          const tieneActa = actas.some(a => {
+            const mismoContrato = a.contrato === c.contrato;
+            const mismoNit = nit && String(a.nit) === nit;
+            if (!mismoContrato && !mismoNit) return false;
+            if ((a.regimen || 'SUBSIDIADO').toUpperCase() !== regLabel) return false;
+            return t.mesesES.some(mes => (a.periodoEvaluado || '').toLowerCase().includes(mes.toLowerCase()));
+          });
+          if (!tieneActa) pend++;
+        });
+      });
+    });
+    if (pend > 0) {
+      setMessage({ type: 'info', text: `⚠️ Hay ${pend} trimestre${pend !== 1 ? 's' : ''} pendiente${pend !== 1 ? 's' : ''} de evaluación en el módulo de radicación.` });
+    }
+  }, [radData]);
 
   // Reset pagination when data changes
   useEffect(() => {
@@ -2384,11 +2421,16 @@ function App() {
 
           const trimActa = (contrato: string, reg: string, t: typeof TRIMS[0]) => {
             const regLabel = reg === 'RC' ? 'CONTRIBUTIVO' : 'SUBSIDIADO';
-            return actas.some(a =>
-              a.contrato === contrato &&
-              (a.regimen || 'SUBSIDIADO').toUpperCase() === regLabel &&
-              t.mesesES.some(mes => (a.periodoEvaluado || '').toLowerCase().includes(mes.toLowerCase()))
-            );
+            // Obtener NIT del contrato para búsqueda alternativa
+            const radCon = (radData?.contratos || []).find((rc: any) => rc.contrato === contrato);
+            const nit = radCon?.nit ? String(radCon.nit) : null;
+            return actas.some(a => {
+              const mismoContrato = a.contrato === contrato;
+              const mismoNit = nit && String(a.nit) === nit;
+              if (!mismoContrato && !mismoNit) return false;
+              if ((a.regimen || 'SUBSIDIADO').toUpperCase() !== regLabel) return false;
+              return t.mesesES.some(mes => (a.periodoEvaluado || '').toLowerCase().includes(mes.toLowerCase()));
+            });
           };
 
           const mesesDispArray = (contrato: string, reg: string) => {
@@ -2471,69 +2513,98 @@ function App() {
 
           if (!radData && !radFetching && !radError) return null;
 
+          // Filtrar por búsqueda
+          const q = radSearch.trim().toLowerCase();
+          const gruposFiltrados = q
+            ? grupos.filter(g =>
+                g.prestador.toLowerCase().includes(q) ||
+                g.nit.toLowerCase().includes(q) ||
+                g.contratos.some(c => c.contrato.toLowerCase().includes(q))
+              )
+            : grupos;
+
           return (
-            <div className={`glass-panel rounded-2xl p-4 border ${pendienteTotal > 0 ? 'border-emerald-200 dark:border-emerald-500/30' : 'border-slate-200 dark:border-slate-700/50'}`}>
-              {/* Header */}
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  Listos para evaluar
-                  {radFetching && <RefreshCw className="h-3 w-3 text-slate-400 animate-spin" />}
-                  {radData && pendienteTotal > 0 && (
-                    <span className="text-[10px] font-medium bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded-full">
-                      {pendienteTotal} pendiente{pendienteTotal !== 1 ? 's' : ''}
-                    </span>
-                  )}
-                  {radData && pendienteTotal === 0 && grupos.length === 0 && (
-                    <span className="text-[10px] font-medium bg-slate-100 dark:bg-slate-700 text-slate-500 px-2 py-0.5 rounded-full">
-                      Todo evaluado ✓
-                    </span>
-                  )}
-                </h2>
-                <button onClick={() => { setRadData(null); setRadError(null); setRadFetching(true); setRadSelector(null); setRadFilesReady(null);
-                  fetch('https://radicacion.vercel.app/api/evaluar', { headers: { 'x-token': RAD_TOKEN }, cache: 'no-store' })
-                    .then(r => r.ok ? r.json() : r.text().then(t2 => Promise.reject(`Error ${r.status}: ${t2}`)))
-                    .then(d => { setRadData(d); setRadLastFetch(new Date().toLocaleTimeString('es-CO')); })
-                    .catch((e: any) => setRadError(String(e?.message || e)))
-                    .finally(() => setRadFetching(false));
-                }} disabled={radFetching} className="p-1 text-slate-400 hover:text-indigo-500 disabled:opacity-40 transition-colors" title="Actualizar">
-                  <RefreshCw className={`h-3.5 w-3.5 ${radFetching ? 'animate-spin' : ''}`} />
-                </button>
+            <div className={`glass-panel rounded-2xl p-3 border ${pendienteTotal > 0 ? 'border-emerald-200 dark:border-emerald-500/30' : 'border-slate-200 dark:border-slate-700/50'}`}>
+              {/* Header compacto */}
+              <div className="flex items-center gap-2 mb-2">
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-100">Listos para evaluar</span>
+                {radFetching && <RefreshCw className="h-3 w-3 text-slate-400 animate-spin" />}
+                {radData && pendienteTotal > 0 && (
+                  <span className="text-[10px] font-medium bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 px-1.5 py-0.5 rounded-full">
+                    {pendienteTotal} pendiente{pendienteTotal !== 1 ? 's' : ''}
+                  </span>
+                )}
+                {radData && pendienteTotal === 0 && (
+                  <span className="text-[10px] font-medium bg-slate-100 dark:bg-slate-700 text-slate-500 px-1.5 py-0.5 rounded-full">Todo evaluado ✓</span>
+                )}
+                <div className="ml-auto flex items-center gap-1">
+                  <button onClick={() => { setRadData(null); setRadError(null); setRadFetching(true); setRadSelector(null); setRadFilesReady(null);
+                    fetch('https://radicacion.vercel.app/api/evaluar', { headers: { 'x-token': RAD_TOKEN }, cache: 'no-store' })
+                      .then(r => r.ok ? r.json() : r.text().then(t2 => Promise.reject(`Error ${r.status}: ${t2}`)))
+                      .then(d => { setRadData(d); setRadLastFetch(new Date().toLocaleTimeString('es-CO')); })
+                      .catch((e: any) => setRadError(String(e?.message || e)))
+                      .finally(() => setRadFetching(false));
+                  }} disabled={radFetching} className="p-1 text-slate-400 hover:text-indigo-500 disabled:opacity-40 transition-colors" title="Actualizar">
+                    <RefreshCw className={`h-3 w-3 ${radFetching ? 'animate-spin' : ''}`} />
+                  </button>
+                </div>
               </div>
 
-              {radError && <p className="text-xs text-red-500 bg-red-50 dark:bg-red-500/10 rounded-lg px-3 py-2">{radError}</p>}
+              {radError && <p className="text-[10px] text-red-500 bg-red-50 dark:bg-red-500/10 rounded-lg px-2 py-1.5 mb-2">{radError}</p>}
               {radFetching && !radData && (
-                <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="h-9 bg-slate-100 dark:bg-slate-700/60 rounded-xl animate-pulse" />)}</div>
+                <div className="space-y-1.5">{[1,2,3].map(i => <div key={i} className="h-7 bg-slate-100 dark:bg-slate-700/60 rounded-lg animate-pulse" />)}</div>
               )}
-              {radData && grupos.length === 0 && <p className="text-xs text-slate-400 py-1">Sin radicaciones desde marzo 2026.</p>}
 
-              {/* Lista agrupada por prestador */}
+              {/* Buscador */}
               {grupos.length > 0 && !radSelector && !radFilesReady && (
-                <div className="space-y-3 max-h-80 overflow-y-auto custom-scroll pr-1">
-                  {grupos.map(g => (
-                    <div key={g.nit} className="rounded-xl border border-slate-100 dark:border-slate-700/50 overflow-hidden">
-                      <div className="bg-slate-100 dark:bg-slate-700/60 px-3 py-1.5 flex items-center gap-2">
-                        <Building2 className="h-3 w-3 text-slate-500 shrink-0" />
-                        <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200 truncate">{g.prestador}</span>
-                        <span className="text-[9px] font-mono text-slate-400 ml-auto shrink-0">NIT {g.nit}</span>
+                <div className="relative mb-2">
+                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Buscar prestador, NIT o contrato..."
+                    value={radSearch}
+                    onChange={e => setRadSearch(e.target.value)}
+                    className="w-full pl-6 pr-3 py-1 text-[10px] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                  />
+                  {radSearch && (
+                    <button onClick={() => setRadSearch('')} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {radData && grupos.length === 0 && <p className="text-[10px] text-slate-400 py-1">Sin radicaciones pendientes desde marzo 2026.</p>}
+              {radData && gruposFiltrados.length === 0 && grupos.length > 0 && (
+                <p className="text-[10px] text-slate-400 py-1">Sin resultados para "{radSearch}".</p>
+              )}
+
+              {/* Lista agrupada por prestador — compacta */}
+              {gruposFiltrados.length > 0 && !radSelector && !radFilesReady && (
+                <div className="space-y-1.5 max-h-72 overflow-y-auto custom-scroll pr-0.5">
+                  {gruposFiltrados.map(g => (
+                    <div key={g.nit} className="rounded-lg border border-slate-100 dark:border-slate-700/50 overflow-hidden">
+                      <div className="bg-slate-50 dark:bg-slate-700/50 px-2.5 py-1 flex items-center gap-1.5">
+                        <Building2 className="h-2.5 w-2.5 text-slate-400 shrink-0" />
+                        <span className="text-[10px] font-bold text-slate-700 dark:text-slate-200 truncate">{g.prestador}</span>
+                        <span className="text-[8px] font-mono text-slate-400 ml-auto shrink-0">{g.nit}</span>
                       </div>
                       <div className="divide-y divide-slate-100 dark:divide-slate-700/40">
                         {g.contratos.map(c => (
-                          <div key={c.contrato} className="px-3 py-2">
-                            <div className="text-[9px] font-mono text-slate-400 mb-1.5">{c.contrato}</div>
+                          <div key={c.contrato} className="px-2.5 py-1.5">
+                            <div className="text-[8px] font-mono text-slate-400 mb-1">{c.contrato}</div>
                             {c.regs.map((reg: string) => {
                               const regLabel = reg === 'RC' ? 'Contributivo' : 'Subsidiado';
                               const regColor = reg === 'RC' ? 'orange' : 'emerald';
                               const hayMeses = mesesDispArray(c.contrato, reg).length > 0;
                               if (!hayMeses) return null;
                               return (
-                                <div key={reg} className="flex items-center gap-1 mb-1.5 flex-wrap">
-                                  <span className={`text-[9px] font-bold w-16 shrink-0 ${regColor === 'orange' ? 'text-orange-500' : 'text-emerald-600'}`}>{regLabel}</span>
-                                  {/* Trimestre chips — solo pendientes (ya evaluados no se muestran) */}
+                                <div key={reg} className="flex items-center gap-1 mb-1 flex-wrap">
+                                  <span className={`text-[8px] font-bold w-14 shrink-0 ${regColor === 'orange' ? 'text-orange-500' : 'text-emerald-600'}`}>{regLabel}</span>
                                   {TRIMS.map(t => {
                                     const completo = trimCompleto(c.contrato, t, reg);
                                     const yaActa   = trimActa(c.contrato, reg, t);
-                                    // Ocultar si ya tiene acta o no tiene datos completos
                                     if (yaActa || !completo) return null;
                                     return (
                                       <button key={t.id}
@@ -2543,13 +2614,12 @@ function App() {
                                           setRadFilesReady(null);
                                         }}
                                         disabled={!!radEvaluando}
-                                        className={`flex items-center gap-0.5 px-2 py-0.5 rounded-lg text-[9px] font-bold transition-all ${regColor === 'orange' ? 'bg-orange-500 hover:bg-orange-600' : 'bg-emerald-500 hover:bg-emerald-600'} text-white active:scale-95 disabled:opacity-50 shadow-sm`}
+                                        className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8px] font-bold transition-all ${regColor === 'orange' ? 'bg-orange-500 hover:bg-orange-600' : 'bg-emerald-500 hover:bg-emerald-600'} text-white active:scale-95 disabled:opacity-50`}
                                       >
-                                        <CheckCircle2 className="h-2 w-2" />{t.label}
+                                        {t.label}
                                       </button>
                                     );
                                   })}
-                                  {/* Botón seleccionar meses */}
                                   <button
                                     onClick={() => {
                                       const allMes = mesesDispArray(c.contrato, reg);
@@ -2558,7 +2628,7 @@ function App() {
                                       setRadFilesReady(null);
                                     }}
                                     disabled={!!radEvaluando}
-                                    className="flex items-center gap-0.5 px-2 py-0.5 rounded-lg text-[9px] text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 border border-dashed border-slate-300 dark:border-slate-600 transition-colors"
+                                    className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8px] text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 border border-dashed border-slate-300 dark:border-slate-600 transition-colors"
                                   >
                                     <Calendar className="h-2 w-2" /> meses
                                   </button>
