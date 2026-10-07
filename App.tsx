@@ -268,6 +268,7 @@ function App() {
   const [radError, setRadError] = useState<string | null>(null);
   const [radLastFetch, setRadLastFetch] = useState<string | null>(null);
   const [radEvaluando, setRadEvaluando] = useState<string | null>(null);
+  const [radFilesReady, setRadFilesReady] = useState<{ contrato: string; reg: string; prestador: string; files: File[]; meses: string[]; pFound: any } | null>(null);
   const [searchPrestador, setSearchPrestador] = useState('');
   const [filterContrato, setFilterContrato] = useState('');
   const [filterRegimen, setFilterRegimen] = useState('');
@@ -2383,27 +2384,25 @@ function App() {
           const handleEval = async (c: RCon, reg: string) => {
             const key = `${c.contrato}|${reg}`;
             setRadEvaluando(key);
+            setRadFilesReady(null);
             const meses = mesesDisp(c.contrato, reg);
             const archivos: File[] = [];
+            const mesesLabels: string[] = [];
             for (const { anio, mes } of meses) {
               try {
                 const url = `${RAD_BASE}/api/rips-ext?contrato=${encodeURIComponent(c.contrato)}&anio=${anio}&mes=${mes}&regimen=${reg}&formato=txt`;
                 const resp = await fetch(url, { headers: { 'x-token': RAD_TOKEN } });
                 if (!resp.ok) { setMessage({ type: 'error', text: `Error RIPS ${MESES_N[mes-1]}/${anio}: HTTP ${resp.status}` }); setRadEvaluando(null); return; }
                 const txt = await resp.text();
-                archivos.push(new File([txt], `RIPS_${c.contrato}_${MESES_N[mes-1]}${anio}.txt`, { type: 'text/plain' }));
+                const fname = `RIPS_${c.contrato}_${MESES_N[mes-1]}${anio}.txt`;
+                archivos.push(new File([txt], fname, { type: 'text/plain' }));
+                mesesLabels.push(MESES_N[mes-1]);
               } catch (e: any) { setMessage({ type: 'error', text: `Error RIPS ${MESES_N[mes-1]}: ${e.message}` }); setRadEvaluando(null); return; }
             }
             setRadEvaluando(null);
             if (archivos.length === 0) { setMessage({ type: 'error', text: 'No se pudieron descargar los RIPS.' }); return; }
             const pFound = prestadores.find(p => p.nit === c.nit);
-            if (pFound) handleLoadPrestadorMetas(pFound);
-            setRegistros([]);
-            const dt = new DataTransfer();
-            archivos.forEach(f => dt.items.add(f));
-            await processFiles(dt.files, null, null);
-            const resumen = meses.map(({ mes }) => MESES_N[mes-1]).join('-');
-            setMessage({ type: 'success', text: `✓ RIPS cargados: ${resumen} (${reg === 'RC' ? 'Contributivo' : 'Subsidiado'}) — Revisa la gráfica.` });
+            setRadFilesReady({ contrato: c.contrato, reg, prestador: c.prestador, files: archivos, meses: mesesLabels, pFound });
           };
 
           if (!radData && !radFetching && !radError) return null;
@@ -2534,6 +2533,74 @@ function App() {
                   })}
                 </div>
               )}
+
+              {/* Panel de confirmación: archivos listos para procesar */}
+              {radFilesReady && (() => {
+                const rf = radFilesReady;
+                const regLabel = rf.reg === 'RC' ? 'Contributivo' : 'Subsidiado';
+                const regColor = rf.reg === 'RC' ? 'orange' : 'emerald';
+                return (
+                  <div className={`mt-3 rounded-xl border-2 p-4 ${regColor === 'orange' ? 'border-orange-300 dark:border-orange-500/50 bg-orange-50 dark:bg-orange-500/10' : 'border-emerald-300 dark:border-emerald-500/50 bg-emerald-50 dark:bg-emerald-500/10'}`}>
+                    <div className="flex items-start justify-between gap-2 mb-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className={`h-4 w-4 ${regColor === 'orange' ? 'text-orange-500' : 'text-emerald-500'}`} />
+                          <span className={`text-xs font-bold ${regColor === 'orange' ? 'text-orange-700 dark:text-orange-400' : 'text-emerald-700 dark:text-emerald-400'}`}>
+                            {rf.files.length} archivo{rf.files.length !== 1 ? 's' : ''} descargados · {regLabel}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 ml-6 truncate max-w-xs">{rf.prestador}</p>
+                        <p className="text-[9px] font-mono text-slate-400 ml-6">{rf.contrato}</p>
+                      </div>
+                      <button onClick={() => setRadFilesReady(null)} className="p-1 text-slate-400 hover:text-slate-600 transition-colors shrink-0"><X className="h-3.5 w-3.5" /></button>
+                    </div>
+
+                    {/* Lista de archivos */}
+                    <div className="flex flex-wrap gap-1.5 mb-3 ml-6">
+                      {rf.files.map((f, i) => (
+                        <span key={i} className="flex items-center gap-1 text-[10px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 font-mono text-slate-600 dark:text-slate-300">
+                          <FileText className="h-2.5 w-2.5 text-slate-400" />
+                          {rf.meses[i]}
+                          <span className="text-[8px] text-slate-400 ml-0.5">{(f.size/1024).toFixed(0)}KB</span>
+                        </span>
+                      ))}
+                    </div>
+
+                    {/* Botones de acción */}
+                    <div className="flex gap-2 ml-6">
+                      <button
+                        onClick={async () => {
+                          if (rf.pFound) handleLoadPrestadorMetas(rf.pFound);
+                          setRegistros([]);
+                          const dt = new DataTransfer();
+                          rf.files.forEach(f => dt.items.add(f));
+                          await processFiles(dt.files, null, null);
+                          setRadFilesReady(null);
+                          setMessage({ type: 'success', text: `✓ RIPS procesados: ${rf.meses.join(', ')} (${regLabel})` });
+                        }}
+                        className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white shadow-sm transition-all active:scale-95 ${regColor === 'orange' ? 'bg-orange-500 hover:bg-orange-600' : 'bg-emerald-500 hover:bg-emerald-600'}`}
+                      >
+                        <Upload className="h-3.5 w-3.5" /> Procesar Datos
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (rf.pFound) handleLoadPrestadorMetas(rf.pFound);
+                          setRegistros([]);
+                          const dt = new DataTransfer();
+                          rf.files.forEach(f => dt.items.add(f));
+                          await processFiles(dt.files, null, null);
+                          setRadFilesReady(null);
+                          setShowActaModal(true);
+                          setMessage({ type: 'success', text: `✓ RIPS procesados: ${rf.meses.join(', ')} (${regLabel})` });
+                        }}
+                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-all active:scale-95"
+                      >
+                        <ClipboardList className="h-3.5 w-3.5" /> Procesar y Generar Acta
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {radLastFetch && (
                 <p className="text-[9px] text-slate-400 mt-2 text-right">radicacion.vercel.app · {radLastFetch}</p>
