@@ -2699,28 +2699,26 @@ function App() {
                 <p className="text-[10px] text-slate-400 py-1">Sin resultados para "{radSearch}".</p>
               )}
 
-              {/* Lista agrupada por prestador — compacta */}
+              {/* Lista agrupada por prestador — ultra compacta */}
               {gruposFiltrados.length > 0 && !radSelector && !radFilesReady && (
-                <div className="space-y-1.5 max-h-72 overflow-y-auto custom-scroll pr-0.5">
+                <div className="space-y-1 max-h-64 overflow-y-auto custom-scroll pr-0.5">
                   {gruposFiltrados.map(g => (
                     <div key={g.nit} className="rounded-lg border border-slate-100 dark:border-slate-700/50 overflow-hidden">
-                      <div className="bg-slate-50 dark:bg-slate-700/50 px-2.5 py-1 flex items-center gap-1.5">
-                        <Building2 className="h-2.5 w-2.5 text-slate-400 shrink-0" />
-                        <span className="text-[10px] font-bold text-slate-700 dark:text-slate-200 truncate">{g.prestador}</span>
+                      <div className="bg-slate-50 dark:bg-slate-700/40 px-2 py-0.5 flex items-center gap-1">
+                        <span className="text-[9px] font-bold text-slate-700 dark:text-slate-200 truncate">{g.prestador}</span>
                         <span className="text-[8px] font-mono text-slate-400 ml-auto shrink-0">{g.nit}</span>
                       </div>
-                      <div className="divide-y divide-slate-100 dark:divide-slate-700/40">
+                      <div className="divide-y divide-slate-100 dark:divide-slate-700/30">
                         {g.contratos.map(c => (
-                          <div key={c.contrato} className="px-2.5 py-1.5">
-                            <div className="text-[8px] font-mono text-slate-400 mb-1">{c.contrato}</div>
+                          <div key={c.contrato} className="px-2 py-1">
                             {c.regs.map((reg: string) => {
-                              const regLabel = reg === 'RC' ? 'Contributivo' : 'Subsidiado';
                               const regColor = reg === 'RC' ? 'orange' : 'emerald';
                               const hayMeses = mesesDispArray(c.contrato, reg).length > 0;
                               if (!hayMeses) return null;
                               return (
-                                <div key={reg} className="flex items-center gap-1 mb-1 flex-wrap">
-                                  <span className={`text-[8px] font-bold w-14 shrink-0 ${regColor === 'orange' ? 'text-orange-500' : 'text-emerald-600'}`}>{regLabel}</span>
+                                <div key={reg} className="flex items-center gap-1 mb-0.5 last:mb-0">
+                                  <span className="text-[8px] font-mono text-slate-400 shrink-0 w-32 truncate">{c.contrato}</span>
+                                  <span className={`text-[7px] font-bold px-1 py-0 rounded shrink-0 ${regColor === 'orange' ? 'bg-orange-100 text-orange-600 dark:bg-orange-500/20 dark:text-orange-400' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'}`}>{reg === 'RC' ? 'C' : 'S'}</span>
                                   {TRIMS.map(t => {
                                     const completo = trimCompleto(c.contrato, t, reg);
                                     const yaActa   = trimActa(c.contrato, reg, t);
@@ -2735,7 +2733,7 @@ function App() {
                                           setRadFilesReady(null);
                                         }}
                                         disabled={!!radEvaluando}
-                                        className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8px] font-bold transition-all ${regColor === 'orange' ? 'bg-orange-500 hover:bg-orange-600' : 'bg-emerald-500 hover:bg-emerald-600'} text-white active:scale-95 disabled:opacity-50`}
+                                        className={`px-1.5 py-0 rounded text-[8px] font-bold transition-all ${regColor === 'orange' ? 'bg-orange-500 hover:bg-orange-600' : 'bg-emerald-500 hover:bg-emerald-600'} text-white active:scale-95 disabled:opacity-50`}
                                       >
                                         {t.label}
                                       </button>
@@ -2750,9 +2748,9 @@ function App() {
                                       setRadPreview(null);
                                     }}
                                     disabled={!!radEvaluando}
-                                    className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8px] text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 border border-dashed border-slate-300 dark:border-slate-600 transition-colors"
+                                    className="flex items-center gap-0.5 px-1 py-0 rounded text-[7px] text-slate-400 hover:text-indigo-500 border border-dashed border-slate-300 dark:border-slate-600 transition-colors"
                                   >
-                                    <Calendar className="h-2 w-2" /> meses
+                                    <Calendar className="h-2 w-2" />
                                   </button>
                                 </div>
                               );
