@@ -2541,18 +2541,24 @@ function App() {
 
           interface RCon { contrato: string; prestador: string; nit: string }
           const radContratos: RCon[] = radData?.contratos || [];
-          const todosContratos = radContratos.map(c => {
-            const todosRegs = [...new Set(
-              (radData?.registros || [])
-                .filter((r: any) => r.contrato === c.contrato &&
-                  ((r.periodo_anio === 2026 && r.periodo_mes >= 3) || (r.periodo_anio === 2027 && r.periodo_mes <= 2)))
-                .map((r: any) => r.regimen || 'RS')
-            )] as string[];
-            // Solo mostrar regímenes que aún tienen algo pendiente de evaluar
-            const regs = todosRegs.filter(reg => regPendiente(c.contrato, reg));
-            return { ...c, regs };
-          // Solo contratos que tienen al menos un régimen pendiente
-          }).filter(c => c.regs.length > 0);
+          const todosContratos = radContratos
+            // Solo contratos registrados en la app (por contrato exacto o por NIT)
+            .filter(c => prestadores.some(p =>
+              p.contrato === c.contrato ||
+              (c.nit && String(p.nit) === String(c.nit))
+            ))
+            .map(c => {
+              const todosRegs = [...new Set(
+                (radData?.registros || [])
+                  .filter((r: any) => r.contrato === c.contrato &&
+                    ((r.periodo_anio === 2026 && r.periodo_mes >= 3) || (r.periodo_anio === 2027 && r.periodo_mes <= 2)))
+                  .map((r: any) => r.regimen || 'RS')
+              )] as string[];
+              // Solo mostrar regímenes que aún tienen algo pendiente de evaluar
+              const regs = todosRegs.filter(reg => regPendiente(c.contrato, reg));
+              return { ...c, regs };
+            // Solo contratos que tienen al menos un régimen pendiente
+            }).filter(c => c.regs.length > 0);
 
           const gruposObj: Record<string, { prestador: string; nit: string; contratos: typeof todosContratos }> = {};
           todosContratos.forEach(c => {

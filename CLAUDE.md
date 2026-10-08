@@ -193,6 +193,37 @@ Se excluyen líneas donde `nombreMed` coincide con `/OXIGENO|OXIGEN|GAS\s+MED|OX
 
 ---
 
+## Módulo Radicación — "Listos para evaluar" (v2.16)
+
+Panel en el Dashboard (solo visible para admin) que muestra contratos pendientes de evaluación cruzando datos de `radicacion.vercel.app` con las actas guardadas.
+
+### Reglas críticas
+- **Solo se muestran contratos registrados en la app.** Filtro: `prestadores.some(p => p.contrato === c.contrato || String(p.nit) === String(c.nit))`. Sin este filtro aparecen contratos de otras EPSI en los datos de radicación.
+- **Trimestre completo:** los 3 meses del trimestre deben tener registros en radicación (`trimCompleto`).
+- **Sin acta existente:** se omiten trimestres que ya tienen acta para ese contrato+régimen+período (`trimActa`).
+- **Radicación con datos:** contratos sin ninguna radicación no aparecen.
+
+### Refs de control (evitan stale closure / async React)
+| Ref | Propósito |
+|---|---|
+| `radForcedPrestId` | Fuerza el prestador detectado tras processFiles (evita que NIT de otro prestador sobreescriba) |
+| `radForcedReg` | Fuerza el régimen ('SUBSIDIADO'/'CONTRIBUTIVO') en handleGenerarActa |
+| `radForcedScale` | Fuerza el número de meses (evita auto-detección por fechas de registros que incluyen mes anterior) |
+| `radPeriodoOverride` | Texto del período para el acta cuando periodoTexto está vacío (RIPS sin registros) |
+| `radPendingActa` | `{pFound, reg}` — dispara handleGenerarActa en el useEffect de registros |
+
+### Flujo de descarga y procesamiento
+1. Clic en chip de trimestre → `setRadPreview({c, reg, t, pFound})` — preview con metas y renuencias
+2. Clic "Descargar RIPS y evaluar" → `doEvalDirect()` → descarga TXT de `radicacion.vercel.app/api/rips-ext` → `setRadFilesReady`
+3. Botón "Procesar y Generar Acta" en radFilesReady → setea refs (`radForcedPrestId`, `radForcedReg`, `radForcedScale`, `radPeriodoOverride`, `radPendingActa`) → `processFiles` → useEffect dispara `handleGenerarActa`
+4. Reintento automático: errores 5xx se reintentan 1 vez tras 2.5s; si falla, el mes se omite con aviso
+
+### Endpoint radicación
+- `GET https://radicacion.vercel.app/api/evaluar` — lista contratos y registros (header `x-token: DUSAKAWI-RIPS-2026`)
+- `GET https://radicacion.vercel.app/api/rips-ext?contrato=X&anio=Y&mes=Z&regimen=RS&formato=txt` — descarga RIPS TXT
+
+---
+
 ## Actas de Evaluación
 
 - Guardadas en PocketBase (`app_storage` key `actas`) vía `CloudStorage.set`
@@ -326,6 +357,7 @@ El formulario se popula desde `p.metas` del prestador seleccionado.
 
 | Versión | Tag git | Descripción |
 |---|---|---|
+| **2.16** | `v2.16` | Módulo radicación: panel "Listos para evaluar" integrado en Dashboard. Solo muestra contratos registrados en la app. Fix régimen, scale y prestador forzados desde radicación. Reintento 5xx. Preview de metas y renuencias al clic. |
 | **2.15** | `v2.15` | Deduplicación de actas por contrato+régimen+período. Alerta detallada al crear acta duplicada. |
 | **2.14** | `v2.14` | Dashboard Prestadores agrupados por IPS/NIT con cajón de contratos y actas. |
 | **2.13** | `v2.13` | Renuncias: Responsable desde lista de funcionarios, auto-relleno al abrir formulario. |
