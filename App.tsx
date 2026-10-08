@@ -1129,8 +1129,9 @@ function App() {
     // Busca primero por contrato exacto, luego por NIT + régimen (contratos con numeración distinta)
     const regimen = (radForcedReg.current || p.regimen || 'SUBSIDIADO').toUpperCase();
     radForcedReg.current = null;
-    // Usar override de período cuando viene del panel de radicación (RIPS sin fechas en registros)
-    const periodoEfectivo = periodoTexto || radPeriodoOverride.current || '';
+    // Override del panel radicación tiene prioridad: el RIPS puede tener fechas de atención
+    // del mes anterior al mes de facturación, lo que causa que periodoTexto quede desfasado.
+    const periodoEfectivo = radPeriodoOverride.current || periodoTexto || '';
     // Normalizar: quitar espacios extra y pasar a minúsculas para comparar período
     const normPeriodo = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
     const periodoNorm = normPeriodo(periodoEfectivo);
@@ -1161,10 +1162,19 @@ function App() {
       setActas(prev => prev.filter(a => a.id !== actaPeriodoExistente.id));
     }
 
-    // Generate a number that doesn't already exist
-    let seq = prestadorActas.length + 1;
+    // Generar número de acta con sufijo basado en trimestre del período evaluado
+    const detectarSufijoTrim = (per: string): number => {
+      const p2 = per.toLowerCase();
+      if (/julio|agosto|septiembre/.test(p2)) return 3;
+      if (/abril|mayo|junio/.test(p2)) return 2;
+      if (/octubre|noviembre|diciembre/.test(p2)) return 4;
+      if (/enero 2027|febrero 2027/.test(p2)) return 5;
+      if (/marzo/.test(p2)) return 1;
+      return prestadorActas.length + 1;
+    };
+    let seq = detectarSufijoTrim(periodoEfectivo);
     let numero = `${p.contrato}-${seq}`;
-    while (actas.some(a => a.numero === numero)) { seq++; numero = `${p.contrato}-${seq}`; }
+    while (actas.some(a => a.numero === numero && a.id !== actaPeriodoExistente?.id)) { seq++; numero = `${p.contrato}-${seq}`; }
     const ripsPertenecenAlPrestador = detectedPrestadorId === p.id;
     const isPAIPrestador = p.tipoContrato === 'PAI';
     const servicios: ActaServicio[] = isPAIPrestador
