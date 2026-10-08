@@ -2981,37 +2981,30 @@ function App() {
                         const isSelTrim = mesesDelTrim.every(m => selMeses.has(mkKey(t.anio, m)));
                         const yearSuffix = t.anio === 2027 ? " '27" : '';
                         return (
-                          <div key={t.id} className={`rounded-lg border ${yaEval ? 'border-slate-200 dark:border-slate-700 opacity-50' : 'border-slate-200 dark:border-slate-700'}`}>
+                          <div key={t.id} className="rounded-lg border border-slate-200 dark:border-slate-700">
                             {/* Header del trimestre */}
-                            <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-t-lg ${yaEval ? 'bg-slate-100 dark:bg-slate-800' : 'bg-white/60 dark:bg-slate-800/60'}`}>
-                              <span className={`text-[10px] font-black w-8 ${yaEval ? 'text-slate-400' : (regColor === 'orange' ? 'text-orange-600' : 'text-emerald-600')}`}>{t.label}</span>
-                              {yaEval ? (
-                                <span className="flex items-center gap-1 text-[9px] text-slate-400"><Check className="h-2.5 w-2.5" /> Ya evaluado</span>
-                              ) : (
-                                <>
-                                  {trimCompleto2 && (
-                                    <button onClick={() => selTrim(t)}
-                                      className={`text-[9px] font-bold px-2 py-0.5 rounded-md transition-colors ${isSelTrim ? (regColor === 'orange' ? 'bg-orange-500 text-white' : 'bg-emerald-500 text-white') : (regColor === 'orange' ? 'text-orange-600 hover:bg-orange-100 dark:hover:bg-orange-500/20' : 'text-emerald-600 hover:bg-emerald-100 dark:hover:bg-emerald-500/20')}`}
-                                    >{isSelTrim ? '✓ Seleccionado' : 'Seleccionar todo'}</button>
-                                  )}
-                                  {!trimCompleto2 && <span className="text-[9px] text-slate-400">Parcial ({mesesDelTrim.length}/{t.meses.length} mes{t.meses.length !== 1 ? 'es' : ''})</span>}
-                                </>
+                            <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-t-lg ${yaEval ? 'bg-slate-50 dark:bg-slate-800/60' : 'bg-white/60 dark:bg-slate-800/60'}`}>
+                              <span className={`text-[10px] font-black w-8 ${regColor === 'orange' ? 'text-orange-600' : 'text-emerald-600'}`}>{t.label}</span>
+                              {yaEval && <span className="flex items-center gap-1 text-[9px] text-slate-400 italic"><Check className="h-2.5 w-2.5" /> ya evaluado</span>}
+                              {trimCompleto2 && (
+                                <button onClick={() => selTrim(t)}
+                                  className={`ml-auto text-[9px] font-bold px-2 py-0.5 rounded-md transition-colors ${isSelTrim ? (regColor === 'orange' ? 'bg-orange-500 text-white' : 'bg-emerald-500 text-white') : (regColor === 'orange' ? 'text-orange-600 hover:bg-orange-100 dark:hover:bg-orange-500/20' : 'text-emerald-600 hover:bg-emerald-100 dark:hover:bg-emerald-500/20')}`}
+                                >{isSelTrim ? '✓ Seleccionado' : 'Seleccionar'}</button>
                               )}
+                              {!trimCompleto2 && <span className="ml-auto text-[9px] text-slate-400">Parcial ({mesesDelTrim.length}/{t.meses.length})</span>}
                             </div>
-                            {/* Meses del trimestre */}
-                            {!yaEval && (
-                              <div className="flex gap-1.5 px-2.5 py-2 flex-wrap">
-                                {mesesDelTrim.map(mes => {
-                                  const k = mkKey(t.anio, mes);
-                                  const selM = selMeses.has(k);
-                                  return (
-                                    <button key={k} onClick={() => toggleMes(t.anio, mes)}
-                                      className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold border-2 transition-all active:scale-95 ${selM ? (regColor === 'orange' ? 'bg-orange-500 border-orange-500 text-white' : 'bg-emerald-500 border-emerald-500 text-white') : 'border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:border-slate-400 bg-white dark:bg-slate-800'}`}
-                                    >{MESES_N[mes - 1]}{yearSuffix}</button>
-                                  );
-                                })}
-                              </div>
-                            )}
+                            {/* Meses del trimestre — siempre visibles y seleccionables */}
+                            <div className="flex gap-1.5 px-2.5 py-2 flex-wrap">
+                              {mesesDelTrim.map(mes => {
+                                const k = mkKey(t.anio, mes);
+                                const selM = selMeses.has(k);
+                                return (
+                                  <button key={k} onClick={() => toggleMes(t.anio, mes)}
+                                    className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold border-2 transition-all active:scale-95 ${selM ? (regColor === 'orange' ? 'bg-orange-500 border-orange-500 text-white' : 'bg-emerald-500 border-emerald-500 text-white') : 'border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:border-slate-400 bg-white dark:bg-slate-800'}`}
+                                  >{MESES_N[mes - 1]}{yearSuffix}</button>
+                                );
+                              })}
+                            </div>
                           </div>
                         );
                       })}
