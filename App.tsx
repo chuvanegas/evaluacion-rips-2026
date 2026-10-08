@@ -316,6 +316,7 @@ function App() {
   const [inlineActa, setInlineActa] = useState<Acta | null>(null); // inline editor in Actas tab
   const [selectedDashPrestador, setSelectedDashPrestador] = useState<string | null>(null);
   const [dashExpandedNits, setDashExpandedNits] = useState<Set<string>>(new Set());
+  const [radExpandedNits, setRadExpandedNits] = useState<Set<string>>(new Set());
   const [monitorPreviewActa, setMonitorPreviewActa] = useState<Acta | null>(null);
   const [radData, setRadData] = useState<{ contratos: any[]; registros: any[]; consultas?: any[]; ts?: string } | null>(null);
   const [radFetching, setRadFetching] = useState(false);
@@ -2647,7 +2648,7 @@ function App() {
             : grupos;
 
           return (
-            <div className={`glass-panel rounded-2xl p-3 border ${pendienteTotal > 0 ? 'border-emerald-200 dark:border-emerald-500/30' : 'border-slate-200 dark:border-slate-700/50'}`}>
+            <div className={`glass-panel rounded-2xl p-3 border max-w-xl ${pendienteTotal > 0 ? 'border-emerald-200 dark:border-emerald-500/30' : 'border-slate-200 dark:border-slate-700/50'}`}>
               {/* Header compacto */}
               <div className="flex items-center gap-2 mb-2">
                 <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
@@ -2706,54 +2707,63 @@ function App() {
               {/* Lista agrupada por prestador — ultra compacta */}
               {gruposFiltrados.length > 0 && !radSelector && !radFilesReady && (
                 <div className="space-y-1 max-h-64 overflow-y-auto custom-scroll pr-0.5">
-                  {gruposFiltrados.map(g => (
+                  {gruposFiltrados.map(g => {
+                    const isOpen = radExpandedNits.has(g.nit);
+                    const toggleNit = () => setRadExpandedNits(prev => {
+                      const next = new Set(prev);
+                      if (next.has(g.nit)) next.delete(g.nit); else next.add(g.nit);
+                      return next;
+                    });
+                    return (
                     <div key={g.nit} className="rounded-lg border border-slate-100 dark:border-slate-700/50 overflow-hidden">
-                      <div className="bg-slate-50 dark:bg-slate-700/40 px-2 py-0.5 flex items-center gap-1">
+                      <button onClick={toggleNit} className="w-full bg-slate-50 dark:bg-slate-700/40 px-2 py-1 flex items-center gap-1 hover:bg-slate-100 dark:hover:bg-slate-700/60 transition-colors text-left">
+                        <ChevronDown className={`h-3 w-3 text-slate-400 shrink-0 transition-transform ${isOpen ? '' : '-rotate-90'}`} />
                         <span className="text-[9px] font-bold text-slate-700 dark:text-slate-200 truncate">{g.prestador}</span>
                         <span className="text-[8px] font-mono text-slate-400 ml-auto shrink-0">{g.nit}</span>
-                      </div>
-                      <div className="flex flex-col items-start divide-y divide-slate-100 dark:divide-slate-700/30 w-full">
-                        {g.contratos.map(c => {
-                          const regsConMeses = c.regs.filter((reg: string) => mesesDispArray(c.contrato, reg).length > 0);
-                          if (regsConMeses.length === 0) return null;
-                          return (
-                            <div key={c.contrato} className="px-2 py-1 inline-flex items-center gap-2 overflow-x-auto max-w-full">
-                              <span className="text-[9px] font-mono text-slate-400 shrink-0">{c.contrato}</span>
-                              <div className="flex items-center gap-2 shrink-0">
-                                {regsConMeses.map((reg: string) => {
-                                  const regColor = reg === 'RC' ? 'orange' : 'emerald';
-                                  const pF = prestadores.find(p => String(p.nit) === String(c.nit) && p.contrato === c.contrato)
-                                    || prestadores.find(p => String(p.nit) === String(c.nit));
-                                  return (
-                                    <span key={reg} className="flex items-center gap-1 shrink-0">
-                                      <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap ${regColor === 'orange' ? 'bg-orange-100 text-orange-600 dark:bg-orange-500/20 dark:text-orange-400' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'}`}>{reg === 'RC' ? 'Contributivo' : 'Subsidiado'}</span>
-                                      {TRIMS.map(t => {
-                                        const completo = trimCompleto(c.contrato, t, reg);
-                                        const yaActa   = trimActa(c.contrato, reg, t);
-                                        if (yaActa || !completo) return null;
-                                        return (
-                                          <button key={t.id}
-                                            onClick={() => { setRadPreview({ c, reg, t, pFound: pF ?? null }); setRadSelector(null); setRadFilesReady(null); }}
-                                            disabled={!!radEvaluando}
-                                            className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-all ${regColor === 'orange' ? 'bg-orange-500 hover:bg-orange-600' : 'bg-emerald-500 hover:bg-emerald-600'} text-white active:scale-95 disabled:opacity-50`}
-                                          >{t.label}</button>
-                                        );
-                                      })}
-                                      <button
-                                        onClick={() => { const sel = new Set(mesesDispArray(c.contrato, reg).map(({ anio, mes }) => mkKey(anio, mes))); setRadSelector({ c, reg, selMeses: sel }); setRadFilesReady(null); setRadPreview(null); }}
-                                        disabled={!!radEvaluando}
-                                        className="flex items-center px-1 py-0.5 rounded text-slate-400 hover:text-indigo-500 border border-dashed border-slate-300 dark:border-slate-600 transition-colors"
-                                      ><Calendar className="h-2.5 w-2.5" /></button>
-                                    </span>
-                                  );
-                                })}
+                      </button>
+                      {isOpen && (
+                        <div className="flex flex-col items-start divide-y divide-slate-100 dark:divide-slate-700/30 w-full">
+                          {g.contratos.map(c => {
+                            const regsConMeses = c.regs.filter((reg: string) => mesesDispArray(c.contrato, reg).length > 0);
+                            if (regsConMeses.length === 0) return null;
+                            return (
+                              <div key={c.contrato} className="px-2 py-1 inline-flex items-center gap-2 overflow-x-auto max-w-full">
+                                <span className="text-[9px] font-mono text-slate-400 shrink-0">{c.contrato}</span>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  {regsConMeses.map((reg: string) => {
+                                    const regColor = reg === 'RC' ? 'orange' : 'emerald';
+                                    const pF = prestadores.find(p => p.contrato === c.contrato);
+                                    return (
+                                      <span key={reg} className="flex items-center gap-1 shrink-0">
+                                        <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap ${regColor === 'orange' ? 'bg-orange-100 text-orange-600 dark:bg-orange-500/20 dark:text-orange-400' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'}`}>{reg === 'RC' ? 'Contributivo' : 'Subsidiado'}</span>
+                                        {TRIMS.map(t => {
+                                          const completo = trimCompleto(c.contrato, t, reg);
+                                          const yaActa   = trimActa(c.contrato, reg, t);
+                                          if (yaActa || !completo) return null;
+                                          return (
+                                            <button key={t.id}
+                                              onClick={() => { setRadPreview({ c, reg, t, pFound: pF ?? null }); setRadSelector(null); setRadFilesReady(null); }}
+                                              disabled={!!radEvaluando}
+                                              className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-all ${regColor === 'orange' ? 'bg-orange-500 hover:bg-orange-600' : 'bg-emerald-500 hover:bg-emerald-600'} text-white active:scale-95 disabled:opacity-50`}
+                                            >{t.label}</button>
+                                          );
+                                        })}
+                                        <button
+                                          onClick={() => { const sel = new Set(mesesDispArray(c.contrato, reg).map(({ anio, mes }) => mkKey(anio, mes))); setRadSelector({ c, reg, selMeses: sel }); setRadFilesReady(null); setRadPreview(null); }}
+                                          disabled={!!radEvaluando}
+                                          className="flex items-center px-1 py-0.5 rounded text-slate-400 hover:text-indigo-500 border border-dashed border-slate-300 dark:border-slate-600 transition-colors"
+                                        ><Calendar className="h-3.5 w-3.5" /></button>
+                                      </span>
+                                    );
+                                  })}
+                                </div>
                               </div>
-                            </div>
-                          );
-                        })}
-                      </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
-                  ))}
+                  );})}
                 </div>
               )}
 
