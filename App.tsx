@@ -2517,16 +2517,19 @@ function App() {
           ];
           const mkKey = (anio: number, mes: number) => `${anio}-${mes}`;
 
-          const tieneReg = (contrato: string, anio: number, mes: number, reg: string) =>
-            (radData?.registros || []).some((r: any) =>
+          const tieneReg = (contrato: string, anio: number, mes: number, reg: string) => {
+            // No mostrar meses cuyo plazo de radicación aún no ha vencido.
+            // El plazo vence el día 15 del mes siguiente al mes de prestación.
+            // Ejemplo: septiembre 2026 → plazo hasta 15 oct 2026.
+            // new Date(anio, mes, 15): mes es 1-indexed y Date usa 0-indexed, entonces
+            // mes sin restar == índice del mes SIGUIENTE == día 15 del mes siguiente. ✓
+            const hoy = new Date();
+            const plazo = new Date(anio, mes, 15);
+            if (hoy < plazo) return false;
+            return (radData?.registros || []).some((r: any) =>
               r.contrato === contrato && r.periodo_anio === anio && r.periodo_mes === mes && r.regimen === reg
-              && (
-                // Excluir "Aún en plazo": registros sin RIPS enviado tienen usuarios === 0 o null
-                r.usuarios > 0 || r.atenciones > 0 || r.tiene_txt === true
-                // Si ninguno de esos campos existe en el API, aceptar el registro (retrocompatibilidad)
-                || (r.usuarios == null && r.atenciones == null && r.tiene_txt == null)
-              )
             );
+          };
 
           const trimCompleto = (contrato: string, t: typeof TRIMS[0], reg: string) =>
             t.meses.every(m => tieneReg(contrato, t.anio, m, reg));
