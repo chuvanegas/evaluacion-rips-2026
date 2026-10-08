@@ -2627,6 +2627,16 @@ function App() {
                   mesesOmitidos.push(`${MESES_FULL[mes-1]} (sin datos)`);
                   continue;
                 }
+                // Validar que el archivo contiene fechas del mes solicitado.
+                // El API puede devolver datos del mes anterior cuando no hay RIPS enviado.
+                const ym = `${anio}-${String(mes).padStart(2, '0')}`;
+                const ymCompact = `${anio}${String(mes).padStart(2, '0')}`;
+                const tieneLineasDelMes = txt.includes(ym) || txt.includes(ymCompact);
+                console.log(`[RAD CONTENT] ${MESES_FULL[mes-1]}/${anio}: ${txt.length} bytes, tieneLineasDelMes=${tieneLineasDelMes}, primeros150: ${txt.substring(0, 150).replace(/\n/g, '↵')}`);
+                if (!tieneLineasDelMes) {
+                  mesesOmitidos.push(`${MESES_FULL[mes-1]} (sin registros del período — aún en plazo)`);
+                  continue;
+                }
                 archivos.push(new File([txt], `RIPS_${c.contrato}_${MESES_N[mes-1]}${anio}.txt`, { type: 'text/plain' }));
                 mesesLabels.push(MESES_N[mes - 1]);
                 mesesESLabels.push(`${MESES_FULL[mes - 1]} ${anio}`);
