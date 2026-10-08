@@ -1162,19 +1162,21 @@ function App() {
       setActas(prev => prev.filter(a => a.id !== actaPeriodoExistente.id));
     }
 
-    // Generar número de acta con sufijo basado en trimestre del período evaluado
-    const detectarSufijoTrim = (per: string): number => {
+    // Generar número de acta con sufijo basado en trimestre del período evaluado.
+    // No se incrementa aunque exista otro acta con ese número (el ID garantiza unicidad real).
+    const detectarSufijoTrim = (per: string): string => {
       const p2 = per.toLowerCase();
-      if (/julio|agosto|septiembre/.test(p2)) return 3;
-      if (/abril|mayo|junio/.test(p2)) return 2;
-      if (/octubre|noviembre|diciembre/.test(p2)) return 4;
-      if (/enero 2027|febrero 2027/.test(p2)) return 5;
-      if (/marzo/.test(p2)) return 1;
-      return prestadorActas.length + 1;
+      if (/julio|agosto|septiembre/.test(p2)) return '3';
+      if (/abril|mayo|junio/.test(p2)) return '2';
+      if (/octubre|noviembre|diciembre/.test(p2)) return '4';
+      if (/enero 2027|febrero 2027/.test(p2)) return '5';
+      if (/marzo/.test(p2)) return '1';
+      // Sin trimestre detectado: usar secuencial
+      let s = prestadorActas.length + 1;
+      while (actas.some(a => a.numero === `${p.contrato}-${s}`)) s++;
+      return String(s);
     };
-    let seq = detectarSufijoTrim(periodoEfectivo);
-    let numero = `${p.contrato}-${seq}`;
-    while (actas.some(a => a.numero === numero && a.id !== actaPeriodoExistente?.id)) { seq++; numero = `${p.contrato}-${seq}`; }
+    const numero = `${p.contrato}-${detectarSufijoTrim(periodoEfectivo)}`;
     const ripsPertenecenAlPrestador = detectedPrestadorId === p.id;
     const isPAIPrestador = p.tipoContrato === 'PAI';
     const servicios: ActaServicio[] = isPAIPrestador
