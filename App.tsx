@@ -2547,6 +2547,20 @@ function App() {
           const pendienteTotal = grupos.reduce((acc, g) =>
             acc + g.contratos.reduce((a2, c) => a2 + c.regs.length, 0), 0);
 
+          // Descarga un mes con 1 reintento automático en error 5xx
+          const fetchRipsMes = async (contrato: string, anio: number, mes: number, reg: string): Promise<{ txt: string } | { error: string }> => {
+            const url = `${RAD_BASE}/api/rips-ext?contrato=${encodeURIComponent(contrato)}&anio=${anio}&mes=${mes}&regimen=${reg}&formato=txt`;
+            const doFetch = () => fetch(url, { headers: { 'x-token': RAD_TOKEN } });
+            let resp = await doFetch();
+            if (resp.status >= 500) {
+              await new Promise(r => setTimeout(r, 2500));
+              resp = await doFetch();
+            }
+            if (!resp.ok) return { error: `HTTP ${resp.status}` };
+            const txt = await resp.text();
+            return { txt };
+          };
+
           const doDownload = async () => {
             if (!radSelector) return;
             const { c, reg, selMeses } = radSelector;
@@ -2556,6 +2570,7 @@ function App() {
             const archivos: File[] = [];
             const mesesLabels: string[] = [];
             const mesesESLabels: string[] = [];
+            const mesesOmitidos: string[] = [];
             const mesesOrdenados = [...selMeses].map(k2 => {
               const [a, m] = k2.split('-').map(Number);
               return { anio: a, mes: m };
@@ -2563,21 +2578,31 @@ function App() {
             const MESES_FULL = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
             for (const { anio, mes } of mesesOrdenados) {
               try {
-                const url = `${RAD_BASE}/api/rips-ext?contrato=${encodeURIComponent(c.contrato)}&anio=${anio}&mes=${mes}&regimen=${reg}&formato=txt`;
-                const resp = await fetch(url, { headers: { 'x-token': RAD_TOKEN } });
-                if (!resp.ok) { setMessage({ type: 'error', text: `Error RIPS ${MESES_N[mes-1]}/${anio}: HTTP ${resp.status}` }); setRadEvaluando(null); return; }
-                const txt = await resp.text();
+                const result = await fetchRipsMes(c.contrato, anio, mes, reg);
+                if ('error' in result) {
+                  mesesOmitidos.push(`${MESES_FULL[mes-1]} (${result.error})`);
+                  continue;
+                }
+                const { txt } = result;
                 if (!txt || txt.trim().length === 0) {
-                  setMessage({ type: 'error', text: `Sin datos RIPS para ${MESES_FULL[mes-1]} ${anio} — contrato ${c.contrato}` });
-                  setRadEvaluando(null); return;
+                  mesesOmitidos.push(`${MESES_FULL[mes-1]} (sin datos)`);
+                  continue;
                 }
                 archivos.push(new File([txt], `RIPS_${c.contrato}_${MESES_N[mes-1]}${anio}.txt`, { type: 'text/plain' }));
                 mesesLabels.push(MESES_N[mes - 1]);
                 mesesESLabels.push(`${MESES_FULL[mes - 1]} ${anio}`);
-              } catch (e: any) { setMessage({ type: 'error', text: `Error RIPS ${MESES_N[mes-1]}: ${e.message}` }); setRadEvaluando(null); return; }
+              } catch (e: any) {
+                mesesOmitidos.push(`${MESES_FULL[mes-1]} (${e.message})`);
+              }
             }
             setRadEvaluando(null);
-            if (archivos.length === 0) { setMessage({ type: 'error', text: 'No se descargaron RIPS.' }); return; }
+            if (archivos.length === 0) {
+              setMessage({ type: 'error', text: `No se descargaron RIPS.${mesesOmitidos.length ? ' Omitidos: ' + mesesOmitidos.join(', ') : ''}` });
+              return;
+            }
+            if (mesesOmitidos.length > 0) {
+              setMessage({ type: 'info', text: `⚠️ Meses omitidos (sin datos o error): ${mesesOmitidos.join(', ')}. Se continúa con ${archivos.length} mes(es).` });
+            }
             // NIT como string para comparar correctamente
             const pFound = prestadores.find(p => String(p.nit) === String(c.nit) && p.contrato === c.contrato)
               || prestadores.find(p => String(p.nit) === String(c.nit));
@@ -2741,28 +2766,32 @@ function App() {
                 const totalRen = renPrest.length;
                 const cargandoPrev = radEvaluando === `${c.contrato}|${reg}|prev`;
                 const doEvalDirect = async () => {
-                  const sel = new Set(t.meses.map((m: number) => mkKey(t.anio, m)));
                   const key = `${c.contrato}|${reg}|prev`;
                   setRadEvaluando(key);
                   const archivos: File[] = [];
                   const mesesLabels: string[] = [];
                   const mesesESLabels: string[] = [];
+                  const mesesOmitidos: string[] = [];
                   const MESES_FULL = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-                  const mesesOrdenados = [...sel].map((k2: string) => { const [a, m] = k2.split('-').map(Number); return { anio: a, mes: m }; }).sort((a: any, b: any) => a.anio - b.anio || a.mes - b.mes);
-                  for (const { anio, mes } of mesesOrdenados) {
+                  for (const mes of t.meses as number[]) {
                     try {
-                      const url = `${RAD_BASE}/api/rips-ext?contrato=${encodeURIComponent(c.contrato)}&anio=${anio}&mes=${mes}&regimen=${reg}&formato=txt`;
-                      const resp = await fetch(url, { headers: { 'x-token': RAD_TOKEN } });
-                      if (!resp.ok) { setMessage({ type: 'error', text: `Error RIPS ${MESES_N[mes-1]}/${anio}: HTTP ${resp.status}` }); setRadEvaluando(null); return; }
-                      const txt = await resp.text();
-                      if (!txt || txt.trim().length === 0) { setMessage({ type: 'error', text: `Sin datos RIPS para ${MESES_FULL[mes-1]} ${anio} — contrato ${c.contrato}` }); setRadEvaluando(null); return; }
-                      archivos.push(new File([txt], `RIPS_${c.contrato}_${MESES_N[mes-1]}${anio}.txt`, { type: 'text/plain' }));
+                      const result = await fetchRipsMes(c.contrato, t.anio, mes, reg);
+                      if ('error' in result) { mesesOmitidos.push(`${MESES_FULL[mes-1]} (${result.error})`); continue; }
+                      const { txt } = result;
+                      if (!txt || txt.trim().length === 0) { mesesOmitidos.push(`${MESES_FULL[mes-1]} (sin datos)`); continue; }
+                      archivos.push(new File([txt], `RIPS_${c.contrato}_${MESES_N[mes-1]}${t.anio}.txt`, { type: 'text/plain' }));
                       mesesLabels.push(MESES_N[mes - 1]);
-                      mesesESLabels.push(`${MESES_FULL[mes - 1]} ${anio}`);
-                    } catch (e: any) { setMessage({ type: 'error', text: `Error RIPS ${MESES_N[mes-1]}: ${e.message}` }); setRadEvaluando(null); return; }
+                      mesesESLabels.push(`${MESES_FULL[mes - 1]} ${t.anio}`);
+                    } catch (e: any) { mesesOmitidos.push(`${MESES_FULL[mes-1]} (${e.message})`); }
                   }
                   setRadEvaluando(null);
-                  if (archivos.length === 0) { setMessage({ type: 'error', text: 'No se descargaron RIPS.' }); return; }
+                  if (archivos.length === 0) {
+                    setMessage({ type: 'error', text: `No se descargaron RIPS.${mesesOmitidos.length ? ' Omitidos: ' + mesesOmitidos.join(', ') : ''}` });
+                    return;
+                  }
+                  if (mesesOmitidos.length > 0) {
+                    setMessage({ type: 'info', text: `⚠️ Meses omitidos: ${mesesOmitidos.join(', ')}. Se continúa con ${archivos.length} mes(es).` });
+                  }
                   const periodoStr = mesesESLabels.join(', ');
                   setRadPreview(null);
                   setRadFilesReady({ contrato: c.contrato, reg, prestador: c.prestador, files: archivos, meses: mesesLabels, pFound, periodoStr });
