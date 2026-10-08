@@ -624,7 +624,15 @@ function App() {
       setRadFetching(true); setRadError(null);
       fetch('https://radicacion.vercel.app/api/evaluar', { headers: { 'x-token': 'DUSAKAWI-RIPS-2026' }, cache: 'no-store' })
         .then(r => r.ok ? r.json() : r.text().then(t => Promise.reject(`Error ${r.status}: ${t}`)))
-        .then(d => { setRadData(d); setRadLastFetch(new Date().toLocaleTimeString('es-CO')); })
+        .then(d => {
+          // DEBUG TEMPORAL: inspeccionar estructura de registros
+          if (d?.registros?.length > 0) {
+            const muestra = d.registros.find((r: any) => r.contrato === 'ASB-44078-2026-11' && r.regimen === 'RC') || d.registros[0];
+            console.log('[RAD DEBUG] Keys del registro:', Object.keys(muestra));
+            console.log('[RAD DEBUG] Registro completo:', JSON.stringify(muestra, null, 2));
+          }
+          setRadData(d); setRadLastFetch(new Date().toLocaleTimeString('es-CO'));
+        })
         .catch((e: any) => setRadError(String(e?.message || e)))
         .finally(() => setRadFetching(false));
     };
