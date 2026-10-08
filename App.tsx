@@ -200,6 +200,7 @@ function App() {
   const radPeriodoOverride = React.useRef<string | null>(null);
   const radForcedPrestId = React.useRef<string | null>(null);
   const radForcedReg = React.useRef<string | null>(null); // 'SUBSIDIADO' | 'CONTRIBUTIVO' | null
+  const radForcedScale = React.useRef<number | null>(null); // número de meses descargados
   // Prestador pendiente de generar acta después de procesar RIPS desde radicación
   const radPendingActa = React.useRef<any>(null);
   // Bandera para evitar loop infinito en dedup automático de actas
@@ -634,12 +635,18 @@ function App() {
 
   // Auto-actualizar scale según meses detectados en los RIPS cargados
   useEffect(() => {
-    const monthSet = new Set<string>();
-    registros.forEach(r => {
-      if (r.fecha && /^\d{4}-\d{2}/.test(r.fecha)) monthSet.add(r.fecha.substring(0, 7));
-    });
-    const n = monthSet.size;
-    if (n > 0) setScale(n);
+    // Si viene del panel de radicación, usar el número exacto de meses descargados
+    if (radForcedScale.current !== null) {
+      setScale(radForcedScale.current);
+      radForcedScale.current = null;
+    } else {
+      const monthSet = new Set<string>();
+      registros.forEach(r => {
+        if (r.fecha && /^\d{4}-\d{2}/.test(r.fecha)) monthSet.add(r.fecha.substring(0, 7));
+      });
+      const n = monthSet.size;
+      if (n > 0) setScale(n);
+    }
     // Generar acta pendiente desde panel de radicación
     if (radPendingActa.current && registros.length > 0) {
       const pending = radPendingActa.current;
@@ -3017,6 +3024,7 @@ function App() {
                       <button
                         onClick={async () => {
                           radPeriodoOverride.current = rf.periodoStr || null;
+                          radForcedScale.current = rf.meses.length;
                           if (rf.pFound) {
                             radForcedPrestId.current = rf.pFound.id;
                             radForcedReg.current = rf.reg === 'RC' ? 'CONTRIBUTIVO' : 'SUBSIDIADO';
@@ -3036,6 +3044,7 @@ function App() {
                       <button
                         onClick={async () => {
                           radPeriodoOverride.current = rf.periodoStr || null;
+                          radForcedScale.current = rf.meses.length;
                           if (rf.pFound) {
                             radForcedPrestId.current = rf.pFound.id;
                             radForcedReg.current = rf.reg === 'RC' ? 'CONTRIBUTIVO' : 'SUBSIDIADO';
