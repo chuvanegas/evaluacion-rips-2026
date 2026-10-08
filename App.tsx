@@ -2656,6 +2656,11 @@ function App() {
           let trimEvalCycle = 0;
           const evalByTrim: Record<string, number> = {};
           TRIMS.forEach(t => { evalByTrim[t.id] = 0; });
+          // Por régimen
+          const statReg: Record<string, { posible: number; eval: number }> = {
+            RS: { posible: 0, eval: 0 },
+            RC: { posible: 0, eval: 0 },
+          };
           radContratos.forEach((c: any) => {
             if (!prestadores.some(p => p.contrato === c.contrato)) return;
             const regsDeEsteContrato = [...new Set(
@@ -2667,9 +2672,11 @@ function App() {
               TRIMS.forEach(t => {
                 if (!trimCompleto(c.contrato, t, reg)) return;
                 trimPosibleCycle++;
+                if (statReg[reg]) statReg[reg].posible++;
                 if (trimActa(c.contrato, reg, t)) {
                   trimEvalCycle++;
                   evalByTrim[t.id] = (evalByTrim[t.id] || 0) + 1;
+                  if (statReg[reg]) statReg[reg].eval++;
                 }
               });
             });
@@ -3177,6 +3184,27 @@ function App() {
                   <p className="text-2xl font-black text-indigo-600 dark:text-indigo-400">{totalPosible}</p>
                   <p className="text-[10px] text-slate-500 mt-0.5">Radicados</p>
                 </div>
+              </div>
+
+              {/* Por régimen */}
+              <div className="grid grid-cols-2 gap-2 mb-5">
+                {[{ reg: 'RS', label: 'Subsidiado', color: 'emerald' }, { reg: 'RC', label: 'Contributivo', color: 'orange' }].map(({ reg, label, color }) => {
+                  const s = statReg[reg] || { posible: 0, eval: 0 };
+                  const pend = s.posible - s.eval;
+                  const pct = s.posible > 0 ? Math.round(s.eval / s.posible * 100) : 0;
+                  return (
+                    <div key={reg} className={`rounded-xl px-3 py-2.5 ${color === 'orange' ? 'bg-orange-50 dark:bg-orange-500/10' : 'bg-emerald-50 dark:bg-emerald-500/10'}`}>
+                      <p className={`text-[10px] font-bold mb-1 ${color === 'orange' ? 'text-orange-600 dark:text-orange-400' : 'text-emerald-700 dark:text-emerald-400'}`}>{label}</p>
+                      <div className="w-full h-1.5 bg-white/60 dark:bg-slate-700/40 rounded-full overflow-hidden mb-1.5">
+                        <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: color === 'orange' ? '#f97316' : '#10b981' }} />
+                      </div>
+                      <div className="flex items-center justify-between text-[9px]">
+                        <span className={`font-bold ${color === 'orange' ? 'text-orange-600 dark:text-orange-400' : 'text-emerald-600 dark:text-emerald-400'}`}>{pct}%</span>
+                        <span className="text-slate-500">{s.eval}✓ {pend > 0 ? `· ${pend}⏳` : ''}</span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
 
               {/* Por trimestre */}
