@@ -2721,7 +2721,7 @@ function App() {
                           if (regsConMeses.length === 0) return null;
                           return (
                             <div key={c.contrato} className="px-2 py-1 flex items-center gap-2 min-w-0 overflow-x-auto">
-                              <span className="text-[9px] font-mono text-slate-400 shrink-0 w-36 truncate">{c.contrato}</span>
+                              <span className="text-[9px] font-mono text-slate-400 shrink-0">{c.contrato}</span>
                               <div className="flex items-center gap-2 shrink-0">
                                 {regsConMeses.map((reg: string) => {
                                   const regColor = reg === 'RC' ? 'orange' : 'emerald';
