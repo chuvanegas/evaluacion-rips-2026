@@ -2649,20 +2649,33 @@ function App() {
 
           // ── Estadísticas globales de evaluación ──────────────────────────────
           const totalContratosApp = prestadores.length;
-          const totalActasAnio = actas.length; // todas las actas, sin filtro de año
-          // Trimesters evaluated: count distinct contrato+regimen+trim combinations in actas
+          const totalActasAnio = actas.length;
+          // Porcentaje: trimestres completos evaluados vs trimestres completos posibles en radicación
+          // (solo contratos registrados en app)
+          let trimPosibleCycle = 0;
+          let trimEvalCycle = 0;
           const evalByTrim: Record<string, number> = {};
-          TRIMS.forEach(t => {
-            evalByTrim[t.id] = actas.filter(a =>
-              t.mesesES.some(mes => (a.periodoEvaluado || '').toLowerCase().includes(mes.toLowerCase()))
-            ).length;
+          TRIMS.forEach(t => { evalByTrim[t.id] = 0; });
+          radContratos.forEach((c: any) => {
+            if (!prestadores.some(p => p.contrato === c.contrato)) return;
+            const regsDeEsteContrato = [...new Set(
+              (radData?.registros || [])
+                .filter((r: any) => r.contrato === c.contrato)
+                .map((r: any) => r.regimen || 'RS')
+            )] as string[];
+            regsDeEsteContrato.forEach(reg => {
+              TRIMS.forEach(t => {
+                if (!trimCompleto(c.contrato, t, reg)) return;
+                trimPosibleCycle++;
+                if (trimActa(c.contrato, reg, t)) {
+                  trimEvalCycle++;
+                  evalByTrim[t.id] = (evalByTrim[t.id] || 0) + 1;
+                }
+              });
+            });
           });
-          // Total possible = contratos registered × regs they have (from radData)
-          const totalPosible = (radData?.registros || []).reduce((acc: any, r: any) => {
-            const key = `${r.contrato}|${r.regimen || 'RS'}`;
-            acc.add(key); return acc;
-          }, new Set()).size;
-          const pctAvance = totalPosible > 0 ? Math.round(totalActasAnio / totalPosible * 100) : 0;
+          const totalPosible = trimPosibleCycle;
+          const pctAvance = trimPosibleCycle > 0 ? Math.round(trimEvalCycle / trimPosibleCycle * 100) : 0;
 
           return (
             <div className="grid grid-cols-[1fr_320px] gap-6 items-start">
