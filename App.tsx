@@ -2542,11 +2542,8 @@ function App() {
           interface RCon { contrato: string; prestador: string; nit: string }
           const radContratos: RCon[] = radData?.contratos || [];
           const todosContratos = radContratos
-            // Solo contratos registrados en la app (por contrato exacto o por NIT)
-            .filter(c => prestadores.some(p =>
-              p.contrato === c.contrato ||
-              (c.nit && String(p.nit) === String(c.nit))
-            ))
+            // Solo contratos registrados exactamente en la app (por número de contrato)
+            .filter(c => prestadores.some(p => p.contrato === c.contrato))
             .map(c => {
               const todosRegs = [...new Set(
                 (radData?.registros || [])
@@ -2715,12 +2712,12 @@ function App() {
                         <span className="text-[9px] font-bold text-slate-700 dark:text-slate-200 truncate">{g.prestador}</span>
                         <span className="text-[8px] font-mono text-slate-400 ml-auto shrink-0">{g.nit}</span>
                       </div>
-                      <div className="divide-y divide-slate-100 dark:divide-slate-700/30">
+                      <div className="flex flex-col items-start divide-y divide-slate-100 dark:divide-slate-700/30 w-full">
                         {g.contratos.map(c => {
                           const regsConMeses = c.regs.filter((reg: string) => mesesDispArray(c.contrato, reg).length > 0);
                           if (regsConMeses.length === 0) return null;
                           return (
-                            <div key={c.contrato} className="px-2 py-1 flex items-center gap-2 min-w-0 overflow-x-auto">
+                            <div key={c.contrato} className="px-2 py-1 inline-flex items-center gap-2 overflow-x-auto max-w-full">
                               <span className="text-[9px] font-mono text-slate-400 shrink-0">{c.contrato}</span>
                               <div className="flex items-center gap-2 shrink-0">
                                 {regsConMeses.map((reg: string) => {
