@@ -636,10 +636,11 @@ function App() {
   // Auto-actualizar scale según meses detectados en los RIPS cargados
   useEffect(() => {
     // Si viene del panel de radicación, usar el número exacto de meses descargados
-    if (radForcedScale.current !== null) {
+    // Solo consumir el ref cuando ya hay registros (evita consumirlo con el vaciado previo)
+    if (radForcedScale.current !== null && registros.length > 0) {
       setScale(radForcedScale.current);
       radForcedScale.current = null;
-    } else {
+    } else if (radForcedScale.current === null) {
       const monthSet = new Set<string>();
       registros.forEach(r => {
         if (r.fecha && /^\d{4}-\d{2}/.test(r.fecha)) monthSet.add(r.fecha.substring(0, 7));
@@ -2979,6 +2980,11 @@ function App() {
                       <button onClick={selTodo}
                         className="px-3 py-1.5 rounded-lg text-[10px] font-bold border border-indigo-400 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 transition-colors"
                       >Seleccionar todo</button>
+                      {selMeses.size > 0 && (
+                        <span className="text-[10px] font-bold text-slate-500 bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded-lg">
+                          Meta ×{selMeses.size}
+                        </span>
+                      )}
                       <button
                         onClick={doDownload}
                         disabled={selMeses.size === 0 || cargandoSel}
