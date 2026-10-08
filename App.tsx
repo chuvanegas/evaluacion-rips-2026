@@ -2647,8 +2647,27 @@ function App() {
               )
             : grupos;
 
+          // ── Estadísticas globales de evaluación ──────────────────────────────
+          const actasAnio = actas.filter(a => (a.periodoEvaluado || '').includes('2026') || (a.periodoEvaluado || '').includes('2027'));
+          const totalContratosApp = prestadores.length;
+          const totalActasAnio = actasAnio.length;
+          // Trimesters evaluated: count distinct contrato+regimen+trim combinations in actas
+          const evalByTrim: Record<string, number> = {};
+          TRIMS.forEach(t => {
+            evalByTrim[t.id] = actasAnio.filter(a =>
+              t.mesesES.some(mes => (a.periodoEvaluado || '').toLowerCase().includes(mes.toLowerCase()))
+            ).length;
+          });
+          // Total possible = contratos registered × regs they have (from radData)
+          const totalPosible = (radData?.registros || []).reduce((acc: any, r: any) => {
+            const key = `${r.contrato}|${r.regimen || 'RS'}`;
+            acc.add(key); return acc;
+          }, new Set()).size;
+          const pctAvance = totalPosible > 0 ? Math.round(totalActasAnio / totalPosible * 100) : 0;
+
           return (
-            <div className={`glass-panel rounded-2xl p-4 border max-w-2xl ${pendienteTotal > 0 ? 'border-emerald-200 dark:border-emerald-500/30' : 'border-slate-200 dark:border-slate-700/50'}`}>
+            <div className="flex gap-4 items-start flex-wrap">
+            <div className={`glass-panel rounded-2xl p-4 border max-w-2xl flex-shrink-0 ${pendienteTotal > 0 ? 'border-emerald-200 dark:border-emerald-500/30' : 'border-slate-200 dark:border-slate-700/50'}`}>
               {/* Header compacto */}
               <div className="flex items-center gap-2 mb-2">
                 <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
@@ -3106,6 +3125,69 @@ function App() {
               })()}
 
               {radLastFetch && <p className="text-[9px] text-slate-400 mt-2 text-right">radicacion.vercel.app · {radLastFetch}</p>}
+            </div>
+
+            {/* ── Panel: Estado Global de Evaluación ── */}
+            <div className="glass-panel rounded-2xl p-4 border border-slate-200 dark:border-slate-700/50 flex-1 min-w-[220px] max-w-xs self-start">
+              <div className="flex items-center gap-2 mb-3">
+                <BarChart3 className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-100">Estado Global</span>
+                <span className="text-[10px] text-slate-400 ml-auto">2026</span>
+              </div>
+
+              {/* Barra de avance */}
+              <div className="mb-3">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] text-slate-500">Avance general</span>
+                  <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">{pctAvance}%</span>
+                </div>
+                <div className="w-full h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                  <div className="h-full rounded-full transition-all duration-500"
+                    style={{ width: `${Math.min(pctAvance, 100)}%`, background: pctAvance >= 80 ? '#10b981' : pctAvance >= 50 ? '#6366f1' : '#f59e0b' }} />
+                </div>
+              </div>
+
+              {/* Tarjetas de cifras */}
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                <div className="bg-slate-50 dark:bg-slate-700/40 rounded-lg px-3 py-2 text-center">
+                  <p className="text-lg font-black text-slate-800 dark:text-slate-100">{totalActasAnio}</p>
+                  <p className="text-[9px] text-slate-500">Actas generadas</p>
+                </div>
+                <div className="bg-emerald-50 dark:bg-emerald-500/10 rounded-lg px-3 py-2 text-center">
+                  <p className="text-lg font-black text-emerald-600 dark:text-emerald-400">{pendienteTotal}</p>
+                  <p className="text-[9px] text-slate-500">Pendientes</p>
+                </div>
+                <div className="bg-slate-50 dark:bg-slate-700/40 rounded-lg px-3 py-2 text-center">
+                  <p className="text-lg font-black text-slate-800 dark:text-slate-100">{totalContratosApp}</p>
+                  <p className="text-[9px] text-slate-500">Contratos app</p>
+                </div>
+                <div className="bg-indigo-50 dark:bg-indigo-500/10 rounded-lg px-3 py-2 text-center">
+                  <p className="text-lg font-black text-indigo-600 dark:text-indigo-400">{totalPosible}</p>
+                  <p className="text-[9px] text-slate-500">Radicados</p>
+                </div>
+              </div>
+
+              {/* Por trimestre */}
+              <div className="space-y-1.5">
+                <p className="text-[10px] font-semibold text-slate-500 mb-1">Actas por trimestre</p>
+                {TRIMS.map(t => {
+                  const n = evalByTrim[t.id] || 0;
+                  const pend = todosContratos.reduce((acc: number, c: any) =>
+                    acc + c.regs.filter((reg: string) => trimCompleto(c.contrato, t, reg) && !trimActa(c.contrato, reg, t)).length, 0);
+                  return (
+                    <div key={t.id} className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 w-8 shrink-0">{t.label}</span>
+                      <div className="flex-1 h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                        <div className="h-full bg-emerald-500 rounded-full transition-all"
+                          style={{ width: n + pend > 0 ? `${Math.round(n / (n + pend) * 100)}%` : n > 0 ? '100%' : '0%' }} />
+                      </div>
+                      <span className="text-[9px] font-mono text-emerald-600 dark:text-emerald-400 shrink-0">{n}✓</span>
+                      {pend > 0 && <span className="text-[9px] font-mono text-amber-500 shrink-0">{pend}⏳</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
             </div>
           );
         })()}
