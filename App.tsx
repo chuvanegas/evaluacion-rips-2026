@@ -2648,13 +2648,12 @@ function App() {
             : grupos;
 
           // ── Estadísticas globales de evaluación ──────────────────────────────
-          const actasAnio = actas.filter(a => (a.periodoEvaluado || '').includes('2026') || (a.periodoEvaluado || '').includes('2027'));
           const totalContratosApp = prestadores.length;
-          const totalActasAnio = actasAnio.length;
+          const totalActasAnio = actas.length; // todas las actas, sin filtro de año
           // Trimesters evaluated: count distinct contrato+regimen+trim combinations in actas
           const evalByTrim: Record<string, number> = {};
           TRIMS.forEach(t => {
-            evalByTrim[t.id] = actasAnio.filter(a =>
+            evalByTrim[t.id] = actas.filter(a =>
               t.mesesES.some(mes => (a.periodoEvaluado || '').toLowerCase().includes(mes.toLowerCase()))
             ).length;
           });
