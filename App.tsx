@@ -199,6 +199,7 @@ function App() {
   // Período pre-establecido desde el panel de radicación (override cuando periodoTexto está vacío)
   const radPeriodoOverride = React.useRef<string | null>(null);
   const radForcedPrestId = React.useRef<string | null>(null);
+  const radForcedReg = React.useRef<string | null>(null); // 'SUBSIDIADO' | 'CONTRIBUTIVO' | null
   // Prestador pendiente de generar acta después de procesar RIPS desde radicación
   const radPendingActa = React.useRef<any>(null);
   // Bandera para evitar loop infinito en dedup automático de actas
@@ -641,9 +642,12 @@ function App() {
     if (n > 0) setScale(n);
     // Generar acta pendiente desde panel de radicación
     if (radPendingActa.current && registros.length > 0) {
-      const p = radPendingActa.current;
+      const pending = radPendingActa.current;
       radPendingActa.current = null;
-      handleGenerarActa(p);
+      // pending puede ser {pFound, reg} (nuevo) o Prestador directo (legacy)
+      const pFound = pending?.pFound ?? pending;
+      if (pending?.reg) radForcedReg.current = pending.reg === 'RC' ? 'CONTRIBUTIVO' : 'SUBSIDIADO';
+      handleGenerarActa(pFound);
     }
   }, [registros]);
 
@@ -1114,7 +1118,8 @@ function App() {
 
     // Validar: ya existe acta para este prestador en el mismo período
     // Busca primero por contrato exacto, luego por NIT + régimen (contratos con numeración distinta)
-    const regimen = p.regimen || 'SUBSIDIADO';
+    const regimen = (radForcedReg.current || p.regimen || 'SUBSIDIADO').toUpperCase();
+    radForcedReg.current = null;
     // Usar override de período cuando viene del panel de radicación (RIPS sin fechas en registros)
     const periodoEfectivo = periodoTexto || radPeriodoOverride.current || '';
     // Normalizar: quitar espacios extra y pasar a minúsculas para comparar período
@@ -1179,7 +1184,7 @@ function App() {
       municipio: p.municipio,
       departamento: p.departamento,
       contrato: p.contrato,
-      regimen: p.regimen || 'SUBSIDIADO',
+      regimen: regimen,
       periodoEvaluado: periodoEfectivo,
       vigencia: p.vigencia || new Date().getFullYear().toString(),
       coordinador: firmasGlobales.coordinador,
@@ -3014,6 +3019,7 @@ function App() {
                           radPeriodoOverride.current = rf.periodoStr || null;
                           if (rf.pFound) {
                             radForcedPrestId.current = rf.pFound.id;
+                            radForcedReg.current = rf.reg === 'RC' ? 'CONTRIBUTIVO' : 'SUBSIDIADO';
                             handleLoadPrestadorMetas(rf.pFound);
                           }
                           setRegistros([]);
@@ -3032,8 +3038,9 @@ function App() {
                           radPeriodoOverride.current = rf.periodoStr || null;
                           if (rf.pFound) {
                             radForcedPrestId.current = rf.pFound.id;
+                            radForcedReg.current = rf.reg === 'RC' ? 'CONTRIBUTIVO' : 'SUBSIDIADO';
                             handleLoadPrestadorMetas(rf.pFound);
-                            radPendingActa.current = rf.pFound;
+                            radPendingActa.current = { pFound: rf.pFound, reg: rf.reg };
                           }
                           setRegistros([]);
                           const dt = new DataTransfer();
