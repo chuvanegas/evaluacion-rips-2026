@@ -624,15 +624,7 @@ function App() {
       setRadFetching(true); setRadError(null);
       fetch('https://radicacion.vercel.app/api/evaluar', { headers: { 'x-token': 'DUSAKAWI-RIPS-2026' }, cache: 'no-store' })
         .then(r => r.ok ? r.json() : r.text().then(t => Promise.reject(`Error ${r.status}: ${t}`)))
-        .then(d => {
-          // DEBUG TEMPORAL: inspeccionar estructura de registros
-          if (d?.registros?.length > 0) {
-            const muestra = d.registros.find((r: any) => r.contrato === 'ASB-44078-2026-11' && r.regimen === 'RC') || d.registros[0];
-            console.log('[RAD DEBUG] Keys del registro:', Object.keys(muestra));
-            console.log('[RAD DEBUG] Registro completo:', JSON.stringify(muestra, null, 2));
-          }
-          setRadData(d); setRadLastFetch(new Date().toLocaleTimeString('es-CO'));
-        })
+        .then(d => { setRadData(d); setRadLastFetch(new Date().toLocaleTimeString('es-CO')); })
         .catch((e: any) => setRadError(String(e?.message || e)))
         .finally(() => setRadFetching(false));
     };
@@ -2626,18 +2618,8 @@ function App() {
                   continue;
                 }
                 const { txt } = result;
-                if (!txt || txt.trim().length === 0) {
+                if (!txt || txt.trim().length < 10) {
                   mesesOmitidos.push(`${MESES_FULL[mes-1]} (sin datos)`);
-                  continue;
-                }
-                // Validar que el archivo contiene fechas del mes solicitado.
-                // El API puede devolver datos del mes anterior cuando no hay RIPS enviado.
-                const ym = `${anio}-${String(mes).padStart(2, '0')}`;
-                const ymCompact = `${anio}${String(mes).padStart(2, '0')}`;
-                const tieneLineasDelMes = txt.includes(ym) || txt.includes(ymCompact);
-                console.log(`[RAD CONTENT] ${MESES_FULL[mes-1]}/${anio}: ${txt.length} bytes, tieneLineasDelMes=${tieneLineasDelMes}, primeros150: ${txt.substring(0, 150).replace(/\n/g, '↵')}`);
-                if (!tieneLineasDelMes) {
-                  mesesOmitidos.push(`${MESES_FULL[mes-1]} (sin registros del período — aún en plazo)`);
                   continue;
                 }
                 archivos.push(new File([txt], `RIPS_${c.contrato}_${MESES_N[mes-1]}${anio}.txt`, { type: 'text/plain' }));
