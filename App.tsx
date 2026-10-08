@@ -198,6 +198,7 @@ function App() {
   const cloudInitialized = React.useRef(false);
   // Período pre-establecido desde el panel de radicación (override cuando periodoTexto está vacío)
   const radPeriodoOverride = React.useRef<string | null>(null);
+  const radForcedPrestId = React.useRef<string | null>(null);
   // Prestador pendiente de generar acta después de procesar RIPS desde radicación
   const radPendingActa = React.useRef<any>(null);
   // Bandera para evitar loop infinito en dedup automático de actas
@@ -1766,8 +1767,8 @@ function App() {
         }
       }
 
-      // Detectar prestador desde nombre de archivos TXT (solo si no hay uno seleccionado)
-      if (hasTxt && !detectedPrestadorId) {
+      // Detectar prestador desde nombre de archivos TXT (solo si no hay uno seleccionado y no hay forzado)
+      if (hasTxt && !detectedPrestadorId && !radForcedPrestId.current) {
         for (let i = 0; i < ripsFiles!.length; i++) {
           const name = ripsFiles![i].name.toUpperCase();
           const found = prestadores.find(p => {
@@ -1777,6 +1778,11 @@ function App() {
           });
           if (found) { setDetectedPrestadorId(found.id); break; }
         }
+      }
+      // Si hay prestador forzado desde el módulo de radicación, aplicarlo ahora
+      if (radForcedPrestId.current) {
+        setDetectedPrestadorId(radForcedPrestId.current);
+        radForcedPrestId.current = null;
       }
 
       // 3. Process JSON RIPS files
@@ -1789,10 +1795,10 @@ function App() {
             // Support single object or array of objects
             const docs: any[] = Array.isArray(data) ? data : [data];
 
-            // Detectar prestador desde campos del JSON (solo si no hay uno seleccionado)
+            // Detectar prestador desde campos del JSON (solo si no hay uno seleccionado y no hay forzado)
             const normalizeNit = (v: string) => String(v || '').replace(/[^0-9]/g, '').slice(0, 9);
             for (const doc of docs) {
-              if (!detectedPrestadorId) {
+              if (!detectedPrestadorId && !radForcedPrestId.current) {
                 const nitDoc = normalizeNit(String(doc.numDocumentoIdObligado || doc.nit || doc.nitPrestador || ''));
                 const contratoDoc = String(doc.numContrato || doc.contrato || '').trim().toLowerCase();
                 const found = prestadores.find(p => {
@@ -3006,7 +3012,10 @@ function App() {
                       <button
                         onClick={async () => {
                           radPeriodoOverride.current = rf.periodoStr || null;
-                          if (rf.pFound) handleLoadPrestadorMetas(rf.pFound);
+                          if (rf.pFound) {
+                            radForcedPrestId.current = rf.pFound.id;
+                            handleLoadPrestadorMetas(rf.pFound);
+                          }
                           setRegistros([]);
                           const dt = new DataTransfer();
                           rf.files.forEach(f => dt.items.add(f));
@@ -3022,8 +3031,9 @@ function App() {
                         onClick={async () => {
                           radPeriodoOverride.current = rf.periodoStr || null;
                           if (rf.pFound) {
+                            radForcedPrestId.current = rf.pFound.id;
                             handleLoadPrestadorMetas(rf.pFound);
-                            radPendingActa.current = rf.pFound; // se dispara en useEffect cuando lleguen los registros
+                            radPendingActa.current = rf.pFound;
                           }
                           setRegistros([]);
                           const dt = new DataTransfer();
