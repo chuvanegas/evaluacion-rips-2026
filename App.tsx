@@ -2523,13 +2523,13 @@ function App() {
 
           const tieneReg = (contrato: string, anio: number, mes: number, reg: string) => {
             // No mostrar meses cuyo plazo de radicación aún no ha vencido.
-            // El plazo vence el día 15 del mes siguiente al mes de prestación.
-            // Ejemplo: septiembre 2026 → plazo hasta 15 oct 2026.
-            // new Date(anio, mes, 15): mes es 1-indexed y Date usa 0-indexed, entonces
-            // mes sin restar == índice del mes SIGUIENTE == día 15 del mes siguiente. ✓
-            const hoy = new Date();
-            const plazo = new Date(anio, mes, 15);
-            if (hoy < plazo) return false;
+            // Plazo: día 20 del mes siguiente (da margen suficiente para radicación tardía).
+            // new Date(anio, mes, 20): mes es 1-indexed; Date usa 0-indexed, entonces
+            // mes sin restar == índice del mes SIGUIENTE == día 20 del mes siguiente. ✓
+            // Ejemplo: sep 2026 → oculto hasta el 20 oct 2026.
+            const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+            const plazo = new Date(anio, mes, 20);
+            if (hoy <= plazo) return false;
             return (radData?.registros || []).some((r: any) =>
               r.contrato === contrato && r.periodo_anio === anio && r.periodo_mes === mes && r.regimen === reg
             );
