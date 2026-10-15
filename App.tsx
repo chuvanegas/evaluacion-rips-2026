@@ -2522,17 +2522,30 @@ function App() {
           const mkKey = (anio: number, mes: number) => `${anio}-${mes}`;
 
           const tieneReg = (contrato: string, anio: number, mes: number, reg: string) => {
-            // No mostrar meses cuyo plazo de radicación aún no ha vencido.
-            // Plazo: día 20 del mes siguiente (da margen suficiente para radicación tardía).
-            // new Date(anio, mes, 20): mes es 1-indexed; Date usa 0-indexed, entonces
-            // mes sin restar == índice del mes SIGUIENTE == día 20 del mes siguiente. ✓
-            // Ejemplo: sep 2026 → oculto hasta el 20 oct 2026.
-            const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
-            const plazo = new Date(anio, mes, 20);
-            if (hoy <= plazo) return false;
-            return (radData?.registros || []).some((r: any) =>
+            const reg2 = (radData?.registros || []).find((r: any) =>
               r.contrato === contrato && r.periodo_anio === anio && r.periodo_mes === mes && r.regimen === reg
             );
+            if (!reg2) return false;
+            // Validar que el registro tiene RIPS efectivamente cargado.
+            // Si el API retorna campos de conteo (usuarios, atenciones) o tiene_txt,
+            // exigir que sean positivos/true para distinguir "Aún en plazo" de "Radicado".
+            const tieneUsuarios = typeof reg2.usuarios === 'number';
+            const tieneAtenciones = typeof reg2.atenciones === 'number';
+            const tieneTxt = typeof reg2.tiene_txt === 'boolean';
+            if (tieneUsuarios || tieneAtenciones || tieneTxt) {
+              // Al menos un campo de datos existe: usarlos para validar
+              return (tieneUsuarios && reg2.usuarios > 0)
+                  || (tieneAtenciones && reg2.atenciones > 0)
+                  || (tieneTxt && reg2.tiene_txt === true);
+            }
+            // Si el API no retorna campos de conteo, loguear la estructura (solo 1 vez)
+            if (!(window as any).__radRegLogged) {
+              console.log('[RAD] Keys del registro:', Object.keys(reg2), JSON.stringify(reg2));
+              (window as any).__radRegLogged = true;
+            }
+            // Sin campos conocidos: usar fecha como último recurso
+            const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+            return hoy > new Date(anio, mes, 20);
           };
 
           const trimCompleto = (contrato: string, t: typeof TRIMS[0], reg: string) =>
