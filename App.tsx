@@ -624,20 +624,7 @@ function App() {
       setRadFetching(true); setRadError(null);
       fetch('https://radicacion.vercel.app/api/evaluar', { headers: { 'x-token': 'DUSAKAWI-RIPS-2026' }, cache: 'no-store' })
         .then(r => r.ok ? r.json() : r.text().then(t => Promise.reject(`Error ${r.status}: ${t}`)))
-        .then(d => {
-          setRadData(d);
-          setRadLastFetch(new Date().toLocaleTimeString('es-CO'));
-          // DEBUG: ver estructura de registros para identificar campo "tiene RIPS"
-          const regs = d?.registros || [];
-          if (regs.length > 0) {
-            console.log('[RAD-DEBUG] campos registro:', Object.keys(regs[0]));
-            console.log('[RAD-DEBUG] ejemplo registro:', JSON.stringify(regs[0]));
-            const sep = regs.filter((r: any) => r.periodo_mes === 9 && r.periodo_anio === 2026);
-            const ago = regs.filter((r: any) => r.periodo_mes === 8 && r.periodo_anio === 2026);
-            console.log('[RAD-DEBUG] registros sep2026:', JSON.stringify(sep.slice(0,2)));
-            console.log('[RAD-DEBUG] registros ago2026:', JSON.stringify(ago.slice(0,2)));
-          }
-        })
+        .then(d => { setRadData(d); setRadLastFetch(new Date().toLocaleTimeString('es-CO')); })
         .catch((e: any) => setRadError(String(e?.message || e)))
         .finally(() => setRadFetching(false));
     };
@@ -2534,29 +2521,17 @@ function App() {
           ];
           const mkKey = (anio: number, mes: number) => `${anio}-${mes}`;
 
+          // Un mes tiene RIPS real si al menos un registro tiene n_usuarios, n_servicios o meses_rips > 0.
+          // Los "RIPS en cero" (enviados pero vacíos) tienen todos esos campos en 0 y no cuentan.
+          // "Aún en plazo" = no existe ningún registro → también false.
           const tieneReg = (contrato: string, anio: number, mes: number, reg: string) => {
-            const reg2 = (radData?.registros || []).find((r: any) =>
+            const regs = (radData?.registros || []).filter((r: any) =>
               r.contrato === contrato && r.periodo_anio === anio && r.periodo_mes === mes && r.regimen === reg
             );
-            if (!reg2) return false;
-            // Validar que el registro tiene RIPS efectivamente cargado.
-            // Si el API retorna campos de conteo (usuarios, atenciones) o tiene_txt,
-            // exigir que sean positivos/true para distinguir "Aún en plazo" de "Radicado".
-            const tieneUsuarios = typeof reg2.usuarios === 'number';
-            const tieneAtenciones = typeof reg2.atenciones === 'number';
-            const tieneTxt = typeof reg2.tiene_txt === 'boolean';
-            if (tieneUsuarios || tieneAtenciones || tieneTxt) {
-              // Al menos un campo de datos existe: usarlos para validar
-              return (tieneUsuarios && reg2.usuarios > 0)
-                  || (tieneAtenciones && reg2.atenciones > 0)
-                  || (tieneTxt && reg2.tiene_txt === true);
-            }
-            // Sin campos conocidos: loguear para diagnóstico y aceptar el registro.
-            if (!(window as any).__radRegLogged) {
-              console.log('[RAD keys]', Object.keys(reg2), JSON.stringify(reg2));
-              (window as any).__radRegLogged = true;
-            }
-            return true;
+            if (regs.length === 0) return false;
+            return regs.some((r: any) =>
+              (r.n_usuarios > 0) || (r.n_servicios > 0) || (r.meses_rips > 0)
+            );
           };
 
           const trimCompleto = (contrato: string, t: typeof TRIMS[0], reg: string) =>
@@ -3191,16 +3166,6 @@ function App() {
               })()}
 
               {radLastFetch && <p className="text-[9px] text-slate-400 mt-2 text-right">radicacion.vercel.app · {radLastFetch}</p>}
-              {/* DEBUG temporal: muestra estructura de registros */}
-              {radData && (
-                <details open className="mt-2">
-                  <summary className="text-[9px] text-slate-400 cursor-pointer">Debug API ({(radData.registros||[]).length} regs)</summary>
-                  <pre className="text-[8px] text-slate-500 bg-slate-100 dark:bg-slate-800 p-1 rounded overflow-auto max-h-60 mt-1 whitespace-pre-wrap">
-                    {`Campos: ${Object.keys((radData.registros||[])[0]||{}).join(', ')}\n\n`}
-                    {`Primeros 3:\n${JSON.stringify((radData.registros||[]).slice(0,3), null, 1)}`}
-                  </pre>
-                </details>
-              )}
             </div>
 
             {/* ── Panel: Estado Global de Evaluación ── */}
