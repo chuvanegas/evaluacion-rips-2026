@@ -3193,7 +3193,7 @@ function App() {
               {radLastFetch && <p className="text-[9px] text-slate-400 mt-2 text-right">radicacion.vercel.app · {radLastFetch}</p>}
               {/* DEBUG temporal: muestra estructura de registros */}
               {radData && (
-                <details className="mt-2">
+                <details open className="mt-2">
                   <summary className="text-[9px] text-slate-400 cursor-pointer">Debug API ({(radData.registros||[]).length} regs)</summary>
                   <pre className="text-[8px] text-slate-500 bg-slate-100 dark:bg-slate-800 p-1 rounded overflow-auto max-h-60 mt-1 whitespace-pre-wrap">
                     {`Campos: ${Object.keys((radData.registros||[])[0]||{}).join(', ')}\n\n`}
