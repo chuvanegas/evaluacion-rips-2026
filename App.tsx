@@ -624,7 +624,20 @@ function App() {
       setRadFetching(true); setRadError(null);
       fetch('https://radicacion.vercel.app/api/evaluar', { headers: { 'x-token': 'DUSAKAWI-RIPS-2026' }, cache: 'no-store' })
         .then(r => r.ok ? r.json() : r.text().then(t => Promise.reject(`Error ${r.status}: ${t}`)))
-        .then(d => { setRadData(d); setRadLastFetch(new Date().toLocaleTimeString('es-CO')); })
+        .then(d => {
+          setRadData(d);
+          setRadLastFetch(new Date().toLocaleTimeString('es-CO'));
+          // DEBUG: ver estructura de registros para identificar campo "tiene RIPS"
+          const regs = d?.registros || [];
+          if (regs.length > 0) {
+            console.log('[RAD-DEBUG] campos registro:', Object.keys(regs[0]));
+            console.log('[RAD-DEBUG] ejemplo registro:', JSON.stringify(regs[0]));
+            const sep = regs.filter((r: any) => r.periodo_mes === 9 && r.periodo_anio === 2026);
+            const ago = regs.filter((r: any) => r.periodo_mes === 8 && r.periodo_anio === 2026);
+            console.log('[RAD-DEBUG] registros sep2026:', JSON.stringify(sep.slice(0,2)));
+            console.log('[RAD-DEBUG] registros ago2026:', JSON.stringify(ago.slice(0,2)));
+          }
+        })
         .catch((e: any) => setRadError(String(e?.message || e)))
         .finally(() => setRadFetching(false));
     };
@@ -3178,6 +3191,18 @@ function App() {
               })()}
 
               {radLastFetch && <p className="text-[9px] text-slate-400 mt-2 text-right">radicacion.vercel.app · {radLastFetch}</p>}
+              {/* DEBUG temporal: muestra estructura de registros */}
+              {radData && (
+                <details className="mt-2">
+                  <summary className="text-[9px] text-slate-400 cursor-pointer">Debug API</summary>
+                  <pre className="text-[8px] text-slate-500 bg-slate-100 dark:bg-slate-800 p-1 rounded overflow-auto max-h-40 mt-1">
+                    {JSON.stringify((radData.registros||[]).filter((r:any)=>r.periodo_mes===9&&r.periodo_anio===2026).slice(0,2), null, 1)}
+                  </pre>
+                  <pre className="text-[8px] text-slate-500 bg-slate-100 dark:bg-slate-800 p-1 rounded overflow-auto max-h-20 mt-1">
+                    {`Campos: ${Object.keys((radData.registros||[])[0]||{}).join(', ')}`}
+                  </pre>
+                </details>
+              )}
             </div>
 
             {/* ── Panel: Estado Global de Evaluación ── */}
