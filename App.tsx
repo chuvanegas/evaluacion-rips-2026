@@ -2538,14 +2538,13 @@ function App() {
                   || (tieneAtenciones && reg2.atenciones > 0)
                   || (tieneTxt && reg2.tiene_txt === true);
             }
-            // Si el API no retorna campos de conteo, loguear la estructura (solo 1 vez)
+            // Sin campos conocidos: loguear para diagnóstico y NO mostrar el mes.
+            // Es mejor ocultar un mes válido que mostrar uno sin RIPS.
             if (!(window as any).__radRegLogged) {
-              console.log('[RAD] Keys del registro:', Object.keys(reg2), JSON.stringify(reg2));
+              console.log('[RAD keys]', Object.keys(reg2), JSON.stringify(reg2));
               (window as any).__radRegLogged = true;
             }
-            // Sin campos conocidos: usar fecha como último recurso
-            const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
-            return hoy > new Date(anio, mes, 20);
+            return false;
           };
 
           const trimCompleto = (contrato: string, t: typeof TRIMS[0], reg: string) =>
