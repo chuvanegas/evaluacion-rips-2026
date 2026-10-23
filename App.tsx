@@ -2521,12 +2521,16 @@ function App() {
           ];
           const mkKey = (anio: number, mes: number) => `${anio}-${mes}`;
 
+          // La API almacena por mes de FACTURACIÓN (billing). La atención de mes M
+          // llega en la factura de mes M+1 (ej: atenciones de marzo en factura de abril).
+          // Por eso buscamos periodo_mes = mesAtención + 1, con rollover de año en diciembre.
           // Un mes tiene RIPS real si al menos un registro tiene n_usuarios, n_servicios o meses_rips > 0.
-          // Los "RIPS en cero" (enviados pero vacíos) tienen todos esos campos en 0 y no cuentan.
-          // "Aún en plazo" = no existe ningún registro → también false.
-          const tieneReg = (contrato: string, anio: number, mes: number, reg: string) => {
+          // "Aún en plazo" = no existe registro de facturación → false. "RIPS en cero" → false.
+          const tieneReg = (contrato: string, anio: number, mesAtencion: number, reg: string) => {
+            const bMes  = mesAtencion === 12 ? 1 : mesAtencion + 1;
+            const bAnio = mesAtencion === 12 ? anio + 1 : anio;
             const regs = (radData?.registros || []).filter((r: any) =>
-              r.contrato === contrato && r.periodo_anio === anio && r.periodo_mes === mes && r.regimen === reg
+              r.contrato === contrato && r.periodo_anio === bAnio && r.periodo_mes === bMes && r.regimen === reg
             );
             if (regs.length === 0) return false;
             return regs.some((r: any) =>
