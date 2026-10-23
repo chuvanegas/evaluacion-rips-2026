@@ -2538,13 +2538,12 @@ function App() {
                   || (tieneAtenciones && reg2.atenciones > 0)
                   || (tieneTxt && reg2.tiene_txt === true);
             }
-            // Sin campos conocidos: loguear para diagnóstico y NO mostrar el mes.
-            // Es mejor ocultar un mes válido que mostrar uno sin RIPS.
+            // Sin campos conocidos: loguear para diagnóstico y aceptar el registro.
             if (!(window as any).__radRegLogged) {
               console.log('[RAD keys]', Object.keys(reg2), JSON.stringify(reg2));
               (window as any).__radRegLogged = true;
             }
-            return false;
+            return true;
           };
 
           const trimCompleto = (contrato: string, t: typeof TRIMS[0], reg: string) =>
