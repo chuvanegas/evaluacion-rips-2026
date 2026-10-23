@@ -3194,12 +3194,10 @@ function App() {
               {/* DEBUG temporal: muestra estructura de registros */}
               {radData && (
                 <details className="mt-2">
-                  <summary className="text-[9px] text-slate-400 cursor-pointer">Debug API</summary>
-                  <pre className="text-[8px] text-slate-500 bg-slate-100 dark:bg-slate-800 p-1 rounded overflow-auto max-h-40 mt-1">
-                    {JSON.stringify((radData.registros||[]).filter((r:any)=>r.periodo_mes===9&&r.periodo_anio===2026).slice(0,2), null, 1)}
-                  </pre>
-                  <pre className="text-[8px] text-slate-500 bg-slate-100 dark:bg-slate-800 p-1 rounded overflow-auto max-h-20 mt-1">
-                    {`Campos: ${Object.keys((radData.registros||[])[0]||{}).join(', ')}`}
+                  <summary className="text-[9px] text-slate-400 cursor-pointer">Debug API ({(radData.registros||[]).length} regs)</summary>
+                  <pre className="text-[8px] text-slate-500 bg-slate-100 dark:bg-slate-800 p-1 rounded overflow-auto max-h-60 mt-1 whitespace-pre-wrap">
+                    {`Campos: ${Object.keys((radData.registros||[])[0]||{}).join(', ')}\n\n`}
+                    {`Primeros 3:\n${JSON.stringify((radData.registros||[]).slice(0,3), null, 1)}`}
                   </pre>
                 </details>
               )}
