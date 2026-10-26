@@ -277,6 +277,7 @@ function App() {
   });
   const [showPrestForm, setShowPrestForm] = useState(false);
   const [editPrest, setEditPrest] = useState<Prestador | null>(null);
+  const [ofrecerComplementario, setOfrecerComplementario] = useState<Omit<Prestador,'id'> | null>(null);
   const [prestForm, setPrestForm] = useState<Omit<Prestador, 'id'>>({
     nombre: '', nit: '', departamento: '', municipio: '', contrato: '', vigencia: '', regimen: 'SUBSIDIADO', repLegalIPS: '',
     metas: []
@@ -999,8 +1000,13 @@ function App() {
     }
     setShowPrestForm(false);
     setEditPrest(null);
+    const formGuardado = { ...prestForm };
     setPrestForm({ nombre: '', nit: '', departamento: '', municipio: '', contrato: '', vigencia: '', regimen: 'SUBSIDIADO', tipoContrato: 'ASISTENCIAL', metas: TIPOS_ASISTENCIAL.map(t => ({ type: t, monthlyGoal: 0, active: true })) });
     setMessage({ type: 'success', text: editPrest ? 'Prestador actualizado.' : 'Prestador creado.' });
+    // Ofrecer régimen complementario solo al crear (no al editar)
+    if (!editPrest) {
+      setOfrecerComplementario(formGuardado);
+    }
   };
 
   const handleDeletePrestador = (id: string) => {
@@ -5976,6 +5982,49 @@ echo "* * * * * root /usr/local/bin/metrics.sh; sleep 30; /usr/local/bin/metrics
           liveTypeCount={{ ...typeCount, PAI: TIPOS_PAI.reduce((s, t) => s + (typeCount[t] || 0), 0) }}
         />
       )}
+
+      {/* --- Oferta régimen complementario --- */}
+      {ofrecerComplementario && !showPrestForm && (() => {
+        const regimenActual = ofrecerComplementario.regimen;
+        const regimenComp = regimenActual === 'SUBSIDIADO' ? 'CONTRIBUTIVO' : 'SUBSIDIADO';
+        const yaExiste = prestadores.some(p =>
+          p.nit === ofrecerComplementario.nit && p.regimen === regimenComp
+        );
+        if (yaExiste) { setOfrecerComplementario(null); return null; }
+        return (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md border border-slate-200 dark:border-slate-800 p-6 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-indigo-100 dark:bg-indigo-900/40">
+                  <Building2 className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+                </div>
+                <div>
+                  <p className="font-bold text-slate-800 dark:text-white text-sm">¿Agregar régimen {regimenComp}?</p>
+                  <p className="text-xs text-slate-500 mt-0.5">{ofrecerComplementario.nombre}</p>
+                </div>
+              </div>
+              <p className="text-xs text-slate-500">
+                El prestador fue creado como <strong>{regimenActual}</strong>. ¿Deseas registrar también el contrato <strong>{regimenComp}</strong> con los mismos datos?
+              </p>
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => setOfrecerComplementario(null)}
+                  className="px-4 py-2 text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
+                >No, gracias</button>
+                <button
+                  onClick={() => {
+                    setPrestForm({ ...ofrecerComplementario, regimen: regimenComp, contrato: '' });
+                    setEditPrest(null);
+                    setOfrecerComplementario(null);
+                    setShowPrestForm(true);
+                  }}
+                  className="px-4 py-2 text-sm font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-colors"
+                >Sí, crear {regimenComp}</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* --- Prestador Form Modal --- */}
       {showPrestForm && (
