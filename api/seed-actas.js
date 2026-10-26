@@ -1,4 +1,4 @@
-// Vercel serverless function — crea actas placeholder para contratos ya evaluados
+// Vercel serverless function — crea/corrige actas placeholder para contratos ya evaluados
 // Uso: GET /api/seed-actas?key=DUSAKAWI2026
 // Solo ejecutar una vez; después borrar o desactivar.
 
@@ -6,6 +6,24 @@ const PB_URL   = 'https://evaluacion-db.duckdns.org';
 const PB_EMAIL = 'jd_vanegas@hotmail.com';
 const PB_PASS  = 'Vanegas1920';
 const SECRET   = 'DUSAKAWI2026';
+
+// Mapeo de código trimestre → periodoEvaluado en formato que el app reconoce
+// El check en App.tsx usa: t.mesesES.some(mes => periodoEvaluado.toLowerCase().includes(mes.toLowerCase()))
+// mesesES: 1T=['Marzo 2026'], 2T=['Abril 2026','Mayo 2026','Junio 2026'], 3T=['Julio...']
+const PERIODO_MAP = {
+  '1T 2026': 'Marzo 2026',
+  '2T 2026': 'Abril, Mayo y Junio 2026',
+  '3T 2026': 'Julio, Agosto y Septiembre 2026',
+  '4T 2026': 'Octubre, Noviembre y Diciembre 2026',
+};
+
+// Meses esperados por el app para detectar cada trimestre (any match)
+const MESES_CHECK = {
+  '1T 2026': ['marzo 2026'],
+  '2T 2026': ['abril 2026', 'mayo 2026', 'junio 2026'],
+  '3T 2026': ['julio 2026', 'agosto 2026', 'septiembre 2026'],
+  '4T 2026': ['octubre 2026', 'noviembre 2026', 'diciembre 2026'],
+};
 
 // Contratos EVALUADOS del Google Sheets (período y régimen)
 const EVALUADOS = [
@@ -120,13 +138,39 @@ export default async function handler(req, res) {
     const actasRecordId = byKey['actas']?.id || null;
     log.push(`📋 Actas existentes: ${actas.length}, Prestadores: ${prestadores.length}`);
 
-    // 3. Construir set de existentes
+    // 3. Corregir placeholders que tienen periodoEvaluado en formato incorrecto ("1T 2026" → "Marzo 2026")
+    let fixCount = 0;
+    for (const [contrato, nit, , , periodos, regs] of EVALUADOS) {
+      for (const periodo of periodos) {
+        const periodoCorr = PERIODO_MAP[periodo] || periodo;
+        const mesesEsperados = MESES_CHECK[periodo] || [];
+        for (const reg of regs) {
+          const regLabel = reg.toUpperCase();
+          // Buscar placeholder para este contrato+regimen con período que no matchea
+          const idx = actas.findIndex(a =>
+            (a.contrato === contrato || String(a.nit) === String(nit)) &&
+            (a.regimen || 'SUBSIDIADO').toUpperCase() === regLabel &&
+            (a._placeholder === true || a._placeholder === 'true') &&
+            !mesesEsperados.some(m => (a.periodoEvaluado || '').toLowerCase().includes(m))
+          );
+          if (idx !== -1) {
+            const old = actas[idx].periodoEvaluado;
+            actas[idx] = { ...actas[idx], periodoEvaluado: periodoCorr };
+            log.push(`🔧 CORREGIDO: ${contrato} | ${reg} | "${old}" → "${periodoCorr}"`);
+            fixCount++;
+          }
+        }
+      }
+    }
+    log.push(`\n🔧 Total corregidos: ${fixCount}`);
+
+    // 4. Reconstruir set de existentes (ya con períodos corregidos)
     const existing = new Set();
     for (const a of actas) {
-      existing.add(`${a.contrato||''}||${a.regimen||''}||${(a.periodoEvaluado||'').toLowerCase()}`);
+      existing.add(`${a.contrato||''}||${(a.regimen||'SUBSIDIADO').toUpperCase()}||${(a.periodoEvaluado||'').toLowerCase()}`);
     }
 
-    // 4. Crear nuevas
+    // 5. Crear los que aún falten
     const nuevas = [];
     const ts = new Date().toISOString().replace(/[^0-9]/g,'').slice(0,14);
     let counter = 0;
@@ -136,10 +180,11 @@ export default async function handler(req, res) {
                  || prestadores.find(p => String(p.nit) === String(nit));
 
       for (const periodo of periodos) {
+        const periodoCorr = PERIODO_MAP[periodo] || periodo;
         for (const reg of regs) {
-          const k = `${contrato}||${reg}||${periodo.toLowerCase()}`;
+          const k = `${contrato}||${reg.toUpperCase()}||${periodoCorr.toLowerCase()}`;
           if (existing.has(k)) {
-            log.push(`⏭ YA EXISTE: ${contrato} | ${reg} | ${periodo}`);
+            log.push(`⏭ YA EXISTE: ${contrato} | ${reg} | ${periodoCorr}`);
             continue;
           }
           counter++;
@@ -153,29 +198,29 @@ export default async function handler(req, res) {
             nit,
             contrato,
             regimen: reg,
-            periodoEvaluado: periodo,
+            periodoEvaluado: periodoCorr,
             tipoContrato: 'ASISTENCIAL',
             servicios: [],
-            observaciones: `Registrado desde hoja de seguimiento 2026. Ya evaluado ${periodo}.`,
+            observaciones: `Registrado desde hoja de seguimiento 2026. Ya evaluado ${periodoCorr}.`,
             porcentajeCumplimiento: 100,
             glosa: 0,
             guardado: true,
             _placeholder: true,
           });
           existing.add(k);
-          log.push(`✅ NUEVA: ${contrato} | ${reg} | ${periodo}`);
+          log.push(`✅ NUEVA: ${contrato} | ${reg} | ${periodoCorr}`);
         }
       }
     }
 
-    log.push(`\n📊 Total nuevas actas: ${nuevas.length}`);
+    log.push(`\n📊 Correcciones: ${fixCount}, Nuevas: ${nuevas.length}`);
 
-    if (nuevas.length === 0) {
-      log.push('✅ Nada que crear — todo ya estaba registrado.');
-      return res.status(200).json({ ok: true, created: 0, log });
+    if (fixCount === 0 && nuevas.length === 0) {
+      log.push('✅ Nada que hacer — todo ya estaba correcto.');
+      return res.status(200).json({ ok: true, fixed: 0, created: 0, log });
     }
 
-    // 5. Guardar
+    // 6. Guardar actas actualizadas + nuevas
     const actasActualizadas = [...actas, ...nuevas];
     const body = JSON.stringify({ value: actasActualizadas });
 
@@ -200,7 +245,7 @@ export default async function handler(req, res) {
     log.push(`✅ GUARDADO. Total actas en BD: ${actasActualizadas.length}`);
     log.push('🎉 Recarga la app para ver los cambios.');
 
-    return res.status(200).json({ ok: true, created: nuevas.length, total: actasActualizadas.length, log });
+    return res.status(200).json({ ok: true, fixed: fixCount, created: nuevas.length, total: actasActualizadas.length, log });
 
   } catch (err) {
     log.push(`❌ ERROR: ${err.message}`);
