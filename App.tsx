@@ -1721,8 +1721,8 @@ function App() {
             const idRaw = urgParts[2] || '';
             const id = normalizeId(idRaw);
             if (!id || id.length < 3) continue;
-            // Extraer fecha: buscar patrón YYYY-MM-DD en la línea (primer match = ingreso)
-            const dateMatch = l.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+            // Fecha de ingreso = primera fecha de la línea (viene pegada al código del prestador, sin \b)
+            const dateMatch = l.match(/(\d{4}-\d{2}-\d{2})/);
             const fecha = dateMatch ? dateMatch[1] : '';
             // Registrar paciente si no existe
             if (!newUsuariosMap.has(id)) {
@@ -1739,9 +1739,11 @@ function App() {
             if (/^bill|^productid|^tipo|^clientid/i.test(parts[0])) continue;
             {
               const pacO = extractAtPatient(l, parts);
-              const codO = (parts.find(p => /^[0-9][0-9A-Z]{5}$/i.test(p) || /^[A-Z]{2,4}\d{3,6}$/i.test(p)) || parts[8] || '').toUpperCase();
-              const idxO = parts.findIndex(p => p.toUpperCase() === codO);
-              const nomO = (idxO >= 0 && parts[idxO + 1]) ? parts[idxO + 1] : '';
+              // Formato RIPS AT: ...,fecha,tipoServicio,código,nombre,cantidad,...
+              const fIdx = parts.findIndex(p => /^\d{4}-\d{2}-\d{2}/.test(p));
+              const idxO = fIdx >= 0 ? fIdx + 2 : 8;
+              const codO = (parts[idxO] || '').toUpperCase();
+              const nomO = parts[idxO + 1] || '';
               if (pacO !== 'SIN_ID' && codO) newOtrosLineas.push({ cups: codO, paciente: pacO, tipo: 'OTROS SERVICIOS', nombre: nomO, fecha: parseDateFromLine(l) });
             }
             // Buscar el código AT: primer campo que sea dígito+alfanumérico de 6 chars (ej. 601T01)
