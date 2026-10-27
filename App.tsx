@@ -672,7 +672,8 @@ function App() {
       { anio: 2027, meses: [1,2],      mesesES: ['Enero 2027','Febrero 2027'] },
     ];
     const regs2 = (radData.registros || []);
-    const cons2 = (radData.contratos || []);
+    // Solo contratos registrados en la app (igual que el panel)
+    const cons2 = (radData.contratos || []).filter((c: any) => prestadores.some(p => p.contrato === c.contrato));
     let pend = 0;
     cons2.forEach((c: any) => {
       ['RS','RC'].forEach(reg => {
@@ -695,7 +696,7 @@ function App() {
     if (pend > 0) {
       setMessage({ type: 'info', text: `⚠️ Hay ${pend} trimestre${pend !== 1 ? 's' : ''} pendiente${pend !== 1 ? 's' : ''} de evaluación en el módulo de radicación.` });
     }
-  }, [radData]);
+  }, [radData, actas, prestadores]);
 
   // Reset pagination when data changes
   useEffect(() => {
@@ -1607,17 +1608,18 @@ function App() {
           // Detectar sección AT: encabezado explícito O línea contiene solo texto de sección (sin datos)
           if (upperLine.includes("ARCHIVO-RIPS-AT") || upperLine.includes("OTROS SERVICIOS") ||
               (/RIPS.*AT\b|^.*-\s*AT\s*-.*$/.test(upperLine) && !l.includes(','))) {
-            section = "SERVICIOS"; inAtSection = true; continue;
+            section = "SERVICIOS"; inAtSection = true; inUrgenciasSection = false; continue;
           }
           if (upperLine.includes("ARCHIVO-RIPS-US") ||
               (upperLine.includes("USUARIOS") && (upperLine.includes("*") || upperLine.includes("°") || upperLine.includes("-")))) {
-            section = "USUARIOS"; inAtSection = false; continue;
+            section = "USUARIOS"; inAtSection = false; inUrgenciasSection = false; continue;
           }
           if (upperLine.includes("ARCHIVO-RIPS-AM") || upperLine.includes("MEDICAMENTOS")) {
-            section = "MEDICAMENTOS"; inAtSection = false; continue;
+            section = "MEDICAMENTOS"; inAtSection = false; inUrgenciasSection = false; continue;
           }
           if (upperLine.includes("ARCHIVO-URGENCIAS") || upperLine.includes("ARCHIVO-RIPS-AU")) {
-            inUrgenciasSection = true; inAtSection = false; section = "URGENCIAS_TXT"; continue;
+            // Toggle: primer header activa la sección, el header de cierre la desactiva
+            inUrgenciasSection = !inUrgenciasSection; inAtSection = false; section = "URGENCIAS_TXT"; continue;
           }
           if (upperLine.includes("ARCHIVO-RIPS-CT") || upperLine.includes("ARCHIVO-RIPS-AC") ||
               upperLine.includes("ARCHIVO-RIPS-AP") ||
