@@ -5904,6 +5904,25 @@ echo "* * * * * root /usr/local/bin/metrics.sh; sleep 30; /usr/local/bin/metrics
                 firmasGlobales={firmasGlobales}
                 onSaveFirmaGlobal={handleSaveFirmaGlobal}
                 liveTypeCount={{ ...typeCount, PAI: TIPOS_PAI.reduce((s, t) => s + (typeCount[t] || 0), 0) }}
+                duplicates={duplicatesList}
+                onLimpiarDuplicados={() => {
+                  const seen = new Set<string>();
+                  let removed = 0;
+                  const cleaned = registros.filter(r => {
+                    if (r.tipo === 'MEDICAMENTOS') return true;
+                    const k = `${r.paciente}|${r.cups}|${r.fecha}`;
+                    if (seen.has(k)) { removed++; return false; }
+                    seen.add(k); return true;
+                  });
+                  setRegistros(cleaned);
+                  const newTC: Record<string,number> = {};
+                  cleaned.forEach(r => { newTC[r.tipo] = (newTC[r.tipo]||0)+1; });
+                  setInlineActa(prev => prev ? {
+                    ...prev,
+                    servicios: prev.servicios.map(s => ({ ...s, ejecutado: newTC[s.tipo] ?? s.ejecutado }))
+                  } : prev);
+                  setMessage({ type: 'success', text: `${removed} duplicados eliminados. Acta recalculada.` });
+                }}
               />
             ) : (
               <div className="glass-panel rounded-2xl p-12 flex flex-col items-center justify-center text-center gap-5 border-2 border-dashed border-slate-300 dark:border-slate-700">
