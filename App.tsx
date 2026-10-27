@@ -233,6 +233,9 @@ function App() {
   });
   
   const [registros, setRegistros] = useState<RipsRecord[]>([]);
+  // Líneas de Otros Servicios (insumos, observación…) — no cuentan como actividad; se usan para revisar urgencias
+  const [otrosLineas, setOtrosLineas] = useState<RipsRecord[]>([]);
+  useEffect(() => { if (registros.length === 0) setOtrosLineas([]); }, [registros.length]);
   const [usuariosMap, setUsuariosMap] = useState<Map<string, UserRecord>>(new Map());
   const [maestro, setMaestro] = useState<Map<string, MaestroCupItem>>(new Map());
   
@@ -1509,6 +1512,7 @@ function App() {
       // 2. Process RIPS
       const newRegistros: RipsRecord[] = [];
       const newUsuariosMap = new Map<string, UserRecord>(usuariosMap);
+      const newOtrosLineas: RipsRecord[] = [];
       const medDupSet = new Set<string>(); // dedup MEDICAMENTOS por paciente+codigo+fecha
 
       const getSectionFromFilename = (name: string) => {
@@ -1733,6 +1737,13 @@ function App() {
             if (parts.length < 4) continue;
             // Saltar cabeceras
             if (/^bill|^productid|^tipo|^clientid/i.test(parts[0])) continue;
+            {
+              const pacO = extractAtPatient(l, parts);
+              const codO = (parts.find(p => /^[0-9][0-9A-Z]{5}$/i.test(p) || /^[A-Z]{2,4}\d{3,6}$/i.test(p)) || parts[8] || '').toUpperCase();
+              const idxO = parts.findIndex(p => p.toUpperCase() === codO);
+              const nomO = (idxO >= 0 && parts[idxO + 1]) ? parts[idxO + 1] : '';
+              if (pacO !== 'SIN_ID' && codO) newOtrosLineas.push({ cups: codO, paciente: pacO, tipo: 'OTROS SERVICIOS', nombre: nomO, fecha: parseDateFromLine(l) });
+            }
             // Buscar el código AT: primer campo que sea dígito+alfanumérico de 6 chars (ej. 601T01)
             let cupsAt = '';
             let cupsIdx = -1;
@@ -1917,6 +1928,7 @@ function App() {
       // Solo MEDICAMENTOS ya tiene su propio dedup interno (medDupSet) por paciente+código+fecha
       setRegistros(prev => [...prev, ...newRegistros]);
       setUsuariosMap(newUsuariosMap);
+      setOtrosLineas(prev => [...prev, ...newOtrosLineas]);
       const numFiles = (ripsFiles?.length || 0) + (jsonFiles?.length || 0);
       const medCount = newRegistros.filter(r => r.tipo === 'MEDICAMENTOS').length;
       const svcCount = newRegistros.filter(r => r.tipo !== 'MEDICAMENTOS').length;
@@ -2134,6 +2146,12 @@ function App() {
     return { stats, chartData, rankingCUPS, rankingPacientes, duplicatesList, typeCount, isAuditMode };
 
   }, [registros, metas, scale, usuariosMap, detectedPrestadorId, prestadores]);
+
+  // Otros Servicios del mismo paciente y fecha que una urgencia (excluye traslados TAB)
+  const urgVinculados = useMemo(() => {
+    const urgKeys = new Set(registros.filter(r => r.tipo === 'URGENCIAS BC').map(r => `${r.paciente}|${r.fecha}`));
+    return otrosLineas.filter(o => urgKeys.has(`${o.paciente}|${o.fecha}`) && !/^\d{3,4}T\d{2}$/.test(o.cups));
+  }, [registros, otrosLineas]);
 
   // Auto-consolidate PAI actas when opened or when RIPS change
   useEffect(() => {
@@ -5908,6 +5926,7 @@ echo "* * * * * root /usr/local/bin/metrics.sh; sleep 30; /usr/local/bin/metrics
                 onSaveFirmaGlobal={handleSaveFirmaGlobal}
                 liveTypeCount={{ ...typeCount, PAI: TIPOS_PAI.reduce((s, t) => s + (typeCount[t] || 0), 0) }}
                 duplicates={duplicatesList}
+                urgVinculados={urgVinculados}
                 onLimpiarDuplicados={() => {
                   const seen = new Set<string>();
                   let removed = 0;
@@ -6011,6 +6030,7 @@ echo "* * * * * root /usr/local/bin/metrics.sh; sleep 30; /usr/local/bin/metrics
           onSaveFirmaGlobal={handleSaveFirmaGlobal}
           liveTypeCount={{ ...typeCount, PAI: TIPOS_PAI.reduce((s, t) => s + (typeCount[t] || 0), 0) }}
           duplicates={duplicatesList}
+          urgVinculados={urgVinculados}
           onLimpiarDuplicados={() => {
             const seen = new Set<string>();
             let removed = 0;

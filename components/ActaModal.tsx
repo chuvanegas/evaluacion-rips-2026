@@ -4,14 +4,14 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   Cell, LabelList, ReferenceLine
 } from 'recharts';
-import { Acta, ActaServicio } from '../types';
+import { Acta, ActaServicio, RipsRecord } from '../types';
 import { utils, writeFile } from 'xlsx';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
 // Total real = RIPS + renuencias
 export const totalEjecutado = (srv: ActaServicio): number =>
-  srv.ejecutado + (srv.renuencias || 0);
+  srv.ejecutado + (srv.renuencias || 0) + (srv.vinculados || 0);
 
 export const pct = (srv: ActaServicio): number => {
   if (!srv.programado) return 0;
@@ -76,7 +76,7 @@ export function ActaPreview({ acta, liveTypeCount }: { acta: Acta; liveTypeCount
     const rips = (liveTypeCount && liveTypeCount[srv.tipo] !== undefined)
       ? liveTypeCount[srv.tipo]
       : srv.ejecutado;
-    return rips + (srv.renuencias || 0);
+    return rips + (srv.renuencias || 0) + (srv.vinculados || 0);
   };
   const getLivePct = (srv: ActaServicio): number => {
     if (!srv.programado) return 0;
@@ -426,6 +426,7 @@ interface Props {
   liveTypeCount?: Record<string, number>;
   duplicates?: DupBannerItem[];
   onLimpiarDuplicados?: () => void;
+  urgVinculados?: RipsRecord[];
 }
 
 export default function ActaModal({
@@ -434,9 +435,11 @@ export default function ActaModal({
   firmasGlobales, onSaveFirmaGlobal,
   liveTypeCount,
   duplicates = [],
-  onLimpiarDuplicados
+  onLimpiarDuplicados,
+  urgVinculados = []
 }: Props) {
   const [view, setView] = useState<'form' | 'preview'>('form');
+  const [verVinculados, setVerVinculados] = useState(false);
   const [nuevoFuncionario, setNuevoFuncionario] = useState('');
   const [showAddFuncionario, setShowAddFuncionario] = useState(false);
 
@@ -787,6 +790,20 @@ export default function ActaModal({
                           </td>
                           <td className="px-3 py-2 text-right font-mono text-slate-500 dark:text-slate-400 text-xs">
                             {srv.ejecutado}
+                            {srv.tipo === 'URGENCIAS BC' && (urgVinculados.length > 0 || (srv.vinculados || 0) > 0) && (
+                              <span className="block mt-0.5 font-sans">
+                                <button type="button" onClick={() => setVerVinculados(v => !v)}
+                                  className="text-[10px] font-semibold text-amber-700 dark:text-amber-400 underline whitespace-nowrap"
+                                  title="Líneas de Otros Servicios del mismo paciente y fecha de la urgencia">
+                                  +{urgVinculados.length || srv.vinculados} vinculados
+                                </button>
+                                <label className="flex items-center justify-end gap-1 text-[10px] text-slate-600 dark:text-slate-300 whitespace-nowrap cursor-pointer">
+                                  <input type="checkbox" checked={(srv.vinculados || 0) > 0}
+                                    onChange={e => setSrv(idx, 'vinculados', e.target.checked ? (urgVinculados.length || srv.vinculados || 0) : 0)} />
+                                  Sumar
+                                </label>
+                              </span>
+                            )}
                             {(dupExtraPorTipo[srv.tipo] || 0) > 0 && (
                               <span className="block text-[10px] font-sans font-semibold text-orange-600 dark:text-orange-400"
                                 title="Registros repetidos (mismo paciente + servicio + fecha) incluidos en el conteo RIPS">
@@ -810,6 +827,32 @@ export default function ActaModal({
                   </tbody>
                 </table>
               </div>
+              {verVinculados && urgVinculados.length > 0 && (
+                <div className="mt-2 rounded-xl border border-amber-200 dark:border-amber-700/50 bg-amber-50 dark:bg-amber-900/20 p-3">
+                  <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 mb-2">
+                    {urgVinculados.length} líneas de Otros Servicios registradas el mismo día que una urgencia del paciente.
+                    Marque "Sumar" en Urgencias si la auditoría las acepta como actividad.
+                  </p>
+                  <div className="max-h-48 overflow-y-auto">
+                    <table className="w-full text-xs">
+                      <thead><tr className="text-amber-700 dark:text-amber-400 text-left">
+                        <th className="pb-1 font-semibold">Paciente</th><th className="pb-1 font-semibold">Fecha</th>
+                        <th className="pb-1 font-semibold">Código</th><th className="pb-1 font-semibold">Descripción</th>
+                      </tr></thead>
+                      <tbody>
+                        {urgVinculados.map((v, i) => (
+                          <tr key={i} className="border-t border-amber-100 dark:border-amber-800/50 text-slate-600 dark:text-slate-300">
+                            <td className="py-0.5 pr-2 font-mono">{v.paciente}</td>
+                            <td className="py-0.5 pr-2">{v.fecha}</td>
+                            <td className="py-0.5 pr-2 font-mono">{v.cups}</td>
+                            <td className="py-0.5">{v.nombre}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Observations */}
