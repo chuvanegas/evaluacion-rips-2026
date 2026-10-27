@@ -209,9 +209,15 @@ Verificado ejecutando el parser real de `processFiles` sobre los 3 TXT de radica
   - Banner naranja `DuplicatesBanner` con lista (paciente, servicio, fecha, copias) y botón **"Quitar duplicados"** → limpia `registros` y recalcula `ejecutado` del acta.
   - En la columna RIPS se muestra **"incl. N dup."** por servicio cuando el conteo incluye repetidos.
 
+### Duplicados por servicio (v2.20)
+- En la columna RIPS, **"incl. N dup."** es un enlace: abre el panel del servicio con cada grupo repetido (paciente, fecha, código, descripción, veces) y una casilla por grupo y otra para todos.
+- **"Quitar k copias"** deja 1 registro en los grupos marcados; los desmarcados se conservan. El banner superior conserva **"Quitar todos"** (con confirmación).
+- Ambos usan `quitarDuplicados(ids?, 'inline'|'modal')` en App.tsx: filtra `registros` por clave `paciente|cups|fecha` (= `DuplicateItem.id`) y recalcula `ejecutado` del acta.
+
 ### Renuencias editables en el acta
 - `ActaServicio` agrega `renuencias?: number` y `vinculados?: number`. `ejecutado` = conteo RIPS puro.
-- `handleGenerarActa` toma `ejecutado` de `typeCount` (ya no de `chartData`, que mezclaba renuencias) y `renuencias` de `metas`.
+- `handleGenerarActa` toma `ejecutado` de `typeCount` (ya no de `chartData`, que mezclaba renuencias).
+- **Desde v2.20 `renuencias` sale de los registros de la pestaña Renuencias** (`renuncias` filtradas por contrato o NIT + régimen + `tipoServicio` + mes contenido en `periodoEvaluado` del acta), igual que el preview de radicación. Antes venía de `metas[].renuencias` (números manuales del Dashboard, persistidos en `rips_dashboard_metas`), que se arrastraban de un prestador a otro (ej. 7 en ENFERMERIA y 1 en IMAGEN en ANASHIWAYA sin renuncias registradas). En el acta el valor sigue siendo editable.
 - Tabla del Formulario: **Programado | RIPS | Renuencias (input rosado) | Total | %**.
 - `totalEjecutado(srv) = ejecutado + renuencias + vinculados`; `pct()`, `ejec()` y la Vista Previa/PDF (`getLiveEjec`) lo usan.
 
@@ -444,6 +450,7 @@ El formulario se popula desde `p.metas` del prestador seleccionado.
 
 | Versión | Tag git | Descripción |
 |---|---|---|
+| **2.20** | `v2.20` | Duplicados revisables y quitables por servicio desde el acta (selección por grupo); renuencias del acta salen de los registros de la pestaña Renuencias, no de los números manuales del Dashboard. |
 | **2.19** | `v2.19` | Líneas vinculadas a urgencias: selección individual por línea o todas; la selección se guarda en el acta. |
 | **2.18** | `v2.18` | RIPS se cargan sin filtrar; duplicados (incl. urgencias/hosp) se revisan y quitan desde el acta; columna Renuencias editable; líneas de Otros Servicios vinculadas a urgencias con opción "Sumar"; fix fecha de ingreso en urgencias. |
 | **2.17** | `v2.17` | Dedup inteligente con aviso de duplicados; modal de revisión para actas automáticas y manuales; fix toggle inUrgenciasSection; badge pendientes filtra solo contratos registrados. |

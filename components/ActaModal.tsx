@@ -346,7 +346,7 @@ interface DupBannerItem {
   cups: string; nombre_cups: string; fecha: string; tipo?: string; repeticiones: number;
 }
 
-function DuplicatesBanner({ duplicates, onLimpiar }: { duplicates: DupBannerItem[]; onLimpiar: () => void }) {
+function DuplicatesBanner({ duplicates, onLimpiar }: { duplicates: DupBannerItem[]; onLimpiar: (ids?: string[]) => void }) {
   const [expanded, setExpanded] = useState(false);
   const [limpiadoLocal, setLimpiadoLocal] = useState(false);
 
@@ -369,16 +369,19 @@ function DuplicatesBanner({ duplicates, onLimpiar }: { duplicates: DupBannerItem
         <Copy className="h-4 w-4 text-orange-600 dark:text-orange-400 flex-shrink-0" />
         <p className="text-xs text-orange-700 dark:text-orange-300 font-medium flex-1">
           <strong>{duplicates.length} servicios duplicados</strong> detectados
-          ({totalExtras} copias extra — misma paciente+servicio+fecha en múltiples radicaciones).
-          Revísalos antes de guardar.
+          ({totalExtras} copias extra — mismo paciente+servicio+fecha).
+          Revíselos por servicio con el enlace "incl. N dup." de la tabla, o quítelos todos.
         </p>
         <button onClick={() => setExpanded(e => !e)}
           className="text-xs underline text-orange-600 dark:text-orange-400 hover:text-orange-800 whitespace-nowrap">
           {expanded ? 'Ocultar' : 'Ver detalle'}
         </button>
-        <button onClick={() => { onLimpiar(); setLimpiadoLocal(true); }}
+        <button onClick={() => {
+            if (!window.confirm(`¿Quitar las ${totalExtras} copias extra de TODOS los servicios? Se deja 1 registro por paciente+servicio+fecha.`)) return;
+            onLimpiar(); setLimpiadoLocal(true);
+          }}
           className="flex items-center gap-1 px-2 py-1 bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-300 rounded text-xs font-medium hover:bg-red-200 transition-colors border border-red-200 dark:border-red-500/30 whitespace-nowrap">
-          <Trash2 className="h-3 w-3" /> Quitar duplicados
+          <Trash2 className="h-3 w-3" /> Quitar todos
         </button>
       </div>
       {expanded && (
@@ -386,6 +389,7 @@ function DuplicatesBanner({ duplicates, onLimpiar }: { duplicates: DupBannerItem
           <table className="w-full text-xs">
             <thead>
               <tr className="text-orange-600 dark:text-orange-400">
+                <th className="text-left font-semibold pb-1">Tipo</th>
                 <th className="text-left font-semibold pb-1">Paciente</th>
                 <th className="text-left font-semibold pb-1">Servicio</th>
                 <th className="text-left font-semibold pb-1">Fecha</th>
@@ -395,6 +399,7 @@ function DuplicatesBanner({ duplicates, onLimpiar }: { duplicates: DupBannerItem
             <tbody>
               {duplicates.map(d => (
                 <tr key={d.id} className="border-t border-orange-100 dark:border-orange-800">
+                  <td className="py-0.5 pr-2 text-slate-600 dark:text-slate-400">{d.tipo}</td>
                   <td className="py-0.5 pr-2 text-slate-600 dark:text-slate-400">{d.paciente}</td>
                   <td className="py-0.5 pr-2 text-slate-600 dark:text-slate-400 max-w-[160px] truncate" title={d.nombre_cups}>{d.cups} {d.nombre_cups}</td>
                   <td className="py-0.5 pr-2 text-slate-600 dark:text-slate-400">{d.fecha}</td>
@@ -425,7 +430,7 @@ interface Props {
   onSaveFirmaGlobal?: (key: 'repLegalEPSI' | 'coordinador' | 'lugarActa', val: string) => void;
   liveTypeCount?: Record<string, number>;
   duplicates?: DupBannerItem[];
-  onLimpiarDuplicados?: () => void;
+  onLimpiarDuplicados?: (ids?: string[]) => void;
   urgVinculados?: RipsRecord[];
 }
 
@@ -440,6 +445,13 @@ export default function ActaModal({
 }: Props) {
   const [view, setView] = useState<'form' | 'preview'>('form');
   const [verVinculados, setVerVinculados] = useState(false);
+  const [dupTipo, setDupTipo] = useState<string | null>(null);
+  const [dupSel, setDupSel] = useState<Set<string>>(new Set());
+  const abrirDupTipo = (tipo: string) => {
+    if (dupTipo === tipo) { setDupTipo(null); return; }
+    setDupTipo(tipo);
+    setDupSel(new Set(duplicates.filter(d => d.tipo === tipo).map(d => d.id)));
+  };
   const [nuevoFuncionario, setNuevoFuncionario] = useState('');
   const [showAddFuncionario, setShowAddFuncionario] = useState(false);
 
@@ -824,10 +836,11 @@ export default function ActaModal({
                               </span>
                             )}
                             {(dupExtraPorTipo[srv.tipo] || 0) > 0 && (
-                              <span className="block text-[10px] font-sans font-semibold text-orange-600 dark:text-orange-400"
-                                title="Registros repetidos (mismo paciente + servicio + fecha) incluidos en el conteo RIPS">
+                              <button type="button" onClick={() => abrirDupTipo(srv.tipo)}
+                                className="block ml-auto text-[10px] font-sans font-semibold text-orange-600 dark:text-orange-400 underline whitespace-nowrap"
+                                title="Ver y quitar los registros repetidos (mismo paciente + servicio + fecha) de este servicio">
                                 incl. {dupExtraPorTipo[srv.tipo]} dup.
-                              </span>
+                              </button>
                             )}
                           </td>
                           <td className="px-3 py-2 text-right">
@@ -886,6 +899,58 @@ export default function ActaModal({
                   </div>
                 </div>
               )}
+              {dupTipo && (() => {
+                const lista = duplicates.filter(d => d.tipo === dupTipo);
+                const extrasSel = lista.filter(d => dupSel.has(d.id)).reduce((a, d) => a + d.repeticiones - 1, 0);
+                return (
+                  <div className="mt-2 rounded-xl border border-orange-200 dark:border-orange-700/50 bg-orange-50 dark:bg-orange-900/20 p-3">
+                    <div className="flex flex-wrap items-center gap-2 mb-2">
+                      <p className="text-xs font-semibold text-orange-800 dark:text-orange-300 flex-1">
+                        {dupTipo}: {lista.length} registros repetidos (mismo paciente + servicio + fecha).
+                        Marque los que desea dejar en 1 solo registro.
+                      </p>
+                      <button type="button" disabled={extrasSel === 0 || !onLimpiarDuplicados}
+                        onClick={() => { onLimpiarDuplicados?.([...dupSel].filter(id => lista.some(d => d.id === id))); setDupTipo(null); }}
+                        className="flex items-center gap-1 px-2 py-1 bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-300 rounded text-xs font-medium hover:bg-red-200 border border-red-200 dark:border-red-500/30 disabled:opacity-40">
+                        <Trash2 className="h-3 w-3" /> Quitar {extrasSel} copias
+                      </button>
+                      <button type="button" onClick={() => setDupTipo(null)} className="p-1 hover:bg-orange-100 dark:hover:bg-orange-800/40 rounded">
+                        <X className="h-3.5 w-3.5 text-orange-700" />
+                      </button>
+                    </div>
+                    <div className="max-h-64 overflow-y-auto">
+                      <table className="w-full text-xs">
+                        <thead><tr className="text-orange-700 dark:text-orange-400 text-left">
+                          <th className="pb-1 pr-2 w-6">
+                            <input type="checkbox" title="Seleccionar todos"
+                              checked={lista.length > 0 && lista.every(d => dupSel.has(d.id))}
+                              ref={el => { if (el) el.indeterminate = lista.some(d => dupSel.has(d.id)) && !lista.every(d => dupSel.has(d.id)); }}
+                              onChange={e => setDupSel(e.target.checked ? new Set(lista.map(d => d.id)) : new Set())} />
+                          </th>
+                          <th className="pb-1 font-semibold">Paciente</th><th className="pb-1 font-semibold">Fecha</th>
+                          <th className="pb-1 font-semibold">Código</th><th className="pb-1 font-semibold">Descripción</th>
+                          <th className="pb-1 font-semibold text-right">Veces</th>
+                        </tr></thead>
+                        <tbody>
+                          {lista.map(d => (
+                            <tr key={d.id} className={`border-t border-orange-100 dark:border-orange-800/50 text-slate-600 dark:text-slate-300 ${dupSel.has(d.id) ? '' : 'opacity-50'}`}>
+                              <td className="py-0.5 pr-2">
+                                <input type="checkbox" checked={dupSel.has(d.id)}
+                                  onChange={e => { const n = new Set(dupSel); if (e.target.checked) n.add(d.id); else n.delete(d.id); setDupSel(n); }} />
+                              </td>
+                              <td className="py-0.5 pr-2 font-mono">{d.paciente}</td>
+                              <td className="py-0.5 pr-2">{d.fecha}</td>
+                              <td className="py-0.5 pr-2 font-mono">{d.cups}</td>
+                              <td className="py-0.5 pr-2 max-w-[260px] truncate" title={d.nombre_cups}>{d.nombre_cups}</td>
+                              <td className="py-0.5 text-right font-bold text-orange-600 dark:text-orange-400">{d.repeticiones}×</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Observations */}

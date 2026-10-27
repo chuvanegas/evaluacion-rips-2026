@@ -1200,8 +1200,14 @@ function App() {
           const metaActiva = metas.find(x => x.type === m.type);
           const ejecutadoRips = (ripsPertenecenAlPrestador && metaActiva)
             ? (typeCount[m.type] || 0) : 0;
-          const renuenciasCount = (ripsPertenecenAlPrestador && metaActiva)
-            ? (metaActiva.renuencias || 0) : 0;
+          // Renuencias = registros de la pestaña Renuencias para este contrato, régimen y período
+          const perLower = (periodoEfectivo || '').toLowerCase();
+          const renuenciasCount = renuncias.filter(r =>
+            (r.contrato === p.contrato || String(r.nit) === String(p.nit)) &&
+            (r.regimen || 'SUBSIDIADO').toUpperCase() === regimen.toUpperCase() &&
+            r.tipoServicio === m.type &&
+            !!r.periodoEvaluado && perLower.includes(r.periodoEvaluado.toLowerCase().trim())
+          ).length;
           return { tipo: m.type, programado: m.monthlyGoal * scale, ejecutado: ejecutadoRips, renuencias: renuenciasCount };
         });
     if (!ripsPertenecenAlPrestador && registros.length > 0) {
@@ -2154,6 +2160,29 @@ function App() {
     const urgKeys = new Set(registros.filter(r => r.tipo === 'URGENCIAS BC').map(r => `${r.paciente}|${r.fecha}`));
     return otrosLineas.filter(o => urgKeys.has(`${o.paciente}|${o.fecha}`) && !/^\d{3,4}T\d{2}$/.test(o.cups));
   }, [registros, otrosLineas]);
+
+  // Quita copias extra (deja 1) de los grupos paciente|cups|fecha indicados; sin ids quita todos
+  const quitarDuplicados = (ids: string[] | undefined, destino: 'inline' | 'modal') => {
+    const objetivo = ids ? new Set(ids) : null;
+    const seen = new Set<string>();
+    let removed = 0;
+    const cleaned = registros.filter(r => {
+      if (r.tipo === 'MEDICAMENTOS') return true;
+      const k = `${r.paciente}|${r.cups}|${r.fecha}`;
+      if (objetivo && !objetivo.has(k)) return true;
+      if (seen.has(k)) { removed++; return false; }
+      seen.add(k); return true;
+    });
+    setRegistros(cleaned);
+    const newTC: Record<string, number> = {};
+    cleaned.forEach(r => { newTC[r.tipo] = (newTC[r.tipo] || 0) + 1; });
+    const recalc = (prev: Acta | null) => prev ? {
+      ...prev,
+      servicios: prev.servicios.map(sv => ({ ...sv, ejecutado: newTC[sv.tipo] ?? sv.ejecutado }))
+    } : prev;
+    if (destino === 'inline') setInlineActa(recalc); else setEditingActa(recalc);
+    setMessage({ type: 'success', text: `${removed} copias duplicadas eliminadas. Acta recalculada.` });
+  };
 
   // Auto-consolidate PAI actas when opened or when RIPS change
   useEffect(() => {
@@ -5929,24 +5958,7 @@ echo "* * * * * root /usr/local/bin/metrics.sh; sleep 30; /usr/local/bin/metrics
                 liveTypeCount={{ ...typeCount, PAI: TIPOS_PAI.reduce((s, t) => s + (typeCount[t] || 0), 0) }}
                 duplicates={duplicatesList}
                 urgVinculados={urgVinculados}
-                onLimpiarDuplicados={() => {
-                  const seen = new Set<string>();
-                  let removed = 0;
-                  const cleaned = registros.filter(r => {
-                    if (r.tipo === 'MEDICAMENTOS') return true;
-                    const k = `${r.paciente}|${r.cups}|${r.fecha}`;
-                    if (seen.has(k)) { removed++; return false; }
-                    seen.add(k); return true;
-                  });
-                  setRegistros(cleaned);
-                  const newTC: Record<string,number> = {};
-                  cleaned.forEach(r => { newTC[r.tipo] = (newTC[r.tipo]||0)+1; });
-                  setInlineActa(prev => prev ? {
-                    ...prev,
-                    servicios: prev.servicios.map(s => ({ ...s, ejecutado: newTC[s.tipo] ?? s.ejecutado }))
-                  } : prev);
-                  setMessage({ type: 'success', text: `${removed} duplicados eliminados. Acta recalculada.` });
-                }}
+                onLimpiarDuplicados={ids => quitarDuplicados(ids, 'inline')}
               />
             ) : (
               <div className="glass-panel rounded-2xl p-12 flex flex-col items-center justify-center text-center gap-5 border-2 border-dashed border-slate-300 dark:border-slate-700">
@@ -6033,25 +6045,7 @@ echo "* * * * * root /usr/local/bin/metrics.sh; sleep 30; /usr/local/bin/metrics
           liveTypeCount={{ ...typeCount, PAI: TIPOS_PAI.reduce((s, t) => s + (typeCount[t] || 0), 0) }}
           duplicates={duplicatesList}
           urgVinculados={urgVinculados}
-          onLimpiarDuplicados={() => {
-            const seen = new Set<string>();
-            let removed = 0;
-            const cleaned = registros.filter(r => {
-              if (r.tipo === 'MEDICAMENTOS') return true;
-              const k = `${r.paciente}|${r.cups}|${r.fecha}`;
-              if (seen.has(k)) { removed++; return false; }
-              seen.add(k); return true;
-            });
-            setRegistros(cleaned);
-            // Recalcular ejecutado en el acta con los valores limpios
-            const newTypeCount: Record<string,number> = {};
-            cleaned.forEach(r => { newTypeCount[r.tipo] = (newTypeCount[r.tipo]||0)+1; });
-            setEditingActa(prev => prev ? {
-              ...prev,
-              servicios: prev.servicios.map(s => ({ ...s, ejecutado: newTypeCount[s.tipo] ?? s.ejecutado }))
-            } : prev);
-            setMessage({ type: 'success', text: `${removed} duplicados eliminados. Acta recalculada.` });
-          }}
+          onLimpiarDuplicados={ids => quitarDuplicados(ids, 'modal')}
         />
       )}
 
