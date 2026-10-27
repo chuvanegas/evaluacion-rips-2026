@@ -325,6 +325,11 @@ Panel en el Dashboard (solo visible para admin) que muestra contratos pendientes
 - `ActaServicio.ejecutado` viene del conteo de `registros` filtrados por tipo
 - El botón "Recalcular Servicios" actualiza los valores ejecutados con los RIPS cargados
 - El aviso "NO se guardará automáticamente" solo aparece en pestaña **Formulario**
+- **Guardar no cierra la ventana (v2.22).** `handleSaveActa` ya no hace `setShowActaModal(false)`. En `ActaModal`:
+  - `savedJson` guarda el acta al momento de guardar; `guardada = savedJson === JSON.stringify(acta)`. El botón pasa a **"✓ Guardada"** (verde) y aparece la barra verde "Acta guardada" con **"Imprimir / PDF ahora"**. Si se edita después, la barra cambia a "Hay cambios sin guardar".
+  - `impresa` se marca al ejecutar `window.print()`. Imprimir sin guardar sigue preguntando si se desea guardar primero.
+  - Cerrar (X) pide confirmación si hay cambios sin guardar o si el acta está guardada pero no impresa.
+  - `onSave` puede devolver `false` (p. ej. el usuario canceló el reemplazo de un acta duplicada en `handleSaveInlineActa`); en ese caso no se marca como guardada.
 
 ### Deduplicación de actas (`deduplicarActas`) — v2.15
 Función en App.tsx (~línea 29). Corre en carga inicial, sync y poll. Tres pasos en cascada:
@@ -452,6 +457,7 @@ El formulario se popula desde `p.metas` del prestador seleccionado.
 
 | Versión | Tag git | Descripción |
 |---|---|---|
+| **2.22** | `v2.22` | Guardar el acta no cierra la ventana: queda "✓ Guardada" y sugiere imprimir; cerrar pide confirmación si no se ha guardado o impreso. |
 | **2.21** | `v2.21` | Duplicados con el mismo formato que vinculados de Urgencias en todos los servicios: "+N duplicados" y "Sumar (k/N)", selección por grupo, guardada en el acta y reversible (no borra registros). PAI agrupa vacunas. |
 | **2.20** | `v2.20` | Duplicados revisables y quitables por servicio desde el acta (selección por grupo); renuencias del acta salen de los registros de la pestaña Renuencias, no de los números manuales del Dashboard. |
 | **2.19** | `v2.19` | Líneas vinculadas a urgencias: selección individual por línea o todas; la selección se guarda en el acta. |

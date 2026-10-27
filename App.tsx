@@ -1248,7 +1248,7 @@ function App() {
   };
 
   const handleSaveActa = () => {
-    if (!editingActa) return;
+    if (!editingActa) return false;
     setActas(prev => {
       const idx = prev.findIndex(a => a.id === editingActa.id);
       if (idx >= 0) {
@@ -1258,8 +1258,6 @@ function App() {
       }
       return [...prev, editingActa];
     });
-    setShowActaModal(false);
-    setEditingActa(null);
     setMessage({ type: 'success', text: `Acta ${editingActa.numero} guardada.` });
   };
 
@@ -1355,7 +1353,7 @@ function App() {
   };
 
   const handleSaveInlineActa = () => {
-    if (!inlineActa) return;
+    if (!inlineActa) return false;
     let actaToSave = inlineActa;
     if (!actaToSave.numero.trim()) {
       const contrato = actaToSave.contrato || (detectedPrestadorId ? prestadores.find(p => p.id === detectedPrestadorId)?.contrato : '') || 'ACTA';
@@ -1382,7 +1380,7 @@ function App() {
         ? `Ya existe el acta <strong>${dup.numero}</strong> con el mismo número`
         : `Ya existe el acta <strong>${dup.numero}</strong> para <strong>${dup.empresa}</strong> en el período <strong>${dup.periodoEvaluado}</strong> (${dup.regimen || 'SUBSIDIADO'})`;
       const msg = `${motivo} — cumplimiento actual: ${pct(dup)}%.\n\n¿Deseas sobreescribirla con el acta actual (${pct(actaToSave)}%)?`;
-      if (!window.confirm(msg.replace(/<strong>|<\/strong>/g, ''))) return;
+      if (!window.confirm(msg.replace(/<strong>|<\/strong>/g, ''))) return false;
       // Remove the existing duplicate before saving
       setActas(prev => {
         const sin = prev.filter(a => a.id !== dup.id);

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Printer, FileSpreadsheet, TrendingUp, AlertTriangle, Copy } from 'lucide-react';
+import { X, Printer, FileSpreadsheet, TrendingUp, AlertTriangle, Copy, CheckCircle } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   Cell, LabelList, ReferenceLine
@@ -410,7 +410,7 @@ function DuplicatesBanner({ duplicates, excluidas, onTodas }: {
 interface Props {
   acta: Acta;
   onChange: (a: Acta) => void;
-  onSave: () => void;
+  onSave: () => void | boolean;   // false = no se guardó (p. ej. el usuario canceló)
   onClose: () => void;
   inline?: boolean;
   funcionarios?: string[];
@@ -432,6 +432,37 @@ export default function ActaModal({
   urgVinculados = []
 }: Props) {
   const [view, setView] = useState<'form' | 'preview'>('form');
+  const [savedJson, setSavedJson] = useState<string | null>(null);
+  const [impresa, setImpresa] = useState(false);
+  const actaJson = JSON.stringify(acta);
+  const guardada = savedJson === actaJson;
+  const guardar = () => {
+    if (onSave() === false) return false;
+    setSavedJson(actaJson);
+    return true;
+  };
+  const imprimir = () => {
+    if (!guardada) {
+      const desea = window.confirm(
+        '⚠️ RECUERDE: Si no guarda el acta, no quedará ningún registro de ella.\n\n¿Desea GUARDAR el acta antes de imprimir?\n\n• Aceptar → Guardar y luego imprimir\n• Cancelar → Imprimir sin guardar (no quedará registro)'
+      );
+      if (desea && !guardar()) return;
+    }
+    setView('preview');
+    setTimeout(() => {
+      const portal = document.getElementById('acta-print-portal');
+      const src = document.getElementById('acta-preview-content');
+      if (portal && src) portal.innerHTML = src.outerHTML;
+      window.print();
+      setImpresa(true);
+      setTimeout(() => { if (portal) portal.innerHTML = ''; }, 2000);
+    }, 300);
+  };
+  const cerrar = () => {
+    if (!guardada && !window.confirm('El acta tiene cambios SIN GUARDAR. Si cierra, no quedará registro de ellos.\n\n¿Cerrar de todos modos?')) return;
+    if (guardada && !impresa && !window.confirm('El acta está guardada pero NO se ha impreso.\n\n¿Cerrar sin imprimir?')) return;
+    onClose();
+  };
   const [verVinculados, setVerVinculados] = useState(false);
   const [dupTipo, setDupTipo] = useState<string | null>(null);
   const abrirDupTipo = (tipo: string) => setDupTipo(t => t === tipo ? null : tipo);
@@ -568,43 +599,45 @@ export default function ActaModal({
             className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 rounded-lg text-xs font-medium hover:bg-emerald-200 transition-colors border border-emerald-200 dark:border-emerald-500/30">
             <FileSpreadsheet className="h-3.5 w-3.5" /> Excel
           </button>
-          <button onClick={() => {
-            const desea = window.confirm(
-              '⚠️ RECUERDE: Si no guarda el acta, no quedará ningún registro de ella.\n\n¿Desea GUARDAR el acta antes de imprimir?\n\n• Aceptar → Guardar y luego imprimir\n• Cancelar → Imprimir sin guardar (no quedará registro)'
-            );
-            if (desea) onSave();
-            setView('preview');
-            setTimeout(() => {
-              const portal = document.getElementById('acta-print-portal');
-              const src = document.getElementById('acta-preview-content');
-              if (portal && src) {
-                portal.innerHTML = src.outerHTML;
-              }
-              window.print();
-              setTimeout(() => { if (portal) portal.innerHTML = ''; }, 2000);
-            }, 300);
-          }}
+          <button onClick={imprimir}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 rounded-lg text-xs font-medium hover:bg-blue-200 transition-colors border border-blue-200 dark:border-blue-500/30">
             <Printer className="h-3.5 w-3.5" /> Imprimir / PDF
           </button>
-          <button onClick={onSave}
-            className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-medium shadow-sm transition-all">
-            Guardar
+          <button onClick={guardar}
+            className={`px-4 py-1.5 rounded-lg text-xs font-medium shadow-sm transition-all ${guardada
+              ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+              : 'bg-indigo-600 hover:bg-indigo-700 text-white'}`}>
+            {guardada ? '✓ Guardada' : 'Guardar'}
           </button>
           {!inline && (
-            <button onClick={onClose} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
+            <button onClick={cerrar} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
               <X className="h-5 w-5 text-slate-500" />
             </button>
           )}
         </div>
       </div>
 
-      {/* ── Aviso: solo visible en modo Formulario ── */}
-      {view === 'form' && (
+      {/* ── Estado: guardada / cambios sin guardar / recordatorio ── */}
+      {guardada ? (
+        <div className="flex flex-wrap items-center gap-2 px-4 py-2 bg-emerald-50 dark:bg-emerald-900/30 border-b border-emerald-200 dark:border-emerald-700 flex-shrink-0">
+          <CheckCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+          <p className="text-xs text-emerald-700 dark:text-emerald-300 font-medium flex-1">
+            <strong>Acta guardada.</strong> {impresa ? 'También fue enviada a impresión.' : 'Ahora puede imprimirla o descargarla en PDF; la ventana sigue abierta.'}
+          </p>
+          {!impresa && (
+            <button onClick={imprimir}
+              className="flex items-center gap-1.5 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium">
+              <Printer className="h-3.5 w-3.5" /> Imprimir / PDF ahora
+            </button>
+          )}
+        </div>
+      ) : (savedJson || view === 'form') && (
         <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-700 flex-shrink-0">
           <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
           <p className="text-xs text-amber-700 dark:text-amber-300 font-medium">
-            <strong>Recuerde:</strong> esta acta <strong>NO se guardará automáticamente</strong>. Si cierra sin presionar <em>Guardar</em>, no quedará ningún registro de ella.
+            {savedJson
+              ? <><strong>Hay cambios sin guardar</strong> desde la última vez. Presione <em>Guardar</em> para conservarlos.</>
+              : <><strong>Recuerde:</strong> esta acta <strong>NO se guardará automáticamente</strong>. Si cierra sin presionar <em>Guardar</em>, no quedará ningún registro de ella.</>}
           </p>
         </div>
       )}
