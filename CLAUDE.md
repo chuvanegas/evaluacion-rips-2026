@@ -209,10 +209,12 @@ Verificado ejecutando el parser real de `processFiles` sobre los 3 TXT de radica
   - Banner naranja `DuplicatesBanner` con lista (paciente, servicio, fecha, copias) y botón **"Quitar duplicados"** → limpia `registros` y recalcula `ejecutado` del acta.
   - En la columna RIPS se muestra **"incl. N dup."** por servicio cuando el conteo incluye repetidos.
 
-### Duplicados por servicio (v2.20)
-- En la columna RIPS, **"incl. N dup."** es un enlace: abre el panel del servicio con cada grupo repetido (paciente, fecha, código, descripción, veces) y una casilla por grupo y otra para todos.
-- **"Quitar k copias"** deja 1 registro en los grupos marcados; los desmarcados se conservan. El banner superior conserva **"Quitar todos"** (con confirmación).
-- Ambos usan `quitarDuplicados(ids?, 'inline'|'modal')` en App.tsx: filtra `registros` por clave `paciente|cups|fecha` (= `DuplicateItem.id`) y recalcula `ejecutado` del acta.
+### Duplicados por servicio (v2.21 — igual que vinculados de Urgencias)
+- Aplica a **todos los servicios y todos los prestadores** (excepto MEDICAMENTOS). En contratos PAI los duplicados de cada vacuna se agrupan en la fila `PAI`.
+- Columna RIPS: número **único** (`ejecutado − copias extra`) + enlace **"+N duplicados"** + casilla **"Sumar (k/N)"** (marca/desmarca todas; estado intermedio si es parcial).
+- El enlace abre la lista del servicio (paciente, fecha, código, descripción, veces, suma) con casilla por grupo y casilla "todas". **Por defecto todas marcadas** (los RIPS se cuentan completos); se desmarcan las que la auditoría no acepta.
+- **No borra registros**: se guarda en el acta `duplicadosQuitadosSel` (ids `paciente|cups|fecha`) y `duplicadosQuitados` (copias extra excluidas). `totalEjecutado = ejecutado + renuencias + vinculados − duplicadosQuitados` (también en Vista Previa/PDF). Reversible en cualquier momento.
+- Banner superior: resumen (se cuentan / excluidas), "Ver detalle", **"Excluir todas"** y **"Contar todas"**. Se eliminó el antiguo `quitarDuplicados` de App.tsx que borraba registros.
 
 ### Renuencias editables en el acta
 - `ActaServicio` agrega `renuencias?: number` y `vinculados?: number`. `ejecutado` = conteo RIPS puro.
@@ -450,6 +452,7 @@ El formulario se popula desde `p.metas` del prestador seleccionado.
 
 | Versión | Tag git | Descripción |
 |---|---|---|
+| **2.21** | `v2.21` | Duplicados con el mismo formato que vinculados de Urgencias en todos los servicios: "+N duplicados" y "Sumar (k/N)", selección por grupo, guardada en el acta y reversible (no borra registros). PAI agrupa vacunas. |
 | **2.20** | `v2.20` | Duplicados revisables y quitables por servicio desde el acta (selección por grupo); renuencias del acta salen de los registros de la pestaña Renuencias, no de los números manuales del Dashboard. |
 | **2.19** | `v2.19` | Líneas vinculadas a urgencias: selección individual por línea o todas; la selección se guarda en el acta. |
 | **2.18** | `v2.18` | RIPS se cargan sin filtrar; duplicados (incl. urgencias/hosp) se revisan y quitan desde el acta; columna Renuencias editable; líneas de Otros Servicios vinculadas a urgencias con opción "Sumar"; fix fecha de ingreso en urgencias. |

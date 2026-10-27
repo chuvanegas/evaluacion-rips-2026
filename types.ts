@@ -117,6 +117,8 @@ export interface ActaServicio {
   renuencias?: number;    // servicios demostrados por prestador fuera de RIPS
   vinculados?: number;    // líneas de Otros Servicios sumadas por decisión del evaluador
   vinculadosSel?: string[]; // claves paciente|fecha|código|índice de las líneas seleccionadas
+  duplicadosQuitados?: number;      // copias extra excluidas por el evaluador (se restan del total)
+  duplicadosQuitadosSel?: string[]; // grupos paciente|cups|fecha excluidos
 }
 
 export interface Renuncia {

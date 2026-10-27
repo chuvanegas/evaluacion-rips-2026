@@ -2161,29 +2161,6 @@ function App() {
     return otrosLineas.filter(o => urgKeys.has(`${o.paciente}|${o.fecha}`) && !/^\d{3,4}T\d{2}$/.test(o.cups));
   }, [registros, otrosLineas]);
 
-  // Quita copias extra (deja 1) de los grupos paciente|cups|fecha indicados; sin ids quita todos
-  const quitarDuplicados = (ids: string[] | undefined, destino: 'inline' | 'modal') => {
-    const objetivo = ids ? new Set(ids) : null;
-    const seen = new Set<string>();
-    let removed = 0;
-    const cleaned = registros.filter(r => {
-      if (r.tipo === 'MEDICAMENTOS') return true;
-      const k = `${r.paciente}|${r.cups}|${r.fecha}`;
-      if (objetivo && !objetivo.has(k)) return true;
-      if (seen.has(k)) { removed++; return false; }
-      seen.add(k); return true;
-    });
-    setRegistros(cleaned);
-    const newTC: Record<string, number> = {};
-    cleaned.forEach(r => { newTC[r.tipo] = (newTC[r.tipo] || 0) + 1; });
-    const recalc = (prev: Acta | null) => prev ? {
-      ...prev,
-      servicios: prev.servicios.map(sv => ({ ...sv, ejecutado: newTC[sv.tipo] ?? sv.ejecutado }))
-    } : prev;
-    if (destino === 'inline') setInlineActa(recalc); else setEditingActa(recalc);
-    setMessage({ type: 'success', text: `${removed} copias duplicadas eliminadas. Acta recalculada.` });
-  };
-
   // Auto-consolidate PAI actas when opened or when RIPS change
   useEffect(() => {
     if (!inlineActa) return;
@@ -5958,7 +5935,6 @@ echo "* * * * * root /usr/local/bin/metrics.sh; sleep 30; /usr/local/bin/metrics
                 liveTypeCount={{ ...typeCount, PAI: TIPOS_PAI.reduce((s, t) => s + (typeCount[t] || 0), 0) }}
                 duplicates={duplicatesList}
                 urgVinculados={urgVinculados}
-                onLimpiarDuplicados={ids => quitarDuplicados(ids, 'inline')}
               />
             ) : (
               <div className="glass-panel rounded-2xl p-12 flex flex-col items-center justify-center text-center gap-5 border-2 border-dashed border-slate-300 dark:border-slate-700">
@@ -6045,7 +6021,6 @@ echo "* * * * * root /usr/local/bin/metrics.sh; sleep 30; /usr/local/bin/metrics
           liveTypeCount={{ ...typeCount, PAI: TIPOS_PAI.reduce((s, t) => s + (typeCount[t] || 0), 0) }}
           duplicates={duplicatesList}
           urgVinculados={urgVinculados}
-          onLimpiarDuplicados={ids => quitarDuplicados(ids, 'modal')}
         />
       )}
 

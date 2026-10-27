@@ -1,17 +1,18 @@
 import React, { useState } from 'react';
-import { X, Printer, FileSpreadsheet, TrendingUp, AlertTriangle, Copy, Trash2, CheckCircle } from 'lucide-react';
+import { X, Printer, FileSpreadsheet, TrendingUp, AlertTriangle, Copy } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   Cell, LabelList, ReferenceLine
 } from 'recharts';
 import { Acta, ActaServicio, RipsRecord } from '../types';
 import { utils, writeFile } from 'xlsx';
+import { TIPOS_PAI } from '../utils/logic';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
 // Total real = RIPS + renuencias
 export const totalEjecutado = (srv: ActaServicio): number =>
-  srv.ejecutado + (srv.renuencias || 0) + (srv.vinculados || 0);
+  Math.max(0, srv.ejecutado + (srv.renuencias || 0) + (srv.vinculados || 0) - (srv.duplicadosQuitados || 0));
 
 export const pct = (srv: ActaServicio): number => {
   if (!srv.programado) return 0;
@@ -76,7 +77,7 @@ export function ActaPreview({ acta, liveTypeCount }: { acta: Acta; liveTypeCount
     const rips = (liveTypeCount && liveTypeCount[srv.tipo] !== undefined)
       ? liveTypeCount[srv.tipo]
       : srv.ejecutado;
-    return rips + (srv.renuencias || 0) + (srv.vinculados || 0);
+    return Math.max(0, rips + (srv.renuencias || 0) + (srv.vinculados || 0) - (srv.duplicadosQuitados || 0));
   };
   const getLivePct = (srv: ActaServicio): number => {
     if (!srv.programado) return 0;
@@ -346,42 +347,31 @@ interface DupBannerItem {
   cups: string; nombre_cups: string; fecha: string; tipo?: string; repeticiones: number;
 }
 
-function DuplicatesBanner({ duplicates, onLimpiar }: { duplicates: DupBannerItem[]; onLimpiar: (ids?: string[]) => void }) {
+function DuplicatesBanner({ duplicates, excluidas, onTodas }: {
+  duplicates: DupBannerItem[]; excluidas: number; onTodas: (contar: boolean) => void;
+}) {
   const [expanded, setExpanded] = useState(false);
-  const [limpiadoLocal, setLimpiadoLocal] = useState(false);
-
   const totalExtras = duplicates.reduce((s, d) => s + d.repeticiones - 1, 0);
-
-  if (limpiadoLocal) {
-    return (
-      <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 dark:bg-emerald-900/30 border-b border-emerald-200 dark:border-emerald-700 flex-shrink-0">
-        <CheckCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
-        <p className="text-xs text-emerald-700 dark:text-emerald-300 font-medium">
-          Duplicados eliminados — los valores ejecutados han sido recalculados.
-        </p>
-      </div>
-    );
-  }
-
   return (
     <div className="border-b border-orange-200 dark:border-orange-700 flex-shrink-0 bg-orange-50 dark:bg-orange-900/20">
-      <div className="flex items-center gap-2 px-4 py-2">
+      <div className="flex flex-wrap items-center gap-2 px-4 py-2">
         <Copy className="h-4 w-4 text-orange-600 dark:text-orange-400 flex-shrink-0" />
-        <p className="text-xs text-orange-700 dark:text-orange-300 font-medium flex-1">
-          <strong>{duplicates.length} servicios duplicados</strong> detectados
-          ({totalExtras} copias extra — mismo paciente+servicio+fecha).
-          Revíselos por servicio con el enlace "incl. N dup." de la tabla, o quítelos todos.
+        <p className="text-xs text-orange-700 dark:text-orange-300 font-medium flex-1 min-w-[240px]">
+          <strong>{duplicates.length} registros duplicados</strong> ({totalExtras} copias extra — mismo paciente+servicio+fecha).
+          Se cuentan <strong>{totalExtras - excluidas}</strong>, excluidas <strong>{excluidas}</strong>.
+          Revíselos por servicio con el enlace "+N duplicados" de la tabla.
         </p>
         <button onClick={() => setExpanded(e => !e)}
           className="text-xs underline text-orange-600 dark:text-orange-400 hover:text-orange-800 whitespace-nowrap">
           {expanded ? 'Ocultar' : 'Ver detalle'}
         </button>
-        <button onClick={() => {
-            if (!window.confirm(`¿Quitar las ${totalExtras} copias extra de TODOS los servicios? Se deja 1 registro por paciente+servicio+fecha.`)) return;
-            onLimpiar(); setLimpiadoLocal(true);
-          }}
-          className="flex items-center gap-1 px-2 py-1 bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-300 rounded text-xs font-medium hover:bg-red-200 transition-colors border border-red-200 dark:border-red-500/30 whitespace-nowrap">
-          <Trash2 className="h-3 w-3" /> Quitar todos
+        <button onClick={() => onTodas(false)} disabled={excluidas === totalExtras}
+          className="px-2 py-1 bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-300 rounded text-xs font-medium hover:bg-red-200 border border-red-200 dark:border-red-500/30 whitespace-nowrap disabled:opacity-40">
+          Excluir todas
+        </button>
+        <button onClick={() => onTodas(true)} disabled={excluidas === 0}
+          className="px-2 py-1 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 rounded text-xs font-medium hover:bg-emerald-200 border border-emerald-200 dark:border-emerald-500/30 whitespace-nowrap disabled:opacity-40">
+          Contar todas
         </button>
       </div>
       {expanded && (
@@ -430,7 +420,6 @@ interface Props {
   onSaveFirmaGlobal?: (key: 'repLegalEPSI' | 'coordinador' | 'lugarActa', val: string) => void;
   liveTypeCount?: Record<string, number>;
   duplicates?: DupBannerItem[];
-  onLimpiarDuplicados?: (ids?: string[]) => void;
   urgVinculados?: RipsRecord[];
 }
 
@@ -440,18 +429,12 @@ export default function ActaModal({
   firmasGlobales, onSaveFirmaGlobal,
   liveTypeCount,
   duplicates = [],
-  onLimpiarDuplicados,
   urgVinculados = []
 }: Props) {
   const [view, setView] = useState<'form' | 'preview'>('form');
   const [verVinculados, setVerVinculados] = useState(false);
   const [dupTipo, setDupTipo] = useState<string | null>(null);
-  const [dupSel, setDupSel] = useState<Set<string>>(new Set());
-  const abrirDupTipo = (tipo: string) => {
-    if (dupTipo === tipo) { setDupTipo(null); return; }
-    setDupTipo(tipo);
-    setDupSel(new Set(duplicates.filter(d => d.tipo === tipo).map(d => d.id)));
-  };
+  const abrirDupTipo = (tipo: string) => setDupTipo(t => t === tipo ? null : tipo);
   const [nuevoFuncionario, setNuevoFuncionario] = useState('');
   const [showAddFuncionario, setShowAddFuncionario] = useState(false);
 
@@ -483,10 +466,32 @@ export default function ActaModal({
   };
   const toggleTodosVinc = (on: boolean) => setVincSel(new Set(on ? urgVinculados.map(vincKey) : []));
 
+  // Tipo del acta al que pertenece cada duplicado (las vacunas suman a la fila PAI)
+  const tieneFilaPAI = acta.servicios.some(x => x.tipo === 'PAI');
+  const tipoServ = (d: DupBannerItem) => (tieneFilaPAI && d.tipo && TIPOS_PAI.includes(d.tipo)) ? 'PAI' : (d.tipo || '');
   const dupExtraPorTipo: Record<string, number> = {};
   duplicates.forEach(d => {
-    if (d.tipo) dupExtraPorTipo[d.tipo] = (dupExtraPorTipo[d.tipo] || 0) + d.repeticiones - 1;
+    const t = tipoServ(d);
+    if (t) dupExtraPorTipo[t] = (dupExtraPorTipo[t] || 0) + d.repeticiones - 1;
   });
+  // Grupos excluidos por servicio (se guardan en el acta: reversible)
+  const setDupExcluidos = (servs: ActaServicio[], tipo: string, ids: Set<string>) => {
+    const lista = duplicates.filter(d => tipoServ(d) === tipo);
+    return servs.map(x => x.tipo !== tipo ? x : {
+      ...x,
+      duplicadosQuitadosSel: lista.filter(d => ids.has(d.id)).map(d => d.id),
+      duplicadosQuitados: lista.filter(d => ids.has(d.id)).reduce((a, d) => a + d.repeticiones - 1, 0),
+    });
+  };
+  const excluidosDe = (tipo: string) => new Set(acta.servicios.find(x => x.tipo === tipo)?.duplicadosQuitadosSel || []);
+  const totalExcluidas = acta.servicios.reduce((a, x) => a + (x.duplicadosQuitados || 0), 0);
+  const todasDups = (contar: boolean) => {
+    let servs = acta.servicios;
+    Object.keys(dupExtraPorTipo).forEach(t => {
+      servs = setDupExcluidos(servs, t, contar ? new Set() : new Set(duplicates.filter(d => tipoServ(d) === t).map(d => d.id)));
+    });
+    onChange({ ...acta, servicios: servs });
+  };
 
   // ── Excel Export ──
   const handleExportExcel = () => {
@@ -605,8 +610,8 @@ export default function ActaModal({
       )}
 
       {/* ── Banner de duplicados (siempre visible si hay dups) ── */}
-      {duplicates.length > 0 && onLimpiarDuplicados && (
-        <DuplicatesBanner duplicates={duplicates} onLimpiar={onLimpiarDuplicados} />
+      {duplicates.length > 0 && (
+        <DuplicatesBanner duplicates={duplicates} excluidas={totalExcluidas} onTodas={todasDups} />
       )}
 
       <div className={inline ? 'overflow-y-auto custom-scroll' : 'flex-1 overflow-y-auto custom-scroll'}>
@@ -816,7 +821,7 @@ export default function ActaModal({
                             />
                           </td>
                           <td className="px-3 py-2 text-right font-mono text-slate-500 dark:text-slate-400 text-xs">
-                            {srv.ejecutado}
+                            {srv.ejecutado - (dupExtraPorTipo[srv.tipo] || 0)}
                             {srv.tipo === 'URGENCIAS BC' && (urgVinculados.length > 0 || (srv.vinculados || 0) > 0) && (
                               <span className="block mt-0.5 font-sans">
                                 <button type="button" onClick={() => setVerVinculados(v => !v)}
@@ -835,13 +840,27 @@ export default function ActaModal({
                                 </label>
                               </span>
                             )}
-                            {(dupExtraPorTipo[srv.tipo] || 0) > 0 && (
-                              <button type="button" onClick={() => abrirDupTipo(srv.tipo)}
-                                className="block ml-auto text-[10px] font-sans font-semibold text-orange-600 dark:text-orange-400 underline whitespace-nowrap"
-                                title="Ver y quitar los registros repetidos (mismo paciente + servicio + fecha) de este servicio">
-                                incl. {dupExtraPorTipo[srv.tipo]} dup.
-                              </button>
-                            )}
+                            {(dupExtraPorTipo[srv.tipo] || 0) > 0 && (() => {
+                              const nDup = dupExtraPorTipo[srv.tipo];
+                              const contadas = nDup - (srv.duplicadosQuitados || 0);
+                              const todosIds = new Set(duplicates.filter(d => tipoServ(d) === srv.tipo).map(d => d.id));
+                              return (
+                                <span className="block mt-0.5 font-sans">
+                                  <button type="button" onClick={() => abrirDupTipo(srv.tipo)}
+                                    className="text-[10px] font-semibold text-orange-600 dark:text-orange-400 underline whitespace-nowrap"
+                                    title="Registros repetidos (mismo paciente + servicio + fecha)">
+                                    +{nDup} duplicados
+                                  </button>
+                                  <label className="flex items-center justify-end gap-1 text-[10px] text-slate-600 dark:text-slate-300 whitespace-nowrap cursor-pointer">
+                                    <input type="checkbox"
+                                      checked={contadas > 0}
+                                      ref={el => { if (el) el.indeterminate = contadas > 0 && contadas < nDup; }}
+                                      onChange={e => onChange({ ...acta, servicios: setDupExcluidos(acta.servicios, srv.tipo, e.target.checked ? new Set() : todosIds) })} />
+                                    Sumar ({contadas}/{nDup})
+                                  </label>
+                                </span>
+                              );
+                            })()}
                           </td>
                           <td className="px-3 py-2 text-right">
                             <input type="number" min="0" value={ren}
@@ -900,20 +919,18 @@ export default function ActaModal({
                 </div>
               )}
               {dupTipo && (() => {
-                const lista = duplicates.filter(d => d.tipo === dupTipo);
-                const extrasSel = lista.filter(d => dupSel.has(d.id)).reduce((a, d) => a + d.repeticiones - 1, 0);
+                const lista = duplicates.filter(d => tipoServ(d) === dupTipo);
+                const excl = excluidosDe(dupTipo);
+                const extras = lista.reduce((a, d) => a + d.repeticiones - 1, 0);
+                const extrasExcl = lista.filter(d => excl.has(d.id)).reduce((a, d) => a + d.repeticiones - 1, 0);
+                const guardar = (ids: Set<string>) => onChange({ ...acta, servicios: setDupExcluidos(acta.servicios, dupTipo, ids) });
                 return (
                   <div className="mt-2 rounded-xl border border-orange-200 dark:border-orange-700/50 bg-orange-50 dark:bg-orange-900/20 p-3">
                     <div className="flex flex-wrap items-center gap-2 mb-2">
                       <p className="text-xs font-semibold text-orange-800 dark:text-orange-300 flex-1">
-                        {dupTipo}: {lista.length} registros repetidos (mismo paciente + servicio + fecha).
-                        Marque los que desea dejar en 1 solo registro.
+                        {dupTipo}: {lista.length} registros repetidos (mismo paciente + servicio + fecha), {extras} copias extra.
+                        Marque las que la auditoría acepta como actividad ({extras - extrasExcl} de {extras} copias se suman).
                       </p>
-                      <button type="button" disabled={extrasSel === 0 || !onLimpiarDuplicados}
-                        onClick={() => { onLimpiarDuplicados?.([...dupSel].filter(id => lista.some(d => d.id === id))); setDupTipo(null); }}
-                        className="flex items-center gap-1 px-2 py-1 bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-300 rounded text-xs font-medium hover:bg-red-200 border border-red-200 dark:border-red-500/30 disabled:opacity-40">
-                        <Trash2 className="h-3 w-3" /> Quitar {extrasSel} copias
-                      </button>
                       <button type="button" onClick={() => setDupTipo(null)} className="p-1 hover:bg-orange-100 dark:hover:bg-orange-800/40 rounded">
                         <X className="h-3.5 w-3.5 text-orange-700" />
                       </button>
@@ -922,27 +939,29 @@ export default function ActaModal({
                       <table className="w-full text-xs">
                         <thead><tr className="text-orange-700 dark:text-orange-400 text-left">
                           <th className="pb-1 pr-2 w-6">
-                            <input type="checkbox" title="Seleccionar todos"
-                              checked={lista.length > 0 && lista.every(d => dupSel.has(d.id))}
-                              ref={el => { if (el) el.indeterminate = lista.some(d => dupSel.has(d.id)) && !lista.every(d => dupSel.has(d.id)); }}
-                              onChange={e => setDupSel(e.target.checked ? new Set(lista.map(d => d.id)) : new Set())} />
+                            <input type="checkbox" title="Seleccionar todas"
+                              checked={excl.size === 0}
+                              ref={el => { if (el) el.indeterminate = excl.size > 0 && excl.size < lista.length; }}
+                              onChange={e => guardar(e.target.checked ? new Set() : new Set(lista.map(d => d.id)))} />
                           </th>
                           <th className="pb-1 font-semibold">Paciente</th><th className="pb-1 font-semibold">Fecha</th>
                           <th className="pb-1 font-semibold">Código</th><th className="pb-1 font-semibold">Descripción</th>
                           <th className="pb-1 font-semibold text-right">Veces</th>
+                          <th className="pb-1 font-semibold text-right">Suma</th>
                         </tr></thead>
                         <tbody>
                           {lista.map(d => (
-                            <tr key={d.id} className={`border-t border-orange-100 dark:border-orange-800/50 text-slate-600 dark:text-slate-300 ${dupSel.has(d.id) ? '' : 'opacity-50'}`}>
+                            <tr key={d.id} className={`border-t border-orange-100 dark:border-orange-800/50 text-slate-600 dark:text-slate-300 ${excl.has(d.id) ? 'opacity-50' : ''}`}>
                               <td className="py-0.5 pr-2">
-                                <input type="checkbox" checked={dupSel.has(d.id)}
-                                  onChange={e => { const n = new Set(dupSel); if (e.target.checked) n.add(d.id); else n.delete(d.id); setDupSel(n); }} />
+                                <input type="checkbox" checked={!excl.has(d.id)}
+                                  onChange={e => { const n = new Set(excl); if (e.target.checked) n.delete(d.id); else n.add(d.id); guardar(n); }} />
                               </td>
                               <td className="py-0.5 pr-2 font-mono">{d.paciente}</td>
                               <td className="py-0.5 pr-2">{d.fecha}</td>
                               <td className="py-0.5 pr-2 font-mono">{d.cups}</td>
                               <td className="py-0.5 pr-2 max-w-[260px] truncate" title={d.nombre_cups}>{d.nombre_cups}</td>
                               <td className="py-0.5 text-right font-bold text-orange-600 dark:text-orange-400">{d.repeticiones}×</td>
+                              <td className="py-0.5 text-right">{excl.has(d.id) ? 0 : d.repeticiones - 1}</td>
                             </tr>
                           ))}
                         </tbody>
