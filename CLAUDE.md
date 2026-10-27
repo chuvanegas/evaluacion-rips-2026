@@ -219,6 +219,7 @@ Verificado ejecutando el parser real de `processFiles` sobre los 3 TXT de radica
 - Nuevo estado `otrosLineas` (App.tsx): cada línea de la sección OTROS SERVICIOS se guarda aparte (no suma a ningún servicio). Código = columna `fecha + 2` (formato AT: `…,fecha,tipoServicio,código,nombre,cantidad,…`). Se limpia cuando `registros` queda vacío.
 - `urgVinculados` (useMemo): líneas de `otrosLineas` con mismo `paciente|fecha` que una urgencia, excluyendo traslados `\d{3,4}T\d{2}`.
 - En el acta, fila URGENCIAS BC: **"+N vinculados"** (abre lista paciente/fecha/código/descripción) y casilla **"Sumar"** → guarda `srv.vinculados = N`. Ej. ASB-44560-2026-09 2T: sin sumar 8%, sumando 19 → 15%.
+- **v2.19 — selección por línea:** la lista tiene una casilla por línea y una casilla "todas" en el encabezado. "Sumar (k/N)" en la fila de Urgencias marca o desmarca todas (queda en estado intermedio si es parcial). Se guarda `srv.vinculadosSel` (claves `paciente|fecha|código|índice`) y `srv.vinculados = vinculadosSel.length`. Actas anteriores sin `vinculadosSel`: si `vinculados >= N` se muestran todas marcadas.
 
 ### Fix fecha de urgencias
 La fecha de ingreso viene pegada al código del prestador (`4456000345072026-05-05 19:31`), así que `\b(\d{4}-…)\b` la saltaba y tomaba la de egreso. Ahora se usa la primera fecha sin `\b`: `l.match(/(\d{4}-\d{2}-\d{2})/)`.
@@ -443,6 +444,7 @@ El formulario se popula desde `p.metas` del prestador seleccionado.
 
 | Versión | Tag git | Descripción |
 |---|---|---|
+| **2.19** | `v2.19` | Líneas vinculadas a urgencias: selección individual por línea o todas; la selección se guarda en el acta. |
 | **2.18** | `v2.18` | RIPS se cargan sin filtrar; duplicados (incl. urgencias/hosp) se revisan y quitan desde el acta; columna Renuencias editable; líneas de Otros Servicios vinculadas a urgencias con opción "Sumar"; fix fecha de ingreso en urgencias. |
 | **2.17** | `v2.17` | Dedup inteligente con aviso de duplicados; modal de revisión para actas automáticas y manuales; fix toggle inUrgenciasSection; badge pendientes filtra solo contratos registrados. |
 | **2.16** | `v2.16` | Módulo radicación: panel "Listos para evaluar" integrado en Dashboard. Solo muestra contratos registrados en la app. Fix régimen, scale y prestador forzados desde radicación. Reintento 5xx. Preview de metas y renuencias al clic. |

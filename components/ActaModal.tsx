@@ -456,6 +456,21 @@ export default function ActaModal({
   const totalEjec  = acta.servicios.reduce((s, x) => s + ejec(x), 0);
   const totalCumpl = totalProg > 0 ? Math.min(Math.round((totalEjec / totalProg) * 100), 100) : 0;
 
+  const vincKey = (v: RipsRecord, i: number) => `${v.paciente}|${v.fecha}|${v.cups}|${i}`;
+  const urgIdx = acta.servicios.findIndex(x => x.tipo === 'URGENCIAS BC');
+  const urgSrv = urgIdx >= 0 ? acta.servicios[urgIdx] : undefined;
+  const vincSel = new Set<string>(
+    urgSrv?.vinculadosSel ??
+    ((urgSrv?.vinculados || 0) >= urgVinculados.length && urgVinculados.length > 0 ? urgVinculados.map(vincKey) : [])
+  );
+  const setVincSel = (sel: Set<string>) => {
+    if (urgIdx < 0) return;
+    const s2 = [...acta.servicios];
+    s2[urgIdx] = { ...s2[urgIdx], vinculadosSel: [...sel], vinculados: sel.size };
+    onChange({ ...acta, servicios: s2 });
+  };
+  const toggleTodosVinc = (on: boolean) => setVincSel(new Set(on ? urgVinculados.map(vincKey) : []));
+
   const dupExtraPorTipo: Record<string, number> = {};
   duplicates.forEach(d => {
     if (d.tipo) dupExtraPorTipo[d.tipo] = (dupExtraPorTipo[d.tipo] || 0) + d.repeticiones - 1;
@@ -798,9 +813,13 @@ export default function ActaModal({
                                   +{urgVinculados.length || srv.vinculados} vinculados
                                 </button>
                                 <label className="flex items-center justify-end gap-1 text-[10px] text-slate-600 dark:text-slate-300 whitespace-nowrap cursor-pointer">
-                                  <input type="checkbox" checked={(srv.vinculados || 0) > 0}
-                                    onChange={e => setSrv(idx, 'vinculados', e.target.checked ? (urgVinculados.length || srv.vinculados || 0) : 0)} />
-                                  Sumar
+                                  <input type="checkbox"
+                                    checked={(srv.vinculados || 0) > 0}
+                                    ref={el => { if (el) el.indeterminate = (srv.vinculados || 0) > 0 && (srv.vinculados || 0) < urgVinculados.length; }}
+                                    onChange={e => urgVinculados.length > 0
+                                      ? toggleTodosVinc(e.target.checked)
+                                      : setSrv(idx, 'vinculados', e.target.checked ? (srv.vinculados || 0) : 0)} />
+                                  Sumar{urgVinculados.length > 0 ? ` (${srv.vinculados || 0}/${urgVinculados.length})` : ''}
                                 </label>
                               </span>
                             )}
@@ -831,17 +850,31 @@ export default function ActaModal({
                 <div className="mt-2 rounded-xl border border-amber-200 dark:border-amber-700/50 bg-amber-50 dark:bg-amber-900/20 p-3">
                   <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 mb-2">
                     {urgVinculados.length} líneas de Otros Servicios registradas el mismo día que una urgencia del paciente.
-                    Marque "Sumar" en Urgencias si la auditoría las acepta como actividad.
+                    Marque las que la auditoría acepta como actividad ({vincSel.size} seleccionadas).
                   </p>
                   <div className="max-h-48 overflow-y-auto">
                     <table className="w-full text-xs">
                       <thead><tr className="text-amber-700 dark:text-amber-400 text-left">
+                        <th className="pb-1 pr-2 w-6">
+                          <input type="checkbox" title="Seleccionar todas"
+                            checked={vincSel.size === urgVinculados.length}
+                            ref={el => { if (el) el.indeterminate = vincSel.size > 0 && vincSel.size < urgVinculados.length; }}
+                            onChange={e => toggleTodosVinc(e.target.checked)} />
+                        </th>
                         <th className="pb-1 font-semibold">Paciente</th><th className="pb-1 font-semibold">Fecha</th>
                         <th className="pb-1 font-semibold">Código</th><th className="pb-1 font-semibold">Descripción</th>
                       </tr></thead>
                       <tbody>
                         {urgVinculados.map((v, i) => (
-                          <tr key={i} className="border-t border-amber-100 dark:border-amber-800/50 text-slate-600 dark:text-slate-300">
+                          <tr key={i} className={`border-t border-amber-100 dark:border-amber-800/50 text-slate-600 dark:text-slate-300 ${vincSel.has(vincKey(v, i)) ? '' : 'opacity-50'}`}>
+                            <td className="py-0.5 pr-2">
+                              <input type="checkbox" checked={vincSel.has(vincKey(v, i))}
+                                onChange={e => {
+                                  const n = new Set(vincSel);
+                                  if (e.target.checked) n.add(vincKey(v, i)); else n.delete(vincKey(v, i));
+                                  setVincSel(n);
+                                }} />
+                            </td>
                             <td className="py-0.5 pr-2 font-mono">{v.paciente}</td>
                             <td className="py-0.5 pr-2">{v.fecha}</td>
                             <td className="py-0.5 pr-2 font-mono">{v.cups}</td>
