@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Printer, FileSpreadsheet, TrendingUp, AlertTriangle } from 'lucide-react';
+import { X, Printer, FileSpreadsheet, TrendingUp, AlertTriangle, Copy, Trash2, CheckCircle } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   Cell, LabelList, ReferenceLine
@@ -333,7 +333,78 @@ export function ActaPreview({ acta, liveTypeCount }: { acta: Acta; liveTypeCount
   );
 }
 
+// ─── Duplicates Banner ───────────────────────────────────────────────────────
+
+interface DupBannerItem {
+  id: string; paciente: string; nombre_paciente: string;
+  cups: string; nombre_cups: string; fecha: string; repeticiones: number;
+}
+
+function DuplicatesBanner({ duplicates, onLimpiar }: { duplicates: DupBannerItem[]; onLimpiar: () => void }) {
+  const [expanded, setExpanded] = useState(false);
+  const [limpiadoLocal, setLimpiadoLocal] = useState(false);
+
+  const totalExtras = duplicates.reduce((s, d) => s + d.repeticiones - 1, 0);
+
+  if (limpiadoLocal) {
+    return (
+      <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 dark:bg-emerald-900/30 border-b border-emerald-200 dark:border-emerald-700 flex-shrink-0">
+        <CheckCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+        <p className="text-xs text-emerald-700 dark:text-emerald-300 font-medium">
+          Duplicados eliminados — los valores ejecutados han sido recalculados.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="border-b border-orange-200 dark:border-orange-700 flex-shrink-0 bg-orange-50 dark:bg-orange-900/20">
+      <div className="flex items-center gap-2 px-4 py-2">
+        <Copy className="h-4 w-4 text-orange-600 dark:text-orange-400 flex-shrink-0" />
+        <p className="text-xs text-orange-700 dark:text-orange-300 font-medium flex-1">
+          <strong>{duplicates.length} servicios duplicados</strong> detectados
+          ({totalExtras} copias extra — misma paciente+servicio+fecha en múltiples radicaciones).
+          Revísalos antes de guardar.
+        </p>
+        <button onClick={() => setExpanded(e => !e)}
+          className="text-xs underline text-orange-600 dark:text-orange-400 hover:text-orange-800 whitespace-nowrap">
+          {expanded ? 'Ocultar' : 'Ver detalle'}
+        </button>
+        <button onClick={() => { onLimpiar(); setLimpiadoLocal(true); }}
+          className="flex items-center gap-1 px-2 py-1 bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-300 rounded text-xs font-medium hover:bg-red-200 transition-colors border border-red-200 dark:border-red-500/30 whitespace-nowrap">
+          <Trash2 className="h-3 w-3" /> Quitar duplicados
+        </button>
+      </div>
+      {expanded && (
+        <div className="px-4 pb-3 max-h-40 overflow-y-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-orange-600 dark:text-orange-400">
+                <th className="text-left font-semibold pb-1">Paciente</th>
+                <th className="text-left font-semibold pb-1">Servicio</th>
+                <th className="text-left font-semibold pb-1">Fecha</th>
+                <th className="text-right font-semibold pb-1">Copias</th>
+              </tr>
+            </thead>
+            <tbody>
+              {duplicates.map(d => (
+                <tr key={d.id} className="border-t border-orange-100 dark:border-orange-800">
+                  <td className="py-0.5 pr-2 text-slate-600 dark:text-slate-400">{d.paciente}</td>
+                  <td className="py-0.5 pr-2 text-slate-600 dark:text-slate-400 max-w-[160px] truncate" title={d.nombre_cups}>{d.cups} {d.nombre_cups}</td>
+                  <td className="py-0.5 pr-2 text-slate-600 dark:text-slate-400">{d.fecha}</td>
+                  <td className="py-0.5 text-right font-bold text-orange-600 dark:text-orange-400">{d.repeticiones}×</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Modal ──────────────────────────────────────────────────────────────
+
 
 interface Props {
   acta: Acta;
@@ -347,13 +418,17 @@ interface Props {
   firmasGlobales?: { repLegalEPSI: string; coordinador: string; lugarActa?: string };
   onSaveFirmaGlobal?: (key: 'repLegalEPSI' | 'coordinador' | 'lugarActa', val: string) => void;
   liveTypeCount?: Record<string, number>;
+  duplicates?: DupBannerItem[];
+  onLimpiarDuplicados?: () => void;
 }
 
 export default function ActaModal({
   acta, onChange, onSave, onClose, inline = false,
   funcionarios = [], onAddFuncionario, onRemoveFuncionario,
   firmasGlobales, onSaveFirmaGlobal,
-  liveTypeCount
+  liveTypeCount,
+  duplicates = [],
+  onLimpiarDuplicados
 }: Props) {
   const [view, setView] = useState<'form' | 'preview'>('form');
   const [nuevoFuncionario, setNuevoFuncionario] = useState('');
@@ -486,6 +561,11 @@ export default function ActaModal({
             <strong>Recuerde:</strong> esta acta <strong>NO se guardará automáticamente</strong>. Si cierra sin presionar <em>Guardar</em>, no quedará ningún registro de ella.
           </p>
         </div>
+      )}
+
+      {/* ── Banner de duplicados (siempre visible si hay dups) ── */}
+      {duplicates.length > 0 && onLimpiarDuplicados && (
+        <DuplicatesBanner duplicates={duplicates} onLimpiar={onLimpiarDuplicados} />
       )}
 
       <div className={inline ? 'overflow-y-auto custom-scroll' : 'flex-1 overflow-y-auto custom-scroll'}>

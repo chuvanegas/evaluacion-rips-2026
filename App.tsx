@@ -1910,46 +1910,26 @@ function App() {
         }
       }
 
-      // Calcular duplicados antes de setRegistros (usando registros actual como base)
-      // Un duplicado = mismo paciente+cups+fecha que ya existe o ya aparece en newRegistros
-      const existingNonMedKeys = new Set<string>();
-      registros.filter(r => r.tipo !== 'MEDICAMENTOS').forEach(r =>
-        existingNonMedKeys.add(`${r.paciente}|${r.cups}|${r.fecha}`)
-      );
-      const seenInNew = new Set<string>();
-      let dupCount = 0;
-      newRegistros.forEach(r => {
-        if (r.tipo === 'MEDICAMENTOS') return;
-        const k = `${r.paciente}|${r.cups}|${r.fecha}`;
-        if (existingNonMedKeys.has(k) || seenInNew.has(k)) dupCount++;
-        else seenInNew.add(k);
-      });
-
-      // Acumular deduplicando por paciente+cups+fecha (todos los tipos excepto MEDICAMENTOS
-      // que ya tiene su propio dedup interno). Esto elimina conteos inflados cuando la API
-      // de radicación agrega múltiples radicaciones del mismo período.
-      setRegistros(prev => {
-        const existingKeys = new Set<string>();
-        prev.forEach(r => existingKeys.add(`${r.paciente}|${r.cups}|${r.fecha}`));
-        const seenNew = new Set<string>();
-        const toAdd = newRegistros.filter(r => {
-          if (r.tipo === 'MEDICAMENTOS') return true; // medDupSet ya filtró los meds
-          const k = `${r.paciente}|${r.cups}|${r.fecha}`;
-          if (existingKeys.has(k)) return false;
-          if (seenNew.has(k)) return false;
-          seenNew.add(k);
-          return true;
-        });
-        return [...prev, ...toAdd];
-      });
+      // Cargar TODOS los registros sin filtrar — el usuario revisa duplicados en el modal de acta
+      // Solo MEDICAMENTOS ya tiene su propio dedup interno (medDupSet) por paciente+código+fecha
+      setRegistros(prev => [...prev, ...newRegistros]);
       setUsuariosMap(newUsuariosMap);
       const numFiles = (ripsFiles?.length || 0) + (jsonFiles?.length || 0);
       const medCount = newRegistros.filter(r => r.tipo === 'MEDICAMENTOS').length;
       const svcCount = newRegistros.filter(r => r.tipo !== 'MEDICAMENTOS').length;
-      const dupMsg = dupCount > 0
-        ? ` · ⚠️ ${dupCount} duplicados filtrados (misma paciente+servicio+fecha de múltiples radicaciones)`
+      // Calcular cuántos tienen clave duplicada (para aviso informativo)
+      const seenForMsg = new Set<string>();
+      let dupCountMsg = 0;
+      newRegistros.forEach(r => {
+        if (r.tipo === 'MEDICAMENTOS') return;
+        const k = `${r.paciente}|${r.cups}|${r.fecha}`;
+        if (seenForMsg.has(k)) dupCountMsg++;
+        else seenForMsg.add(k);
+      });
+      const dupMsg = dupCountMsg > 0
+        ? ` · ⚠️ ${dupCountMsg} posibles duplicados — revísalos antes de generar el acta`
         : '';
-      setMessage({ type: 'success', text: `Añadidos ${newRegistros.length - dupCount} registros únicos de ${numFiles} archivo(s) (${medCount} medicamentos, ${svcCount - dupCount} servicios)${dupMsg}.` });
+      setMessage({ type: 'success', text: `Añadidos ${svcCount} servicios y ${medCount} medicamentos de ${numFiles} archivo(s)${dupMsg}.` });
 
     } catch (e) {
       console.error(e);
@@ -6008,6 +5988,26 @@ echo "* * * * * root /usr/local/bin/metrics.sh; sleep 30; /usr/local/bin/metrics
           firmasGlobales={firmasGlobales}
           onSaveFirmaGlobal={handleSaveFirmaGlobal}
           liveTypeCount={{ ...typeCount, PAI: TIPOS_PAI.reduce((s, t) => s + (typeCount[t] || 0), 0) }}
+          duplicates={duplicatesList}
+          onLimpiarDuplicados={() => {
+            const seen = new Set<string>();
+            let removed = 0;
+            const cleaned = registros.filter(r => {
+              if (r.tipo === 'MEDICAMENTOS') return true;
+              const k = `${r.paciente}|${r.cups}|${r.fecha}`;
+              if (seen.has(k)) { removed++; return false; }
+              seen.add(k); return true;
+            });
+            setRegistros(cleaned);
+            // Recalcular ejecutado en el acta con los valores limpios
+            const newTypeCount: Record<string,number> = {};
+            cleaned.forEach(r => { newTypeCount[r.tipo] = (newTypeCount[r.tipo]||0)+1; });
+            setEditingActa(prev => prev ? {
+              ...prev,
+              servicios: prev.servicios.map(s => ({ ...s, ejecutado: newTypeCount[s.tipo] ?? s.ejecutado }))
+            } : prev);
+            setMessage({ type: 'success', text: `${removed} duplicados eliminados. Acta recalculada.` });
+          }}
         />
       )}
 
