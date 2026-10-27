@@ -2639,8 +2639,9 @@ function App() {
                   continue;
                 }
                 const { txt } = result;
-                if (!txt || txt.trim().length < 10) {
-                  mesesOmitidos.push(`${MESES_FULL[mes-1]} (sin datos)`);
+                const hasRips = /ARCHIVO-USUARIOS|ARCHIVO-CONSULTAS|ARCHIVO-PROCEDIMIENTOS|ARCHIVO-URGENCIAS|ARCHIVO-MEDICAMENTOS/i.test(txt);
+                if (!txt || !hasRips) {
+                  mesesOmitidos.push(`${MESES_FULL[mes-1]} (sin datos RIPS)`);
                   continue;
                 }
                 archivos.push(new File([txt], `RIPS_${c.contrato}_${MESES_N[mes-1]}${anio}.txt`, { type: 'text/plain' }));
@@ -2906,7 +2907,8 @@ function App() {
                       const result = await fetchRipsMes(c.contrato, t.anio, mes, reg);
                       if ('error' in result) { mesesOmitidos.push(`${MESES_FULL[mes-1]} (${result.error})`); continue; }
                       const { txt } = result;
-                      if (!txt || txt.trim().length === 0) { mesesOmitidos.push(`${MESES_FULL[mes-1]} (sin datos)`); continue; }
+                      const hasRips = /ARCHIVO-USUARIOS|ARCHIVO-CONSULTAS|ARCHIVO-PROCEDIMIENTOS|ARCHIVO-URGENCIAS|ARCHIVO-MEDICAMENTOS/i.test(txt);
+                      if (!txt || !hasRips) { mesesOmitidos.push(`${MESES_FULL[mes-1]} (sin datos RIPS)`); continue; }
                       archivos.push(new File([txt], `RIPS_${c.contrato}_${MESES_N[mes-1]}${t.anio}.txt`, { type: 'text/plain' }));
                       mesesLabels.push(MESES_N[mes - 1]);
                       mesesESLabels.push(`${MESES_FULL[mes - 1]} ${t.anio}`);
@@ -3124,7 +3126,7 @@ function App() {
                     <div className="flex flex-wrap gap-1.5 mb-3 ml-6">
                       {rf.files.map((f, i) => (
                         <span key={i} className="flex items-center gap-1 text-[10px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 font-mono text-slate-600 dark:text-slate-300">
-                          <FileText className="h-2.5 w-2.5 text-slate-400" />{rf.meses[i]} <span className="text-[8px] text-slate-400">{(f.size/1024).toFixed(0)}KB</span>
+                          <FileText className="h-2.5 w-2.5 text-slate-400" />{rf.meses[i]} <span className="text-[8px] text-slate-400">{f.size < 1024 ? `${f.size}B` : `${(f.size/1024).toFixed(1)}KB`}</span>
                         </span>
                       ))}
                     </div>
@@ -5650,6 +5652,11 @@ echo "* * * * * root /usr/local/bin/metrics.sh; sleep 30; /usr/local/bin/metrics
                       setRadEvaluando(null); return;
                     }
                     const txt = await resp.text();
+                    const hasRips = /ARCHIVO-USUARIOS|ARCHIVO-CONSULTAS|ARCHIVO-PROCEDIMIENTOS|ARCHIVO-URGENCIAS|ARCHIVO-MEDICAMENTOS/i.test(txt);
+                    if (!hasRips) {
+                      setMessage({ type: 'error', text: `Sin datos RIPS válidos para ${MESES_N[mes-1]}/${anio}.` });
+                      setRadEvaluando(null); return;
+                    }
                     archivos.push(new File([txt], `RIPS_${c.contrato}_${MESES_N[mes-1]}${anio}.txt`, { type: 'text/plain' }));
                   } catch (e: any) {
                     setMessage({ type: 'error', text: `Error RIPS ${MESES_N[mes-1]}: ${e.message}` });
