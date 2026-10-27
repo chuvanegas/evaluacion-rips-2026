@@ -9,14 +9,18 @@ import { utils, writeFile } from 'xlsx';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
+// Total real = RIPS + renuencias
+export const totalEjecutado = (srv: ActaServicio): number =>
+  srv.ejecutado + (srv.renuencias || 0);
+
 export const pct = (srv: ActaServicio): number => {
   if (!srv.programado) return 0;
-  return Math.min(Math.round((srv.ejecutado / srv.programado) * 100), 100);
+  return Math.min(Math.round((totalEjecutado(srv) / srv.programado) * 100), 100);
 };
 
 // Ejecutado topado en la meta (no puede superar programado)
 export const ejec = (srv: ActaServicio): number =>
-  Math.min(srv.ejecutado, srv.programado);
+  Math.min(totalEjecutado(srv), srv.programado);
 
 const pctColor = (p: number) =>
   p >= 100 ? '#2dd4bf' : p >= 80 ? '#ca8a04' : '#dc2626';
@@ -67,10 +71,12 @@ function XBarTick({ x, y, payload }: any) {
 // ─── Preview (print-faithful PDF replica) ───────────────────────────────────
 
 export function ActaPreview({ acta, liveTypeCount }: { acta: Acta; liveTypeCount?: Record<string, number> }) {
-  // If live RIPS counts are available, use them instead of stored ejecutado
+  // If live RIPS counts are available, use them; always add renuencias from acta
   const getLiveEjec = (srv: ActaServicio): number => {
-    if (liveTypeCount && liveTypeCount[srv.tipo] !== undefined) return liveTypeCount[srv.tipo];
-    return srv.ejecutado;
+    const rips = (liveTypeCount && liveTypeCount[srv.tipo] !== undefined)
+      ? liveTypeCount[srv.tipo]
+      : srv.ejecutado;
+    return rips + (srv.renuencias || 0);
   };
   const getLivePct = (srv: ActaServicio): number => {
     if (!srv.programado) return 0;
@@ -754,24 +760,36 @@ export default function ActaModal({
                   <thead className="bg-slate-100 dark:bg-slate-950/60 text-xs text-slate-500 uppercase tracking-wider">
                     <tr>
                       <th className="px-3 py-2 text-left">Tipo de Servicio</th>
-                      <th className="px-3 py-2 text-right w-32">Programado</th>
-                      <th className="px-3 py-2 text-right w-28">Ejecutado</th>
-                      <th className="px-3 py-2 text-right w-28">% Cumpl.</th>
+                      <th className="px-3 py-2 text-right w-28">Programado</th>
+                      <th className="px-3 py-2 text-right w-20 text-slate-500">RIPS</th>
+                      <th className="px-3 py-2 text-right w-24 text-rose-500">Renuencias</th>
+                      <th className="px-3 py-2 text-right w-20">Total</th>
+                      <th className="px-3 py-2 text-right w-24">% Cumpl.</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
                     {acta.servicios.map((srv, idx) => {
                       const p = pct(srv);
+                      const ren = srv.renuencias || 0;
                       return (
                         <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/30">
                           <td className="px-3 py-2 text-slate-700 dark:text-slate-300">{srv.tipo}</td>
                           <td className="px-3 py-2 text-right">
                             <input type="number" min="0" value={srv.programado}
                               onChange={e => setSrv(idx, 'programado', Number(e.target.value))}
-                              className="w-28 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-2 py-0.5 text-right text-xs font-mono focus:ring-1 focus:ring-indigo-500 outline-none"
+                              className="w-24 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-2 py-0.5 text-right text-xs font-mono focus:ring-1 focus:ring-indigo-500 outline-none"
                             />
                           </td>
-                          <td className="px-3 py-2 text-right font-mono text-slate-600 dark:text-slate-300">
+                          <td className="px-3 py-2 text-right font-mono text-slate-500 dark:text-slate-400 text-xs">
+                            {srv.ejecutado}
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            <input type="number" min="0" value={ren}
+                              onChange={e => setSrv(idx, 'renuencias', Number(e.target.value))}
+                              className="w-20 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-700/40 rounded px-2 py-0.5 text-right text-xs font-mono focus:ring-1 focus:ring-rose-500 outline-none text-rose-700 dark:text-rose-300"
+                            />
+                          </td>
+                          <td className="px-3 py-2 text-right font-mono font-semibold text-slate-700 dark:text-slate-200">
                             {ejec(srv).toLocaleString()}
                           </td>
                           <td className="px-3 py-2 text-right font-bold" style={{ color: pctColor(p) }}>{p}%</td>

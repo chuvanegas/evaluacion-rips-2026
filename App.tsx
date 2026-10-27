@@ -1194,9 +1194,12 @@ function App() {
           ejecutado: ripsPertenecenAlPrestador ? (chartData[0]?.ejecutado || 0) : 0
         }]
       : p.metas.filter(m => m.active && m.monthlyGoal > 0).map(m => {
-          const ejecutado = (ripsPertenecenAlPrestador && metas.find(x => x.type === m.type))
-            ? (chartData.find(c => c.name === m.type)?.ejecutado || 0) : 0;
-          return { tipo: m.type, programado: m.monthlyGoal * scale, ejecutado };
+          const metaActiva = metas.find(x => x.type === m.type);
+          const ejecutadoRips = (ripsPertenecenAlPrestador && metaActiva)
+            ? (typeCount[m.type] || 0) : 0;
+          const renuenciasCount = (ripsPertenecenAlPrestador && metaActiva)
+            ? (metaActiva.renuencias || 0) : 0;
+          return { tipo: m.type, programado: m.monthlyGoal * scale, ejecutado: ejecutadoRips, renuencias: renuenciasCount };
         });
     if (!ripsPertenecenAlPrestador && registros.length > 0) {
       setMessage({ type: 'info', text: `Los RIPS cargados no corresponden a ${p.nombre}. Los valores ejecutados se muestran en 0. Carga los RIPS de este prestador para ver los datos correctos.` });

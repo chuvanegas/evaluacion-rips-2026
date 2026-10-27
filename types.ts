@@ -112,7 +112,8 @@ export interface CustomCupsEntry {
 export interface ActaServicio {
   tipo: string;
   programado: number;
-  ejecutado: number;
+  ejecutado: number;      // conteo de RIPS únicamente
+  renuencias?: number;    // servicios demostrados por prestador fuera de RIPS
 }
 
 export interface Renuncia {
