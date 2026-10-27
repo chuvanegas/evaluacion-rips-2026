@@ -86,6 +86,7 @@ export interface DuplicateItem {
   cups: string;
   nombre_cups: string;
   fecha: string;
+  tipo?: string;
   repeticiones: number;
 }
 

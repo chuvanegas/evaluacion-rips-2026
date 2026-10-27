@@ -343,7 +343,7 @@ export function ActaPreview({ acta, liveTypeCount }: { acta: Acta; liveTypeCount
 
 interface DupBannerItem {
   id: string; paciente: string; nombre_paciente: string;
-  cups: string; nombre_cups: string; fecha: string; repeticiones: number;
+  cups: string; nombre_cups: string; fecha: string; tipo?: string; repeticiones: number;
 }
 
 function DuplicatesBanner({ duplicates, onLimpiar }: { duplicates: DupBannerItem[]; onLimpiar: () => void }) {
@@ -452,6 +452,11 @@ export default function ActaModal({
   const totalProg  = acta.servicios.reduce((s, x) => s + x.programado, 0);
   const totalEjec  = acta.servicios.reduce((s, x) => s + ejec(x), 0);
   const totalCumpl = totalProg > 0 ? Math.min(Math.round((totalEjec / totalProg) * 100), 100) : 0;
+
+  const dupExtraPorTipo: Record<string, number> = {};
+  duplicates.forEach(d => {
+    if (d.tipo) dupExtraPorTipo[d.tipo] = (dupExtraPorTipo[d.tipo] || 0) + d.repeticiones - 1;
+  });
 
   // ── Excel Export ──
   const handleExportExcel = () => {
@@ -782,6 +787,12 @@ export default function ActaModal({
                           </td>
                           <td className="px-3 py-2 text-right font-mono text-slate-500 dark:text-slate-400 text-xs">
                             {srv.ejecutado}
+                            {(dupExtraPorTipo[srv.tipo] || 0) > 0 && (
+                              <span className="block text-[10px] font-sans font-semibold text-orange-600 dark:text-orange-400"
+                                title="Registros repetidos (mismo paciente + servicio + fecha) incluidos en el conteo RIPS">
+                                incl. {dupExtraPorTipo[srv.tipo]} dup.
+                              </span>
+                            )}
                           </td>
                           <td className="px-3 py-2 text-right">
                             <input type="number" min="0" value={ren}

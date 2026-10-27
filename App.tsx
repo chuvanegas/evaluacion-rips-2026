@@ -1960,9 +1960,8 @@ function App() {
     const pacMeta: Record<string, { dates: string[], cups: string[] }> = {};
     const cupsPacDates: Record<string, Record<string, Set<string>>> = {};
 
-    // Duplicates Tracking
-    // Solo aplica para Consultas y Procedimientos. Se excluyen Medicamentos, Hospitalización y Urgencias.
-    const TIPOS_SIN_DUPLICADOS = new Set(['MEDICAMENTOS', 'HOSP BAJA COMPLEJIDAD', 'URGENCIAS BC']);
+    // Duplicates Tracking — todos los tipos excepto MEDICAMENTOS (cantidad genera copias legítimas)
+    const TIPOS_SIN_DUPLICADOS = new Set(['MEDICAMENTOS']);
     const duplicateMap = new Map<string, { count: number, record: RipsRecord }>();
 
     filteredRegistros.forEach(r => {
@@ -2012,6 +2011,7 @@ function App() {
           cups: val.record.cups,
           nombre_cups: val.record.nombre,
           fecha: val.record.fecha,
+          tipo: val.record.tipo,
           repeticiones: val.count
         });
       }
