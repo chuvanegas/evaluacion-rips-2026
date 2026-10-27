@@ -138,6 +138,7 @@ Dashboard → barra "Ejecutado (Real)"
 - `expandedNits` — Set de NITs abiertos en la lista de prestadores (pestaña Prestadores)
 - `dashExpandedNits` — Set de NITs abiertos en el panel Prestadores del Dashboard
 - `selectedDashPrestador` — legacy (ya no se usa para selección en dashboard)
+- `otrosLineas` — líneas de Otros Servicios (no cuentan); base de `urgVinculados` (v2.18)
 
 ---
 
@@ -193,7 +194,43 @@ Se excluyen líneas donde `nombreMed` coincide con `/OXIGENO|OXIGEN|GAS\s+MED|OX
 
 ---
 
+## Auditoría de urgencias, duplicados y renuencias en el acta (v2.18)
+
+### Diagnóstico 25% → 15% → 8% (contrato ASB-44560-2026-09, Contributivo, 2T)
+Verificado ejecutando el parser real de `processFiles` sobre los 3 TXT de radicación (abr/may/jun):
+- Los RIPS contienen: LAB 10, IMAGEN 1, TAB 2, URGENCIAS 10, HOSP 0 → **23/276 = 8%**. **Cero duplicados** (ninguna combinación paciente+servicio+fecha se repite).
+- El acta del **15%** tenía URGENCIAS = 29: las 10 reales + **19 líneas de Otros Servicios** (insumos MAT…, sala de observación 5DSB01) contadas como urgencia por el bug de `inUrgenciasSection` (no se cerraba; las líneas de Otros Servicios caían en el handler de urgencias porque se evalúa antes que `inAtSection`). Los traslados 601T02 no se afectaban porque los procesa el pre-scan `atLineSet`.
+- No eran duplicados de múltiples radicaciones (la explicación de v2.17 era incorrecta).
+
+### Carga sin filtrar + revisión de duplicados
+- `processFiles` ya **no filtra** duplicados: `setRegistros(prev => [...prev, ...newRegistros])`. Solo MEDICAMENTOS mantiene su `medDupSet` (la cantidad genera copias legítimas).
+- `duplicatesList` (useMemo) ahora incluye **todos los tipos excepto MEDICAMENTOS** (`TIPOS_SIN_DUPLICADOS = ['MEDICAMENTOS']`; antes excluía también URGENCIAS y HOSP, por eso nunca se veían). Cada item lleva `tipo`.
+- `ActaModal` recibe `duplicates` + `onLimpiarDuplicados`:
+  - Banner naranja `DuplicatesBanner` con lista (paciente, servicio, fecha, copias) y botón **"Quitar duplicados"** → limpia `registros` y recalcula `ejecutado` del acta.
+  - En la columna RIPS se muestra **"incl. N dup."** por servicio cuando el conteo incluye repetidos.
+
+### Renuencias editables en el acta
+- `ActaServicio` agrega `renuencias?: number` y `vinculados?: number`. `ejecutado` = conteo RIPS puro.
+- `handleGenerarActa` toma `ejecutado` de `typeCount` (ya no de `chartData`, que mezclaba renuencias) y `renuencias` de `metas`.
+- Tabla del Formulario: **Programado | RIPS | Renuencias (input rosado) | Total | %**.
+- `totalEjecutado(srv) = ejecutado + renuencias + vinculados`; `pct()`, `ejec()` y la Vista Previa/PDF (`getLiveEjec`) lo usan.
+
+### Líneas de Otros Servicios vinculadas a urgencias
+- Nuevo estado `otrosLineas` (App.tsx): cada línea de la sección OTROS SERVICIOS se guarda aparte (no suma a ningún servicio). Código = columna `fecha + 2` (formato AT: `…,fecha,tipoServicio,código,nombre,cantidad,…`). Se limpia cuando `registros` queda vacío.
+- `urgVinculados` (useMemo): líneas de `otrosLineas` con mismo `paciente|fecha` que una urgencia, excluyendo traslados `\d{3,4}T\d{2}`.
+- En el acta, fila URGENCIAS BC: **"+N vinculados"** (abre lista paciente/fecha/código/descripción) y casilla **"Sumar"** → guarda `srv.vinculados = N`. Ej. ASB-44560-2026-09 2T: sin sumar 8%, sumando 19 → 15%.
+
+### Fix fecha de urgencias
+La fecha de ingreso viene pegada al código del prestador (`4456000345072026-05-05 19:31`), así que `\b(\d{4}-…)\b` la saltaba y tomaba la de egreso. Ahora se usa la primera fecha sin `\b`: `l.match(/(\d{4}-\d{2}-\d{2})/)`.
+
+### Verificar el parser sin navegador
+Extraer de App.tsx el bloque entre `const getTipo = (cups: string): string =>` y `// Detectar prestador desde nombre de archivos TXT`, envolverlo en una función con `ripsFiles` simulados (`text: async () => readFileSync(p,'latin1')`), empaquetar con `npx esbuild --bundle --platform=node` y ejecutar con node. Requiere `npm install`.
+
+---
+
 ## Deduplicación de RIPS y revisión de actas (v2.17)
+
+> ⚠️ La dedup automática y la explicación de "29 urgencias = duplicados de radicaciones" de esta sección fueron **reemplazadas en v2.18** (ver sección anterior).
 
 ### Deduplicación por paciente+cups+fecha
 
@@ -406,6 +443,7 @@ El formulario se popula desde `p.metas` del prestador seleccionado.
 
 | Versión | Tag git | Descripción |
 |---|---|---|
+| **2.18** | `v2.18` | RIPS se cargan sin filtrar; duplicados (incl. urgencias/hosp) se revisan y quitan desde el acta; columna Renuencias editable; líneas de Otros Servicios vinculadas a urgencias con opción "Sumar"; fix fecha de ingreso en urgencias. |
 | **2.17** | `v2.17` | Dedup inteligente con aviso de duplicados; modal de revisión para actas automáticas y manuales; fix toggle inUrgenciasSection; badge pendientes filtra solo contratos registrados. |
 | **2.16** | `v2.16` | Módulo radicación: panel "Listos para evaluar" integrado en Dashboard. Solo muestra contratos registrados en la app. Fix régimen, scale y prestador forzados desde radicación. Reintento 5xx. Preview de metas y renuencias al clic. |
 | **2.15** | `v2.15` | Deduplicación de actas por contrato+régimen+período. Alerta detallada al crear acta duplicada. |
