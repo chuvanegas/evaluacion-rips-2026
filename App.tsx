@@ -1230,8 +1230,9 @@ function App() {
       creadoPor: currentUser.username
     };
     radPeriodoOverride.current = null; // limpiar override
-    setInlineActa(newActa);
-    setActiveTab('actas');
+    // Abrir modal de revisión para que el usuario valide y corrija antes de guardar
+    setEditingActa(newActa);
+    setShowActaModal(true);
   };
 
   const handleSaveActa = () => {
@@ -1909,15 +1910,30 @@ function App() {
         }
       }
 
-      // Acumular registros entre archivos. Para MEDICAMENTOS, dedup a nivel de dispensación
-      // (paciente+cups+fecha) para evitar doble-conteo si el mismo archivo se sube dos veces.
+      // Calcular duplicados antes de setRegistros (usando registros actual como base)
+      // Un duplicado = mismo paciente+cups+fecha que ya existe o ya aparece en newRegistros
+      const existingNonMedKeys = new Set<string>();
+      registros.filter(r => r.tipo !== 'MEDICAMENTOS').forEach(r =>
+        existingNonMedKeys.add(`${r.paciente}|${r.cups}|${r.fecha}`)
+      );
+      const seenInNew = new Set<string>();
+      let dupCount = 0;
+      newRegistros.forEach(r => {
+        if (r.tipo === 'MEDICAMENTOS') return;
+        const k = `${r.paciente}|${r.cups}|${r.fecha}`;
+        if (existingNonMedKeys.has(k) || seenInNew.has(k)) dupCount++;
+        else seenInNew.add(k);
+      });
+
+      // Acumular deduplicando por paciente+cups+fecha (todos los tipos excepto MEDICAMENTOS
+      // que ya tiene su propio dedup interno). Esto elimina conteos inflados cuando la API
+      // de radicación agrega múltiples radicaciones del mismo período.
       setRegistros(prev => {
-        // Deduplicar TODOS los tipos por paciente+cups+fecha para evitar
-        // doble conteo si se carga el mismo archivo dos veces
         const existingKeys = new Set<string>();
         prev.forEach(r => existingKeys.add(`${r.paciente}|${r.cups}|${r.fecha}`));
         const seenNew = new Set<string>();
         const toAdd = newRegistros.filter(r => {
+          if (r.tipo === 'MEDICAMENTOS') return true; // medDupSet ya filtró los meds
           const k = `${r.paciente}|${r.cups}|${r.fecha}`;
           if (existingKeys.has(k)) return false;
           if (seenNew.has(k)) return false;
@@ -1930,7 +1946,10 @@ function App() {
       const numFiles = (ripsFiles?.length || 0) + (jsonFiles?.length || 0);
       const medCount = newRegistros.filter(r => r.tipo === 'MEDICAMENTOS').length;
       const svcCount = newRegistros.filter(r => r.tipo !== 'MEDICAMENTOS').length;
-      setMessage({ type: 'success', text: `Añadidos ${newRegistros.length} registros (${medCount} medicamentos, ${svcCount} otros servicios) de ${numFiles} archivo(s). Suba más archivos para acumular o use "Limpiar datos" para reiniciar.` });
+      const dupMsg = dupCount > 0
+        ? ` · ⚠️ ${dupCount} duplicados filtrados (misma paciente+servicio+fecha de múltiples radicaciones)`
+        : '';
+      setMessage({ type: 'success', text: `Añadidos ${newRegistros.length - dupCount} registros únicos de ${numFiles} archivo(s) (${medCount} medicamentos, ${svcCount - dupCount} servicios)${dupMsg}.` });
 
     } catch (e) {
       console.error(e);
