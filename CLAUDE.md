@@ -193,6 +193,55 @@ Se excluyen líneas donde `nombreMed` coincide con `/OXIGENO|OXIGEN|GAS\s+MED|OX
 
 ---
 
+## Deduplicación de RIPS y revisión de actas (v2.17)
+
+### Deduplicación por paciente+cups+fecha
+
+El flujo de radicación descarga los archivos TXT combinando TODAS las radicaciones presentadas para un período (radicación 1, 2, 3…). Esto resulta en que los mismos encuentros clínicos aparecen varias veces (e.g., 29 líneas de urgencias para 10 encuentros reales).
+
+**Lógica de dedup en `processFiles` (App.tsx ~línea 1912):**
+- Para **MEDICAMENTOS**: dedup propio (`medDupSet`) dentro de `processFiles`, por `paciente|cups|fecha` — una dispensación única por código+fecha.
+- Para el **resto de tipos** (urgencias, laboratorio, TAB, imagen, etc.): dedup global en `setRegistros` por `paciente|cups|fecha`. Elimina registros idénticos acumulados de múltiples radicaciones.
+- La clave de urgencias usa `cups = 'URGBC'` (código interno, no CUPS real).
+
+**Aviso al usuario:** si se filtran duplicados, el mensaje de éxito lo indica:
+> "Añadidos 10 registros únicos · ⚠️ 19 duplicados filtrados (misma paciente+servicio+fecha de múltiples radicaciones)"
+
+### Fix toggle de sección URGENCIAS (`inUrgenciasSection`)
+
+**Bug anterior:** `inUrgenciasSection = true` siempre (header abre Y cierra ambos igual). Con múltiples radicaciones en un TXT, el header de cierre no apagaba la sección.
+
+**Fix v2.17:** Toggle `inUrgenciasSection = !inUrgenciasSection`. También se añadió reset explícito (`inUrgenciasSection = false`) al entrar a MEDICAMENTOS, USUARIOS y OTROS SERVICIOS. Esto asegura que solo las líneas dentro de cada bloque ARCHIVO-URGENCIAS se cuenten como urgencias.
+
+```javascript
+// ANTES (bug):
+inUrgenciasSection = true;  // nunca se apagaba con el header de cierre
+
+// DESPUÉS (fix):
+inUrgenciasSection = !inUrgenciasSection;  // toggle: abre y cierra
+// + en MEDICAMENTOS, USUARIOS, OTROS SERVICIOS:
+inUrgenciasSection = false;
+```
+
+### Modal de revisión para actas (manual y automático)
+
+**Antes v2.17:** `handleGenerarActa` hacía `setInlineActa(newActa); setActiveTab('actas')` — navegaba directamente a la pestaña Actas. El flujo automático no daba opción de revisar antes de guardar.
+
+**Desde v2.17:** `handleGenerarActa` hace `setEditingActa(newActa); setShowActaModal(true)` — abre el **ActaModal flotante** para revisión. Tanto el flujo **manual** (carga de RIPS + "Generar Acta") como el **automático** (radicación → "Procesar y Generar Acta") muestran el mismo modal con:
+- Gráfica de cumplimiento
+- Tabla de servicios con % por tipo
+- Campos editables (el usuario puede corregir valores antes de guardar)
+- Botón "Guardar" → añade a `actas` → auto-save a PocketBase
+- Botón "X" → cierra sin guardar
+
+### Badge y panel "Listos para evaluar" — fixes v2.17
+
+- `trimActa()` ya detectaba actas manuales y automáticas (usa `actas` de estado → todas las actas guardadas, sin importar cómo se crearon).
+- **Badge de pendientes** (useEffect ~línea 665): añadidas dependencias `actas` y `prestadores` → el conteo se actualiza en tiempo real al guardar nuevas actas.
+- **Filtro de contratos**: el badge ahora filtra solo contratos registrados en la app (`prestadores.some(p => p.contrato === c.contrato)`), igual que el panel visual. Antes podía mostrar contratos de otras EPSI.
+
+---
+
 ## Módulo Radicación — "Listos para evaluar" (v2.16)
 
 Panel en el Dashboard (solo visible para admin) que muestra contratos pendientes de evaluación cruzando datos de `radicacion.vercel.app` con las actas guardadas.
@@ -357,6 +406,7 @@ El formulario se popula desde `p.metas` del prestador seleccionado.
 
 | Versión | Tag git | Descripción |
 |---|---|---|
+| **2.17** | `v2.17` | Dedup inteligente con aviso de duplicados; modal de revisión para actas automáticas y manuales; fix toggle inUrgenciasSection; badge pendientes filtra solo contratos registrados. |
 | **2.16** | `v2.16` | Módulo radicación: panel "Listos para evaluar" integrado en Dashboard. Solo muestra contratos registrados en la app. Fix régimen, scale y prestador forzados desde radicación. Reintento 5xx. Preview de metas y renuencias al clic. |
 | **2.15** | `v2.15` | Deduplicación de actas por contrato+régimen+período. Alerta detallada al crear acta duplicada. |
 | **2.14** | `v2.14` | Dashboard Prestadores agrupados por IPS/NIT con cajón de contratos y actas. |
