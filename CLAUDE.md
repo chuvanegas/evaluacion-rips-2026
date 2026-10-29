@@ -302,6 +302,8 @@ Panel en el Dashboard (solo visible para admin) que muestra contratos pendientes
 - `findPrestadorRad(contrato, nit, reg)` (App.tsx) elige el prestador por **contrato + régimen** (`RS`→SUBSIDIADO, `RC`→CONTRIBUTIVO). Orden: contrato+régimen → contrato → NIT+régimen → NIT.
 - Lo usan los chips de trimestre (preview), `doEvalDirect` y `handleEvaluar`. Antes se buscaba solo por contrato/NIT y, cuando Subsidiado y Contributivo comparten número de contrato (ej. ASE-44847-2026-47), ambos regímenes mostraban y evaluaban con las metas del primero que se encontraba.
 - Si no hay contrato registrado para ese régimen, el preview muestra un aviso y usa las metas del otro régimen; se corrige registrando el contrato con **+ Contrato**.
+- **v2.24:** el preview indica de qué registro salen las metas ("Metas del contrato registrado: X · RÉGIMEN") y avisa cuando las metas activas de ambos regímenes del mismo contrato son **idénticas** (casi siempre copiadas al crear el régimen complementario).
+- Causa raíz: el botón "Sí, crear {régimen complementario}" (oferta tras guardar un prestador) copiaba `metas` del primer régimen. Desde v2.24 conserva los servicios pero con `monthlyGoal: 0`, como "+ Contrato". Los registros ya copiados hay que corregirlos a mano en Mantenimiento.
 
 ### Refs de control (evitan stale closure / async React)
 | Ref | Propósito |
@@ -462,6 +464,7 @@ El formulario se popula desde `p.metas` del prestador seleccionado.
 
 | Versión | Tag git | Descripción |
 |---|---|---|
+| **2.24** | `v2.24` | El régimen complementario ya no copia las metas (inicia en cero); el preview indica el registro de origen de las metas y avisa si ambos regímenes tienen metas idénticas. |
 | **2.23** | `v2.23` | Listos para evaluar: el prestador y sus metas se eligen por contrato + régimen (antes ambos regímenes usaban las mismas metas); aviso si falta el contrato del régimen. |
 | **2.22** | `v2.22` | Guardar el acta no cierra la ventana: queda "✓ Guardada" y sugiere imprimir; cerrar pide confirmación si no se ha guardado o impreso. |
 | **2.21** | `v2.21` | Duplicados con el mismo formato que vinculados de Urgencias en todos los servicios: "+N duplicados" y "Sumar (k/N)", selección por grupo, guardada en el acta y reversible (no borra registros). PAI agrupa vacunas. |

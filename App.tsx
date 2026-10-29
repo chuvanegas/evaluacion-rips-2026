@@ -2985,6 +2985,30 @@ function App() {
                         <span className="text-[10px] text-amber-700 dark:text-amber-400">Prestador no registrado en la app. Se puede procesar pero no se asignarán metas.</span>
                       </div>
                     )}
+                    {pFound && (() => {
+                      // ¿El otro régimen del mismo contrato tiene exactamente las mismas metas? (copiadas al crearlo)
+                      const regFull = reg === 'RC' ? 'CONTRIBUTIVO' : 'SUBSIDIADO';
+                      if ((pFound.regimen || 'SUBSIDIADO').toUpperCase() !== regFull) return null;
+                      const otro = prestadores.find(p => p.id !== pFound.id && p.contrato === pFound.contrato &&
+                        (p.regimen || 'SUBSIDIADO').toUpperCase() !== regFull);
+                      const firma = (x: any) => (x.metas || []).filter((m: any) => m.active && m.monthlyGoal > 0)
+                        .map((m: any) => `${m.type}:${m.monthlyGoal}`).sort().join('|');
+                      if (!otro || !firma(pFound) || firma(otro) !== firma(pFound)) return null;
+                      return (
+                        <div className="flex items-start gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 mb-2">
+                          <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
+                          <span className="text-[10px] text-amber-700 dark:text-amber-400">
+                            Las metas registradas para <strong>{regLabel}</strong> son idénticas a las de <strong>{(otro.regimen || 'SUBSIDIADO').toLowerCase()}</strong> en {pFound.contrato}.
+                            Probablemente se copiaron al crear el régimen. Corríjalas en Mantenimiento (lápiz del contrato {regLabel.toLowerCase()}).
+                          </span>
+                        </div>
+                      );
+                    })()}
+                    {pFound && (
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mb-1">
+                        Metas del contrato registrado: <strong>{pFound.contrato}</strong> · <strong>{(pFound.regimen || 'SUBSIDIADO').toUpperCase()}</strong>
+                      </p>
+                    )}
                     {pFound && (pFound.regimen || 'SUBSIDIADO').toUpperCase() !== (reg === 'RC' ? 'CONTRIBUTIVO' : 'SUBSIDIADO') && (
                       <div className="flex items-start gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 mb-2">
                         <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
@@ -6070,7 +6094,9 @@ echo "* * * * * root /usr/local/bin/metrics.sh; sleep 30; /usr/local/bin/metrics
                 >No, gracias</button>
                 <button
                   onClick={() => {
-                    setPrestForm({ ...ofrecerComplementario, regimen: regimenComp, contrato: '' });
+                    // Las metas del otro régimen son distintas: mismos servicios, valores en cero
+                    setPrestForm({ ...ofrecerComplementario, regimen: regimenComp, contrato: '',
+                      metas: (ofrecerComplementario.metas || []).map(m => ({ ...m, monthlyGoal: 0, renuencias: 0 })) });
                     setEditPrest(null);
                     setOfrecerComplementario(null);
                     setShowPrestForm(true);
