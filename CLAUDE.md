@@ -298,12 +298,18 @@ Panel en el Dashboard (solo visible para admin) que muestra contratos pendientes
 - **Sin acta existente:** se omiten trimestres que ya tienen acta para ese contrato+régimen+período (`trimActa`).
 - **Radicación con datos:** contratos sin ninguna radicación no aparecen.
 
-### Prestador por contrato + régimen (v2.23)
-- `findPrestadorRad(contrato, nit, reg)` (App.tsx) elige el prestador por **contrato + régimen** (`RS`→SUBSIDIADO, `RC`→CONTRIBUTIVO). Orden: contrato+régimen → contrato → NIT+régimen → NIT.
-- Lo usan los chips de trimestre (preview), `doEvalDirect` y `handleEvaluar`. Antes se buscaba solo por contrato/NIT y, cuando Subsidiado y Contributivo comparten número de contrato (ej. ASE-44847-2026-47), ambos regímenes mostraban y evaluaban con las metas del primero que se encontraba.
-- Si no hay contrato registrado para ese régimen, el preview muestra un aviso y usa las metas del otro régimen; se corrige registrando el contrato con **+ Contrato**.
-- **v2.24:** el preview indica de qué registro salen las metas ("Metas del contrato registrado: X · RÉGIMEN") y avisa cuando las metas activas de ambos regímenes del mismo contrato son **idénticas** (casi siempre copiadas al crear el régimen complementario).
-- Causa raíz: el botón "Sí, crear {régimen complementario}" (oferta tras guardar un prestador) copiaba `metas` del primer régimen. Desde v2.24 conserva los servicios pero con `monthlyGoal: 0`, como "+ Contrato". Los registros ya copiados hay que corregirlos a mano en Mantenimiento.
+### Prestador por contrato + régimen (v2.23 → v2.25)
+- **Cada régimen es un registro de prestador aparte con sus propias metas** (el subsidiado siempre tiene metas mayores que el contributivo). Nunca usar las metas de un régimen para el otro.
+- En radicación ambos regímenes suelen venir con el **mismo número de contrato**, pero el registro de la app puede tenerlo escrito distinto (espacios, guiones, prefijo, dígito de verificación en el NIT…).
+- `matchPrestadorRad(contrato, nit, reg)` (App.tsx) devuelve `{ p, modo, candidatos }`:
+  1. `exacto` — contrato normalizado (`normContrato`: mayúsculas, sin espacios, guiones unicode → `-`) + régimen.
+  2. `nit` — mismo NIT (`normNit`: solo dígitos, primeros 9) + régimen; si hay varios contratos se elige el más parecido (`simContrato`: grupos de dígitos iguales en la misma posición). Ej. JEKEET tiene 2 contratos por régimen.
+  3. `otroRegimen` — solo si no existe ningún registro del régimen: usa el del otro régimen y el preview muestra aviso.
+  4. `ninguno`.
+  `findPrestadorRad` = `matchPrestadorRad(...).p`. Lo usan los chips de trimestre, `doEvalDirect`, "Período personalizado" (`radSelector.pFound` conserva la elección del preview) y `handleEvaluar`.
+- Preview: selector **"Metas del contrato registrado"** con todos los registros del contrato/NIT (contrato · régimen) para elegir manualmente; aviso azul si se emparejó por NIT con otro número de contrato; aviso ámbar si se usa el otro régimen o si ambos regímenes tienen metas idénticas.
+- Verificado con prueba unitaria (8 casos) extrayendo las funciones de App.tsx y ejecutándolas con node.
+- v2.24: el botón "Sí, crear {régimen complementario}" ya no copia las metas (inicia en cero).
 
 ### Refs de control (evitan stale closure / async React)
 | Ref | Propósito |
@@ -464,6 +470,7 @@ El formulario se popula desde `p.metas` del prestador seleccionado.
 
 | Versión | Tag git | Descripción |
 |---|---|---|
+| **2.25** | `v2.25` | Metas del régimen correcto aunque el número de contrato del registro no coincida con radicación (contrato normalizado → NIT + régimen → otro régimen con aviso); selector para elegir el registro en el preview. |
 | **2.24** | `v2.24` | El régimen complementario ya no copia las metas (inicia en cero); el preview indica el registro de origen de las metas y avisa si ambos regímenes tienen metas idénticas. |
 | **2.23** | `v2.23` | Listos para evaluar: el prestador y sus metas se eligen por contrato + régimen (antes ambos regímenes usaban las mismas metas); aviso si falta el contrato del régimen. |
 | **2.22** | `v2.22` | Guardar el acta no cierra la ventana: queda "✓ Guardada" y sugiere imprimir; cerrar pide confirmación si no se ha guardado o impreso. |

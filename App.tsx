@@ -328,7 +328,7 @@ function App() {
   const [radLastFetch, setRadLastFetch] = useState<string | null>(null);
   const [radEvaluando, setRadEvaluando] = useState<string | null>(null);
   const [radFilesReady, setRadFilesReady] = useState<{ contrato: string; reg: string; prestador: string; files: File[]; meses: string[]; pFound: any; periodoStr: string } | null>(null);
-  const [radSelector, setRadSelector] = useState<{ c: any; reg: string; selMeses: Set<string> } | null>(null);
+  const [radSelector, setRadSelector] = useState<{ c: any; reg: string; selMeses: Set<string>; pFound?: any } | null>(null);
   const [radSearch, setRadSearch] = useState('');
   const [radPreview, setRadPreview] = useState<{ c: any; reg: string; t: any; pFound: any } | null>(null);
   const [searchPrestador, setSearchPrestador] = useState('');
@@ -2160,15 +2160,36 @@ function App() {
   }, [registros, otrosLineas]);
 
   // Prestador de un contrato de radicación respetando el régimen (RS/RC).
-  // Un mismo número de contrato puede existir como dos prestadores (Subsidiado y Contributivo) con metas distintas.
-  const findPrestadorRad = (contrato: string, nit: any, reg: string): Prestador | undefined => {
+  // Cada régimen es un registro aparte con sus propias metas; el número de contrato del registro
+  // puede no coincidir textualmente con el de radicación, así que se cae al NIT + régimen antes
+  // de usar el registro del otro régimen.
+  const normContrato = (x: any) => String(x || '').toUpperCase().replace(/[\u2010-\u2015\u2212]/g, '-').replace(/\s+/g, '');
+  const normNit = (x: any) => String(x || '').replace(/\D/g, '').slice(0, 9);
+  const simContrato = (x: string, y: string) => {
+    const gx = normContrato(x).match(/\d+/g) || [], gy = normContrato(y).match(/\d+/g) || [];
+    let n = 0;
+    for (let i = 0; i < Math.min(gx.length, gy.length); i++) if (gx[i] === gy[i]) n++;
+    return n;
+  };
+  const matchPrestadorRad = (contrato: string, nit: any, reg: string) => {
     const regFull = reg === 'RC' ? 'CONTRIBUTIVO' : 'SUBSIDIADO';
     const mismoReg = (p: Prestador) => (p.regimen || 'SUBSIDIADO').toUpperCase() === regFull;
-    return prestadores.find(p => p.contrato === contrato && mismoReg(p))
-      || prestadores.find(p => p.contrato === contrato)
-      || prestadores.find(p => String(p.nit) === String(nit) && mismoReg(p))
-      || prestadores.find(p => String(p.nit) === String(nit));
+    const c0 = normContrato(contrato);
+    const n0 = normNit(nit);
+    const porContrato = prestadores.filter(p => normContrato(p.contrato) === c0);
+    const porNit = n0 ? prestadores.filter(p => normNit(p.nit) === n0) : [];
+    const candidatos = [...new Map([...porContrato, ...porNit].map(p => [p.id, p] as [string, Prestador])).values()];
+    const masParecido = (lista: Prestador[]) => [...lista].sort((x, y) => simContrato(y.contrato, contrato) - simContrato(x.contrato, contrato))[0];
+    const exacto = porContrato.find(mismoReg);
+    if (exacto) return { p: exacto, modo: 'exacto' as const, candidatos };
+    const nitReg = porNit.filter(mismoReg);
+    if (nitReg.length) return { p: masParecido(nitReg), modo: 'nit' as const, candidatos };
+    const otro = porContrato[0] || (porNit.length ? masParecido(porNit) : undefined);
+    if (otro) return { p: otro, modo: 'otroRegimen' as const, candidatos };
+    return { p: undefined, modo: 'ninguno' as const, candidatos };
   };
+  const findPrestadorRad = (contrato: string, nit: any, reg: string): Prestador | undefined =>
+    matchPrestadorRad(contrato, nit, reg).p;
 
   // Auto-consolidate PAI actas when opened or when RIPS change
   useEffect(() => {
@@ -2657,7 +2678,7 @@ function App() {
 
           const doDownload = async () => {
             if (!radSelector) return;
-            const { c, reg, selMeses } = radSelector;
+            const { c, reg, selMeses, pFound: pElegido } = radSelector;
             if (selMeses.size === 0) { setMessage({ type: 'error', text: 'Selecciona al menos un mes.' }); return; }
             const key = `${c.contrato}|${reg}|sel`;
             setRadEvaluando(key);
@@ -2699,7 +2720,7 @@ function App() {
               setMessage({ type: 'info', text: `⚠️ Meses omitidos (sin datos o error): ${mesesOmitidos.join(', ')}. Se continúa con ${archivos.length} mes(es).` });
             }
             // NIT como string para comparar correctamente
-            const pFound = findPrestadorRad(c.contrato, c.nit, reg);
+            const pFound = pElegido ?? findPrestadorRad(c.contrato, c.nit, reg);
             // Período en español para pre-llenar el acta
             const periodoStr = mesesESLabels.join(', ');
             setRadSelector(null);
@@ -2985,39 +3006,63 @@ function App() {
                         <span className="text-[10px] text-amber-700 dark:text-amber-400">Prestador no registrado en la app. Se puede procesar pero no se asignarán metas.</span>
                       </div>
                     )}
-                    {pFound && (() => {
-                      // ¿El otro régimen del mismo contrato tiene exactamente las mismas metas? (copiadas al crearlo)
+                    {(() => {
                       const regFull = reg === 'RC' ? 'CONTRIBUTIVO' : 'SUBSIDIADO';
-                      if ((pFound.regimen || 'SUBSIDIADO').toUpperCase() !== regFull) return null;
-                      const otro = prestadores.find(p => p.id !== pFound.id && p.contrato === pFound.contrato &&
-                        (p.regimen || 'SUBSIDIADO').toUpperCase() !== regFull);
-                      const firma = (x: any) => (x.metas || []).filter((m: any) => m.active && m.monthlyGoal > 0)
-                        .map((m: any) => `${m.type}:${m.monthlyGoal}`).sort().join('|');
-                      if (!otro || !firma(pFound) || firma(otro) !== firma(pFound)) return null;
+                      const regDe = (x: any) => (x?.regimen || 'SUBSIDIADO').toUpperCase();
+                      const m = matchPrestadorRad(c.contrato, c.nit, reg);
+                      const elegidoReg = !!pFound && regDe(pFound) === regFull;
+                      // Registro del otro régimen para el mismo prestador (para detectar metas copiadas)
+                      const mo = pFound ? matchPrestadorRad(pFound.contrato, pFound.nit, reg === 'RC' ? 'RS' : 'RC') : null;
+                      const otro = mo && (mo.modo === 'exacto' || mo.modo === 'nit') && mo.p && mo.p.id !== pFound?.id ? mo.p : null;
+                      const firma = (x: any) => (x?.metas || []).filter((mt: any) => mt.active && mt.monthlyGoal > 0)
+                        .map((mt: any) => `${mt.type}:${mt.monthlyGoal}`).sort().join('|');
+                      const identicas = elegidoReg && !!otro && !!firma(pFound) && firma(otro) === firma(pFound);
                       return (
-                        <div className="flex items-start gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 mb-2">
-                          <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
-                          <span className="text-[10px] text-amber-700 dark:text-amber-400">
-                            Las metas registradas para <strong>{regLabel}</strong> son idénticas a las de <strong>{(otro.regimen || 'SUBSIDIADO').toLowerCase()}</strong> en {pFound.contrato}.
-                            Probablemente se copiaron al crear el régimen. Corríjalas en Mantenimiento (lápiz del contrato {regLabel.toLowerCase()}).
-                          </span>
-                        </div>
+                        <>
+                          {m.candidatos.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-1.5 mb-1 text-[10px] text-slate-500 dark:text-slate-400">
+                              <span>Metas del contrato registrado:</span>
+                              <select value={pFound?.id || ''}
+                                onChange={e => { const np = prestadores.find(p => p.id === e.target.value) || null; setRadPreview(prev => prev ? { ...prev, pFound: np } : prev); }}
+                                className="text-[10px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded px-1.5 py-0.5 text-slate-700 dark:text-slate-200">
+                                {!pFound && <option value="">— Seleccione —</option>}
+                                {m.candidatos.map(p => (
+                                  <option key={p.id} value={p.id}>{p.contrato} · {regDe(p)}</option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+                          {pFound && !elegidoReg && (
+                            <div className="flex items-start gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 mb-2">
+                              <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
+                              <span className="text-[10px] text-amber-700 dark:text-amber-400">
+                                No se encontró un registro <strong>{regLabel}</strong> para este prestador (contrato {c.contrato}, NIT {c.nit}).
+                                Se muestran las metas del registro <strong>{regDe(pFound).toLowerCase()}</strong> {pFound.contrato}.
+                                Elija el registro correcto en la lista o créelo en Mantenimiento (+ Contrato, régimen {regLabel}).
+                              </span>
+                            </div>
+                          )}
+                          {pFound && elegidoReg && m.modo === 'nit' && m.p?.id === pFound.id && (
+                            <div className="flex items-start gap-1.5 px-2.5 py-1.5 rounded-lg bg-sky-50 dark:bg-sky-500/10 border border-sky-200 dark:border-sky-500/30 mb-2">
+                              <AlertTriangle className="h-3.5 w-3.5 text-sky-500 shrink-0 mt-0.5" />
+                              <span className="text-[10px] text-sky-700 dark:text-sky-300">
+                                En radicación el contrato es <strong>{c.contrato}</strong>; el registro {regLabel} de este NIT está como <strong>{pFound.contrato}</strong>.
+                                Se usan sus metas. Si no es el correcto, cámbielo en la lista.
+                              </span>
+                            </div>
+                          )}
+                          {identicas && (
+                            <div className="flex items-start gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 mb-2">
+                              <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
+                              <span className="text-[10px] text-amber-700 dark:text-amber-400">
+                                Las metas de <strong>{regLabel}</strong> ({pFound.contrato}) son idénticas a las de <strong>{regDe(otro).toLowerCase()}</strong> ({otro?.contrato}).
+                                Revíselas en Mantenimiento: cada régimen debe tener sus propias metas.
+                              </span>
+                            </div>
+                          )}
+                        </>
                       );
                     })()}
-                    {pFound && (
-                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mb-1">
-                        Metas del contrato registrado: <strong>{pFound.contrato}</strong> · <strong>{(pFound.regimen || 'SUBSIDIADO').toUpperCase()}</strong>
-                      </p>
-                    )}
-                    {pFound && (pFound.regimen || 'SUBSIDIADO').toUpperCase() !== (reg === 'RC' ? 'CONTRIBUTIVO' : 'SUBSIDIADO') && (
-                      <div className="flex items-start gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 mb-2">
-                        <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
-                        <span className="text-[10px] text-amber-700 dark:text-amber-400">
-                          No hay un contrato <strong>{regLabel}</strong> registrado para {c.contrato}. Se muestran las metas del contrato <strong>{(pFound.regimen || 'SUBSIDIADO').toLowerCase()}</strong>.
-                          Regístrelo en Mantenimiento (+ Contrato) para usar sus propias metas.
-                        </span>
-                      </div>
-                    )}
                     {/* Tabla de actividades */}
                     {activeMetas.length > 0 && (
                       <div className="mb-2">
@@ -3069,7 +3114,7 @@ function App() {
                       <button
                         onClick={() => {
                           const sel = new Set(t.meses.map((m: number) => mkKey(t.anio, m)));
-                          setRadSelector({ c, reg, selMeses: sel });
+                          setRadSelector({ c, reg, selMeses: sel, pFound });
                           setRadPreview(null);
                         }}
                         className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 border border-dashed border-slate-300 dark:border-slate-600 transition-colors"
