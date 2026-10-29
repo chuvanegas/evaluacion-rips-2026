@@ -2159,6 +2159,17 @@ function App() {
     return otrosLineas.filter(o => urgKeys.has(`${o.paciente}|${o.fecha}`) && !/^\d{3,4}T\d{2}$/.test(o.cups));
   }, [registros, otrosLineas]);
 
+  // Prestador de un contrato de radicación respetando el régimen (RS/RC).
+  // Un mismo número de contrato puede existir como dos prestadores (Subsidiado y Contributivo) con metas distintas.
+  const findPrestadorRad = (contrato: string, nit: any, reg: string): Prestador | undefined => {
+    const regFull = reg === 'RC' ? 'CONTRIBUTIVO' : 'SUBSIDIADO';
+    const mismoReg = (p: Prestador) => (p.regimen || 'SUBSIDIADO').toUpperCase() === regFull;
+    return prestadores.find(p => p.contrato === contrato && mismoReg(p))
+      || prestadores.find(p => p.contrato === contrato)
+      || prestadores.find(p => String(p.nit) === String(nit) && mismoReg(p))
+      || prestadores.find(p => String(p.nit) === String(nit));
+  };
+
   // Auto-consolidate PAI actas when opened or when RIPS change
   useEffect(() => {
     if (!inlineActa) return;
@@ -2688,8 +2699,7 @@ function App() {
               setMessage({ type: 'info', text: `⚠️ Meses omitidos (sin datos o error): ${mesesOmitidos.join(', ')}. Se continúa con ${archivos.length} mes(es).` });
             }
             // NIT como string para comparar correctamente
-            const pFound = prestadores.find(p => String(p.nit) === String(c.nit) && p.contrato === c.contrato)
-              || prestadores.find(p => String(p.nit) === String(c.nit));
+            const pFound = findPrestadorRad(c.contrato, c.nit, reg);
             // Período en español para pre-llenar el acta
             const periodoStr = mesesESLabels.join(', ');
             setRadSelector(null);
@@ -2828,7 +2838,6 @@ function App() {
                         {g.contratos.map((c: any) => {
                           const regsConMeses = c.regs.filter((reg: string) => mesesDispArray(c.contrato, reg).length > 0);
                           if (regsConMeses.length === 0) return null;
-                          const pF = prestadores.find(p => p.contrato === c.contrato);
                           return (
                             <div key={c.contrato} className="px-3 py-1.5 inline-flex items-center gap-2 overflow-x-auto max-w-full">
                               <span className="text-[10px] font-mono text-slate-400 shrink-0">{c.contrato}</span>
@@ -2844,7 +2853,7 @@ function App() {
                                         if (yaActa || !completo) return null;
                                         return (
                                           <button key={t.id}
-                                            onClick={() => { setRadPreview({ c, reg, t, pFound: pF ?? null }); setRadSelector(null); setRadFilesReady(null); }}
+                                            onClick={() => { setRadPreview({ c, reg, t, pFound: findPrestadorRad(c.contrato, c.nit, reg) ?? null }); setRadSelector(null); setRadFilesReady(null); }}
                                             disabled={!!radEvaluando}
                                             className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${regColor === 'orange' ? 'bg-orange-500 hover:bg-orange-600' : 'bg-emerald-500 hover:bg-emerald-600'} text-white active:scale-95 disabled:opacity-50`}
                                           >{t.label}</button>
@@ -2974,6 +2983,15 @@ function App() {
                       <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 mb-2">
                         <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
                         <span className="text-[10px] text-amber-700 dark:text-amber-400">Prestador no registrado en la app. Se puede procesar pero no se asignarán metas.</span>
+                      </div>
+                    )}
+                    {pFound && (pFound.regimen || 'SUBSIDIADO').toUpperCase() !== (reg === 'RC' ? 'CONTRIBUTIVO' : 'SUBSIDIADO') && (
+                      <div className="flex items-start gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 mb-2">
+                        <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
+                        <span className="text-[10px] text-amber-700 dark:text-amber-400">
+                          No hay un contrato <strong>{regLabel}</strong> registrado para {c.contrato}. Se muestran las metas del contrato <strong>{(pFound.regimen || 'SUBSIDIADO').toLowerCase()}</strong>.
+                          Regístrelo en Mantenimiento (+ Contrato) para usar sus propias metas.
+                        </span>
                       </div>
                     )}
                     {/* Tabla de actividades */}
@@ -5693,7 +5711,7 @@ echo "* * * * * root /usr/local/bin/metrics.sh; sleep 30; /usr/local/bin/metrics
                 }
                 setRadEvaluando(null);
                 if (archivos.length === 0) { setMessage({ type: 'error', text: 'No se pudieron descargar los RIPS.' }); return; }
-                const pFound = prestadores.find(p => p.nit === c.nit);
+                const pFound = findPrestadorRad(c.contrato, c.nit, reg);
                 if (pFound) handleLoadPrestadorMetas(pFound);
                 setRegistros([]);
                 const dt = new DataTransfer();

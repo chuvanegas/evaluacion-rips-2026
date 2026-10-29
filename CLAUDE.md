@@ -298,6 +298,11 @@ Panel en el Dashboard (solo visible para admin) que muestra contratos pendientes
 - **Sin acta existente:** se omiten trimestres que ya tienen acta para ese contrato+régimen+período (`trimActa`).
 - **Radicación con datos:** contratos sin ninguna radicación no aparecen.
 
+### Prestador por contrato + régimen (v2.23)
+- `findPrestadorRad(contrato, nit, reg)` (App.tsx) elige el prestador por **contrato + régimen** (`RS`→SUBSIDIADO, `RC`→CONTRIBUTIVO). Orden: contrato+régimen → contrato → NIT+régimen → NIT.
+- Lo usan los chips de trimestre (preview), `doEvalDirect` y `handleEvaluar`. Antes se buscaba solo por contrato/NIT y, cuando Subsidiado y Contributivo comparten número de contrato (ej. ASE-44847-2026-47), ambos regímenes mostraban y evaluaban con las metas del primero que se encontraba.
+- Si no hay contrato registrado para ese régimen, el preview muestra un aviso y usa las metas del otro régimen; se corrige registrando el contrato con **+ Contrato**.
+
 ### Refs de control (evitan stale closure / async React)
 | Ref | Propósito |
 |---|---|
@@ -457,6 +462,7 @@ El formulario se popula desde `p.metas` del prestador seleccionado.
 
 | Versión | Tag git | Descripción |
 |---|---|---|
+| **2.23** | `v2.23` | Listos para evaluar: el prestador y sus metas se eligen por contrato + régimen (antes ambos regímenes usaban las mismas metas); aviso si falta el contrato del régimen. |
 | **2.22** | `v2.22` | Guardar el acta no cierra la ventana: queda "✓ Guardada" y sugiere imprimir; cerrar pide confirmación si no se ha guardado o impreso. |
 | **2.21** | `v2.21` | Duplicados con el mismo formato que vinculados de Urgencias en todos los servicios: "+N duplicados" y "Sumar (k/N)", selección por grupo, guardada en el acta y reversible (no borra registros). PAI agrupa vacunas. |
 | **2.20** | `v2.20` | Duplicados revisables y quitables por servicio desde el acta (selección por grupo); renuencias del acta salen de los registros de la pestaña Renuencias, no de los números manuales del Dashboard. |
