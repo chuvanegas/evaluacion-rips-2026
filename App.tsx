@@ -623,7 +623,7 @@ function App() {
     if (currentUser?.role !== 'admin') return;
     const onDash = activeTab === 'dashboard';
     const onMonitor = activeTab === 'mantenimiento' && maintTab === 'monitor';
-    if (!onDash && !onMonitor) return;
+    if (!onDash && !onMonitor && !showPrestForm) return;
     const fetchRad = () => {
       setRadFetching(true); setRadError(null);
       fetch('https://radicacion.vercel.app/api/evaluar', { headers: { 'x-token': 'DUSAKAWI-RIPS-2026' }, cache: 'no-store' })
@@ -636,7 +636,7 @@ function App() {
     // Refrescar cada 12 horas mientras el tab esté activo
     const id = setInterval(fetchRad, 12 * 60 * 60 * 1000);
     return () => clearInterval(id);
-  }, [activeTab, maintTab]);
+  }, [activeTab, maintTab, showPrestForm]);
 
   // Auto-actualizar scale según meses detectados en los RIPS cargados
   useEffect(() => {
@@ -997,14 +997,22 @@ function App() {
       setMessage({ type: 'error', text: 'Nombre y NIT son obligatorios.' });
       return;
     }
+    const formN = { ...prestForm, contrato: limpiarContrato(prestForm.contrato), nit: prestForm.nit.trim().replace(/[\s.]/g, '') };
+    const avisos = validarContratoPrestador(formN, editPrest?.id ?? null);
+    const errores = avisos.filter(a => a.tipo === 'error');
+    if (errores.length) { window.alert(errores.map(e => e.texto).join('\n')); return; }
+    const pendientes = avisos.filter(a => a.tipo === 'aviso');
+    if (pendientes.length && !window.confirm(
+      `Revise el N° de contrato ${formN.contrato} antes de guardar:\n\n• ${pendientes.map(a => a.texto).join('\n• ')}\n\nAceptar = guardar así · Cancelar = corregir`
+    )) return;
     if (editPrest) {
-      setPrestadores(prev => prev.map(p => p.id === editPrest.id ? { ...prestForm, id: editPrest.id } : p));
+      setPrestadores(prev => prev.map(p => p.id === editPrest.id ? { ...formN, id: editPrest.id } : p));
     } else {
-      setPrestadores(prev => [...prev, { ...prestForm, id: Date.now().toString() }]);
+      setPrestadores(prev => [...prev, { ...formN, id: Date.now().toString() }]);
     }
     setShowPrestForm(false);
     setEditPrest(null);
-    const formGuardado = { ...prestForm };
+    const formGuardado = { ...formN };
     setPrestForm({ nombre: '', nit: '', departamento: '', municipio: '', contrato: '', vigencia: '', regimen: 'SUBSIDIADO', tipoContrato: 'ASISTENCIAL', metas: TIPOS_ASISTENCIAL.map(t => ({ type: t, monthlyGoal: 0, active: true })) });
     setMessage({ type: 'success', text: editPrest ? 'Prestador actualizado.' : 'Prestador creado.' });
     // Ofrecer régimen complementario solo al crear (no al editar)
@@ -2190,6 +2198,52 @@ function App() {
   };
   const findPrestadorRad = (contrato: string, nit: any, reg: string): Prestador | undefined =>
     matchPrestadorRad(contrato, nit, reg).p;
+
+  // Número de contrato tal como se guarda: mayúsculas, guiones normales, sin espacios
+  const limpiarContrato = (x: any) => String(x || '').toUpperCase().trim()
+    .replace(/[\u2010-\u2015\u2212]/g, '-').replace(/\s*-\s*/g, '-').replace(/\s+/g, '-')
+    .replace(/-+/g, '-').replace(/^-|-$/g, '');
+  type AvisoContrato = { tipo: 'error' | 'aviso' | 'info'; texto: string; sugerencias?: string[] };
+  // Validación del N° de contrato al crear/editar un prestador: el mismo contrato debe quedar escrito
+  // idéntico en ambos regímenes y igual que en radicación, o las metas se cruzan entre regímenes.
+  const validarContratoPrestador = (form: Omit<Prestador, 'id'>, editId: string | null): AvisoContrato[] => {
+    const out: AvisoContrato[] = [];
+    const c = limpiarContrato(form.contrato);
+    if (!c) return [{ tipo: 'error', texto: 'El N° de contrato es obligatorio.' }];
+    const reg = (form.regimen || 'SUBSIDIADO').toUpperCase();
+    const n0 = normNit(form.nit);
+    const otros = prestadores.filter(p => p.id !== editId);
+    const dup = otros.find(p => normContrato(p.contrato) === normContrato(c) && (p.regimen || 'SUBSIDIADO').toUpperCase() === reg);
+    if (dup) out.push({ tipo: 'error', texto: `Ya existe el contrato ${dup.contrato} en régimen ${reg} (${dup.nombre}). Edite ese registro en lugar de crear otro.` });
+    if (!/^[A-Z]{2,4}-\d{3,6}-\d{4}-\d{1,3}$/.test(c)) out.push({ tipo: 'aviso', texto: `"${c}" no tiene el formato habitual (ej. ASB-20001-2026-04).` });
+    const sugeridos = new Set<string>();
+    // Mismo NIT, número parecido pero escrito distinto (casi siempre el mismo contrato mal digitado)
+    (n0 ? otros.filter(p => normNit(p.nit) === n0) : []).forEach(p => {
+      const pc = limpiarContrato(p.contrato);
+      if (!pc || normContrato(pc) === normContrato(c) || sugeridos.has(pc) || simContrato(pc, c) < 2) return;
+      sugeridos.add(pc);
+      out.push({ tipo: 'aviso', texto: `El registro ${(p.regimen || 'SUBSIDIADO').toUpperCase()} de este NIT tiene el contrato ${p.contrato}. Si es el mismo contrato, debe quedar idéntico.`, sugerencias: [pc] });
+    });
+    // Contra radicación (si ya se cargó)
+    if (radData && n0) {
+      const radCons = (radData.contratos || []).filter((rc: any) => normNit(rc.nit) === n0);
+      if (radCons.length === 0) {
+        out.push({ tipo: 'info', texto: `El NIT ${form.nit} no aparece en radicación; verifique el NIT.` });
+      } else if (!radCons.some((rc: any) => normContrato(rc.contrato) === normContrato(c))) {
+        const parecidos = radCons.filter((rc: any) => simContrato(rc.contrato, c) >= 2);
+        const lista = (parecidos.length ? parecidos : radCons).map((rc: any) => limpiarContrato(rc.contrato)).filter((x: string) => !sugeridos.has(x));
+        lista.forEach((x: string) => sugeridos.add(x));
+        out.push({
+          tipo: 'aviso',
+          texto: parecidos.length
+            ? `En radicación este NIT tiene el contrato ${parecidos.map((rc: any) => rc.contrato).join(', ')}.`
+            : `"${c}" no existe en radicación para este NIT. Contratos radicados: ${radCons.map((rc: any) => rc.contrato).join(', ')}.`,
+          sugerencias: lista.slice(0, 4),
+        });
+      }
+    }
+    return out;
+  };
 
   // Auto-consolidate PAI actas when opened or when RIPS change
   useEffect(() => {
@@ -6140,7 +6194,7 @@ echo "* * * * * root /usr/local/bin/metrics.sh; sleep 30; /usr/local/bin/metrics
                 <button
                   onClick={() => {
                     // Las metas del otro régimen son distintas: mismos servicios, valores en cero
-                    setPrestForm({ ...ofrecerComplementario, regimen: regimenComp, contrato: '',
+                    setPrestForm({ ...ofrecerComplementario, regimen: regimenComp, contrato: limpiarContrato(ofrecerComplementario.contrato),
                       metas: (ofrecerComplementario.metas || []).map(m => ({ ...m, monthlyGoal: 0, renuencias: 0 })) });
                     setEditPrest(null);
                     setOfrecerComplementario(null);
@@ -6182,11 +6236,40 @@ echo "* * * * * root /usr/local/bin/metrics.sh; sleep 30; /usr/local/bin/metrics
                     <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide block mb-1">{label}</label>
                     <input
                       type="text"
-                      placeholder={placeholder}
+                      placeholder={key === 'contrato' ? 'ASB-20001-2026-04' : placeholder}
                       value={prestForm[key] as string}
                       onChange={e => setPrestForm(prev => ({ ...prev, [key]: e.target.value }))}
                       className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/50 outline-none transition-all"
                     />
+                    {key === 'contrato' && String(prestForm.contrato || '').trim() !== '' && (() => {
+                      const limpio = limpiarContrato(prestForm.contrato);
+                      const avisos = validarContratoPrestador({ ...prestForm, contrato: limpio }, editPrest?.id ?? null);
+                      return (
+                        <div className="mt-1 space-y-1">
+                          {limpio !== String(prestForm.contrato || '').trim() && (
+                            <p className="text-[11px] text-slate-500">Se guardará como <strong className="font-mono">{limpio}</strong></p>
+                          )}
+                          {avisos.map((a, i) => (
+                            <div key={i} className={`text-[11px] rounded-md px-2 py-1 border ${a.tipo === 'error'
+                              ? 'bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/30 text-red-700 dark:text-red-300'
+                              : a.tipo === 'aviso'
+                                ? 'bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30 text-amber-800 dark:text-amber-300'
+                                : 'bg-sky-50 dark:bg-sky-500/10 border-sky-200 dark:border-sky-500/30 text-sky-700 dark:text-sky-300'}`}>
+                              {a.texto}
+                              {(a.sugerencias || []).map(sg => (
+                                <button key={sg} type="button" onClick={() => setPrestForm(prev => ({ ...prev, contrato: sg }))}
+                                  className="ml-1.5 px-1.5 py-0.5 rounded bg-white dark:bg-slate-800 border border-current font-mono font-semibold hover:opacity-80">
+                                  Usar {sg}
+                                </button>
+                              ))}
+                            </div>
+                          ))}
+                          {avisos.length === 0 && radData && (
+                            <p className="text-[11px] text-emerald-600 dark:text-emerald-400">✓ Coincide con radicación</p>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 ))}
                 <div>

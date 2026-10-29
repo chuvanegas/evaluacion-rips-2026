@@ -442,6 +442,18 @@ Siempre inicia con `tipoContrato: 'ASISTENCIAL'` y `TIPOS_ASISTENCIAL` en cero.
 ### Editar prestador existente
 El formulario se popula desde `p.metas` del prestador seleccionado.
 
+### Validación del N° de contrato (v2.26)
+Objetivo: que el mismo contrato quede escrito **idéntico** en ambos regímenes y igual que en radicación, para que cada régimen tome sus propias metas.
+- Al guardar, `handleSavePrestador` normaliza con `limpiarContrato` (mayúsculas, guiones unicode → `-`, espacios → `-`, sin guiones repetidos) y limpia el NIT (sin espacios ni puntos).
+- `validarContratoPrestador(form, editId)` devuelve avisos:
+  - **error** (bloquea, `alert`): contrato vacío; ya existe el mismo contrato normalizado en el **mismo régimen** (otro registro).
+  - **aviso** (pide confirmación al guardar): formato distinto a `XXX-#####-AAAA-##`; otro registro del mismo NIT con número parecido (`simContrato >= 2`) pero escrito distinto; contrato que no existe en radicación para ese NIT (sugiere los radicados).
+  - **info**: el NIT no aparece en radicación.
+- En el formulario, debajo del campo N° de Contrato: "Se guardará como …", los avisos y botones **"Usar …"** que reemplazan el número por el sugerido; "✓ Coincide con radicación" cuando todo cuadra.
+- Los datos de radicación se cargan también al abrir el formulario (admin) para poder comparar.
+- "Sí, crear {régimen complementario}" precarga **el mismo número de contrato** (antes quedaba vacío y se redigitaba).
+- Probado con 7 casos (espacios, cero faltante, guiones unicode, duplicado, edición del mismo registro, prefijo distinto, NIT ausente, vacío).
+
 ### Selector de prestador (Carga de Datos)
 - Al seleccionar un prestador diferente al activo → RIPS se limpian automáticamente
 - Detección desde archivos solo corre si `!detectedPrestadorId` (no sobreescribe selección manual)
@@ -470,6 +482,7 @@ El formulario se popula desde `p.metas` del prestador seleccionado.
 
 | Versión | Tag git | Descripción |
 |---|---|---|
+| **2.26** | `v2.26` | Validación del N° de contrato al crear/editar prestadores: normalización, bloqueo de duplicados por régimen, avisos y sugerencias "Usar …" contra el otro régimen y radicación; el régimen complementario precarga el mismo contrato. |
 | **2.25** | `v2.25` | Metas del régimen correcto aunque el número de contrato del registro no coincida con radicación (contrato normalizado → NIT + régimen → otro régimen con aviso); selector para elegir el registro en el preview. |
 | **2.24** | `v2.24` | El régimen complementario ya no copia las metas (inicia en cero); el preview indica el registro de origen de las metas y avisa si ambos regímenes tienen metas idénticas. |
 | **2.23** | `v2.23` | Listos para evaluar: el prestador y sus metas se eligen por contrato + régimen (antes ambos regímenes usaban las mismas metas); aviso si falta el contrato del régimen. |
@@ -514,5 +527,6 @@ git tag v2.15 && git -c http.proxy="" -c https.proxy="" push \
 |---|---|---|
 | "Nuevo Prestador" | Cabecera de la lista | ASISTENCIAL en 0 |
 | Reset tras guardar | `handleSavePrestador` (~línea 770) | ASISTENCIAL en 0 |
-| "+ Contrato" | Header del grupo NIT | ASISTENCIAL en 0 (corregido v2.4) |
+| "+ Contrato" | Header del grupo NIT | ASISTENCIAL en 0 (corregido v2.4); contrato vacío con sugerencias "Usar …" (v2.26) |
+| "Sí, crear {régimen}" | Oferta tras guardar un prestador | Metas en 0 (v2.24), mismo N° de contrato precargado (v2.26) |
 | **Editar (lápiz)** | Fila de contrato | Carga datos existentes — correcto |
