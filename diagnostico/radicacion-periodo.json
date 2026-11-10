@@ -1,0 +1,346 @@
+{
+  "fecha_diagnostico": "2026-11-10",
+  "fuente": "https://radicacion.vercel.app/api/evaluar y /api/rips-ext (solo lectura)",
+  "evaluar": {
+    "generado": "2026-11-10T07:44:45-05:00",
+    "claves_primer_nivel": [
+      "generado",
+      "version",
+      "contratos",
+      "registros",
+      "consultas",
+      "corridas",
+      "ultima",
+      "no_vigentes"
+    ],
+    "campos_registros": [
+      "contrato",
+      "estado",
+      "factura",
+      "fecha_max",
+      "fecha_min",
+      "fecha_recepcion",
+      "fuente",
+      "ips",
+      "meses_rips",
+      "n_servicios",
+      "n_usuarios",
+      "periodo_anio",
+      "periodo_mes",
+      "primera_vez",
+      "radicacion",
+      "recepcion",
+      "regimen",
+      "valor"
+    ],
+    "total_registros": 1529,
+    "total_contratos": 144,
+    "registros_con_fecha_min": 1290,
+    "registros_con_fecha_max": 1290
+  },
+  "comparacion_global_periodo_mes_vs_fecha_min": {
+    "registros_con_fechas": 1290,
+    "periodo_mes_igual_mes_fecha_min_mas_1": 1289,
+    "periodo_mes_igual_mes_fecha_min": 0,
+    "otros": 1,
+    "excepcion": {
+      "contrato": "EB-44098-2026-04",
+      "regimen": "RS",
+      "periodo": "2026-06",
+      "fecha_min": "2026-03-06",
+      "fecha_max": "2026-05-28",
+      "fuente": "CONSULTAS (varios meses)",
+      "nota": "periodo_mes = mes de fecha_max + 1"
+    },
+    "registros_con_fecha_min_y_max_en_el_mismo_mes": 1282
+  },
+  "paso2_ASB-44560-2026-09_RC": [
+    {
+      "periodo_anio": 2026,
+      "periodo_mes": 3,
+      "recepcion": "585610",
+      "radicacion": "495120",
+      "fecha_recepcion": "2026/10/23 15:23",
+      "fecha_min": "",
+      "fecha_max": "",
+      "n_usuarios": 0,
+      "n_servicios": 0,
+      "meses_rips": 0
+    },
+    {
+      "periodo_anio": 2026,
+      "periodo_mes": 4,
+      "recepcion": "570667",
+      "radicacion": "449922",
+      "fecha_recepcion": "2026/09/21 10:28",
+      "fecha_min": "2026-03-03",
+      "fecha_max": "2026-03-31",
+      "n_usuarios": 10,
+      "n_servicios": 58,
+      "meses_rips": 1
+    },
+    {
+      "periodo_anio": 2026,
+      "periodo_mes": 5,
+      "recepcion": "583362",
+      "radicacion": "484315",
+      "fecha_recepcion": "2026/10/14 11:37",
+      "fecha_min": "2026-04-12",
+      "fecha_max": "2026-04-29",
+      "n_usuarios": 4,
+      "n_servicios": 33,
+      "meses_rips": 1
+    },
+    {
+      "periodo_anio": 2026,
+      "periodo_mes": 6,
+      "recepcion": "583985",
+      "radicacion": "491914",
+      "fecha_recepcion": "2026/10/22 09:32",
+      "fecha_min": "2026-05-05",
+      "fecha_max": "2026-05-15",
+      "n_usuarios": 4,
+      "n_servicios": 30,
+      "meses_rips": 1
+    },
+    {
+      "periodo_anio": 2026,
+      "periodo_mes": 7,
+      "recepcion": "584300",
+      "radicacion": "492674",
+      "fecha_recepcion": "2026/10/22 14:12",
+      "fecha_min": "2026-06-03",
+      "fecha_max": "2026-06-22",
+      "n_usuarios": 3,
+      "n_servicios": 23,
+      "meses_rips": 1
+    },
+    {
+      "periodo_anio": 2026,
+      "periodo_mes": 8,
+      "recepcion": "585609",
+      "radicacion": "493714",
+      "fecha_recepcion": "2026/10/22 16:07",
+      "fecha_min": "2026-07-16",
+      "fecha_max": "2026-07-31",
+      "n_usuarios": 6,
+      "n_servicios": 43,
+      "meses_rips": 1
+    }
+  ],
+  "paso3_rips_ext_ASB-44560-2026-09_RC": [
+    {
+      "mes_param": 4,
+      "content_disposition": "attachment; filename=\"RIPS_ASB-44560-2026-09_atenciones_2026-04_RC_rec583362.txt\"",
+      "consultas_por_mes": {
+        "2026-04": 6
+      },
+      "consultas_mes_mas_frecuente": "2026-04",
+      "consultas_rango": [
+        "2026-04-12",
+        "2026-04-29"
+      ],
+      "recepcion_devuelta": "583362",
+      "periodo_mes_de_esa_recepcion_en_evaluar": 5
+    },
+    {
+      "mes_param": 5,
+      "content_disposition": "attachment; filename=\"RIPS_ASB-44560-2026-09_atenciones_2026-05_RC_rec583985.txt\"",
+      "consultas_por_mes": {
+        "2026-05": 5
+      },
+      "consultas_mes_mas_frecuente": "2026-05",
+      "consultas_rango": [
+        "2026-05-05",
+        "2026-05-15"
+      ],
+      "recepcion_devuelta": "583985",
+      "periodo_mes_de_esa_recepcion_en_evaluar": 6
+    },
+    {
+      "mes_param": 6,
+      "content_disposition": "attachment; filename=\"RIPS_ASB-44560-2026-09_atenciones_2026-06_RC_rec584300.txt\"",
+      "consultas_por_mes": {
+        "2026-06": 2
+      },
+      "consultas_mes_mas_frecuente": "2026-06",
+      "consultas_rango": [
+        "2026-06-03",
+        "2026-06-22"
+      ],
+      "recepcion_devuelta": "584300",
+      "periodo_mes_de_esa_recepcion_en_evaluar": 7
+    }
+  ],
+  "paso4_MDC-44001-2026-15_RS": [
+    {
+      "periodo_anio": 2026,
+      "periodo_mes": 3,
+      "recepcion": "605147",
+      "radicacion": "512289",
+      "fecha_recepcion": "2026/11/09 16:03",
+      "fecha_min": "",
+      "fecha_max": "",
+      "n_usuarios": 0,
+      "n_servicios": 0,
+      "meses_rips": 0
+    },
+    {
+      "periodo_anio": 2026,
+      "periodo_mes": 4,
+      "recepcion": "423245",
+      "radicacion": "335181",
+      "fecha_recepcion": "2026/07/15 10:54",
+      "fecha_min": "2026-03-01",
+      "fecha_max": "2026-03-31",
+      "n_usuarios": 1029,
+      "n_servicios": 2146,
+      "meses_rips": 1
+    },
+    {
+      "periodo_anio": 2026,
+      "periodo_mes": 5,
+      "recepcion": "429277",
+      "radicacion": "336853",
+      "fecha_recepcion": "2026/07/15 15:21",
+      "fecha_min": "2026-04-01",
+      "fecha_max": "2026-04-30",
+      "n_usuarios": 1193,
+      "n_servicios": 2658,
+      "meses_rips": 1
+    },
+    {
+      "periodo_anio": 2026,
+      "periodo_mes": 6,
+      "recepcion": "448584",
+      "radicacion": "341923",
+      "fecha_recepcion": "2026/07/17 16:49",
+      "fecha_min": "2026-05-01",
+      "fecha_max": "2026-05-31",
+      "n_usuarios": 1073,
+      "n_servicios": 2301,
+      "meses_rips": 1
+    },
+    {
+      "periodo_anio": 2026,
+      "periodo_mes": 7,
+      "recepcion": "550766",
+      "radicacion": "361116",
+      "fecha_recepcion": "2026/07/30 10:11",
+      "fecha_min": "2026-06-01",
+      "fecha_max": "2026-06-30",
+      "n_usuarios": 2569,
+      "n_servicios": 5376,
+      "meses_rips": 1
+    },
+    {
+      "periodo_anio": 2026,
+      "periodo_mes": 8,
+      "recepcion": "556544",
+      "radicacion": "459752",
+      "fecha_recepcion": "2026/10/01 08:39",
+      "fecha_min": "2026-07-01",
+      "fecha_max": "2026-07-31",
+      "n_usuarios": 1302,
+      "n_servicios": 2861,
+      "meses_rips": 1
+    },
+    {
+      "periodo_anio": 2026,
+      "periodo_mes": 9,
+      "recepcion": "605146",
+      "radicacion": "464946",
+      "fecha_recepcion": "2026/10/05 11:53",
+      "fecha_min": "2026-08-01",
+      "fecha_max": "2026-08-31",
+      "n_usuarios": 1138,
+      "n_servicios": 2468,
+      "meses_rips": 1
+    }
+  ],
+  "paso4_MDC-44847-2026-12_RS": [
+    {
+      "periodo_anio": 2026,
+      "periodo_mes": 3,
+      "recepcion": "563195",
+      "radicacion": "472260",
+      "fecha_recepcion": "2026/10/08 11:19",
+      "fecha_min": "",
+      "fecha_max": "",
+      "n_usuarios": 0,
+      "n_servicios": 0,
+      "meses_rips": 0
+    },
+    {
+      "periodo_anio": 2026,
+      "periodo_mes": 4,
+      "recepcion": "423950",
+      "radicacion": "335192",
+      "fecha_recepcion": "2026/07/15 11:11",
+      "fecha_min": "2026-03-02",
+      "fecha_max": "2026-03-31",
+      "n_usuarios": 93,
+      "n_servicios": 218,
+      "meses_rips": 1
+    },
+    {
+      "periodo_anio": 2026,
+      "periodo_mes": 5,
+      "recepcion": "426086",
+      "radicacion": "336854",
+      "fecha_recepcion": "2026/07/15 17:20",
+      "fecha_min": "2026-04-01",
+      "fecha_max": "2026-04-30",
+      "n_usuarios": 101,
+      "n_servicios": 237,
+      "meses_rips": 1
+    },
+    {
+      "periodo_anio": 2026,
+      "periodo_mes": 6,
+      "recepcion": "467964",
+      "radicacion": "340040",
+      "fecha_recepcion": "2026/07/16 14:54",
+      "fecha_min": "2026-05-04",
+      "fecha_max": "2026-05-29",
+      "n_usuarios": 119,
+      "n_servicios": 253,
+      "meses_rips": 1
+    },
+    {
+      "periodo_anio": 2026,
+      "periodo_mes": 7,
+      "recepcion": "472635",
+      "radicacion": "377772",
+      "fecha_recepcion": "2026/08/11 20:54",
+      "fecha_min": "2026-06-01",
+      "fecha_max": "2026-06-30",
+      "n_usuarios": 130,
+      "n_servicios": 272,
+      "meses_rips": 1
+    },
+    {
+      "periodo_anio": 2026,
+      "periodo_mes": 8,
+      "recepcion": "563194",
+      "radicacion": "383505",
+      "fecha_recepcion": "2026/08/13 17:20",
+      "fecha_min": "2026-07-01",
+      "fecha_max": "2026-07-31",
+      "n_usuarios": 123,
+      "n_servicios": 227,
+      "meses_rips": 1
+    }
+  ],
+  "conclusion": {
+    "periodo_mes": "facturacion",
+    "detalle": "En /api/evaluar, periodo_mes es el mes de facturación/radicación = mes de atención + 1. En /api/rips-ext, el parámetro mes es el mes de ATENCIÓN (el archivo se llama 'atenciones_AAAA-MM' y entrega la recepción cuyo periodo_mes es mes+1).",
+    "evidencia": [
+      "1289 de 1290 registros con fecha_min tienen periodo_mes = mes(fecha_min)+1; ninguno tiene periodo_mes = mes(fecha_min).",
+      "ASB-44560-2026-09 RC: periodo_mes 5 tiene fecha_min 2026-04-12 / fecha_max 2026-04-29; rips-ext mes=4 devuelve esa misma recepción (583362) con consultas 2026-04-12..2026-04-29.",
+      "MDC-44001-2026-15 y MDC-44847-2026-12 RS: periodo_mes 4..9 cubren atenciones de marzo..agosto (mes anterior completo).",
+      "Los registros 'INICIAL · Cápita inicial (RIPS en cero)' tienen periodo_mes 3 sin fechas ni conteos."
+    ],
+    "implicaciones_app": "mesesAtencionRegistro (v2.28) es consistente: usar fecha_min/fecha_max y, si faltan, periodo_mes-1. Las descargas de rips-ext deben pedir el mes de atención (como hace hoy el flujo de 2T: abr/may/jun), no periodo_mes."
+  }
+}
