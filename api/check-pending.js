@@ -16,6 +16,39 @@ const TRIMS = [
   { id: 'OS', anio: 2027, meses: [1,2],       mesesES: ['Enero 2027','Febrero 2027'] },
 ];
 
+// ── Mismas reglas que App.tsx (radEstadoMes / radActaDeTrim / radContratoRegistrado) ──
+const MESES_PERIODO = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+const mesClave = (anio, mes) => `${anio}-${String(mes).padStart(2, '0')}`;
+function mesesDePeriodo(texto) {
+  const t = String(texto || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const out = new Set();
+  const anios = t.match(/\b20\d{2}\b/g) || [];
+  const anioDef = anios.length ? anios[anios.length - 1] : '2026';
+  let sinAnio = [];
+  (t.match(/[a-z]+|\d{4}/g) || []).forEach(tok => {
+    const mi = tok === 'setiembre' ? 8 : MESES_PERIODO.indexOf(tok);
+    if (mi >= 0) sinAnio.push(mi + 1);
+    else if (/^20\d{2}$/.test(tok)) { sinAnio.forEach(m => out.add(`${tok}-${String(m).padStart(2, '0')}`)); sinAnio = []; }
+  });
+  sinAnio.forEach(m => out.add(`${anioDef}-${String(m).padStart(2, '0')}`));
+  if (out.size === 0) {
+    (t.match(/\b[1-4]\s*t\b/g) || []).forEach(code => {
+      const tr = TRIMS.find(x => x.id === `${code[0]}T`);
+      if (tr) tr.meses.forEach(m => out.add(mesClave(tr.anio, m)));
+    });
+    if (/\bo\s*\/?\s*s\b/.test(t)) TRIMS[4].meses.forEach(m => out.add(mesClave(TRIMS[4].anio, m)));
+  }
+  return [...out].sort();
+}
+const normContrato = x => String(x || '').toUpperCase().replace(/[\u2010-\u2015\u2212]/g, '-').replace(/\s+/g, '');
+const normNit = x => String(x || '').replace(/\D/g, '').slice(0, 9);
+const simContrato = (x, y) => {
+  const gx = normContrato(x).match(/\d+/g) || [], gy = normContrato(y).match(/\d+/g) || [];
+  let n = 0;
+  for (let i = 0; i < Math.min(gx.length, gy.length); i++) if (Number(gx[i]) === Number(gy[i])) n++;
+  return n;
+};
+
 export default async function handler(req, res) {
   const url = new URL(req.url, `https://${req.headers.host}`);
   if (url.searchParams.get('key') !== SECRET) {
@@ -51,30 +84,41 @@ export default async function handler(req, res) {
   const contratos = radData.contratos || [];
 
   // 4. Calcular pendientes (misma lógica que el app)
-  const tieneReg = (contrato, anio, mes, reg) =>
-    registros.some(r =>
-      r.contrato === contrato &&
-      r.periodo_anio === anio &&
-      r.periodo_mes === mes &&   // billing month offset: atención mes M → factura M+1
-      r.regimen === reg &&
-      ((r.n_usuarios > 0) || (r.n_servicios > 0) || (r.meses_rips > 0))
-    );
-
-  const trimActa = (contrato, nit, regLabel, t) =>
-    actas.some(a => {
-      const mismoContrato = a.contrato === contrato;
-      const mismoNit = nit && String(a.nit) === String(nit);
-      if (!mismoContrato && !mismoNit) return false;
-      if ((a.regimen || 'SUBSIDIADO').toUpperCase() !== regLabel) return false;
-      return t.mesesES.some(mes => (a.periodoEvaluado || '').toLowerCase().includes(mes.toLowerCase()));
-    });
+  // La API guarda por mes de FACTURACIÓN: la atención del mes M llega en la factura de M+1,
+  // y un mes cuenta solo si su factura trae usuarios, servicios o meses RIPS.
+  const tieneReg = (contrato, anio, mesAtencion, reg) => {
+    const bMes  = mesAtencion === 12 ? 1 : mesAtencion + 1;
+    const bAnio = mesAtencion === 12 ? anio + 1 : anio;
+    return registros.some(r =>
+      r.contrato === contrato && r.periodo_anio === bAnio && r.periodo_mes === bMes && r.regimen === reg &&
+      ((r.n_usuarios > 0) || (r.n_servicios > 0) || (r.meses_rips > 0)));
+  };
+  // Un acta cuenta para un contrato por su número de contrato; por NIT solo si el acta no tiene
+  // contrato y el NIT tiene un único contrato en radicación.
+  const actaEsDeContrato = (a, contrato, nit) => {
+    const aNit = normNit(a.nit) || normNit((prestadores.find(p => p.id === a.prestadorId) || {}).nit);
+    if (normContrato(a.contrato)) {
+      return normContrato(a.contrato) === normContrato(contrato) ||
+        (!!aNit && aNit === normNit(nit) && simContrato(a.contrato, contrato) >= 3);
+    }
+    if (!aNit || aNit !== normNit(nit)) return false;
+    return contratos.filter(rc => normNit(rc.nit) === aNit).length <= 1;
+  };
+  const trimActa = (contrato, nit, regLabel, t) => {
+    const mesesT = t.meses.map(m => mesClave(t.anio, m));
+    return actas.some(a =>
+      (a.regimen || 'SUBSIDIADO').toUpperCase() === regLabel &&
+      actaEsDeContrato(a, contrato, nit) &&
+      mesesDePeriodo(a.periodoEvaluado).some(m => mesesT.includes(m)));
+  };
+  const prestadorDe = c =>
+    prestadores.find(p => normContrato(p.contrato) === normContrato(c.contrato)) ||
+    prestadores.find(p => normNit(p.nit) === normNit(c.nit) && simContrato(p.contrato, c.contrato) >= 3);
 
   // Solo contratos registrados en la app
   const pendientes = [];
   for (const c of contratos) {
-    const prest = prestadores.find(p =>
-      p.contrato === c.contrato || String(p.nit) === String(c.nit)
-    );
+    const prest = prestadorDe(c);
     if (!prest) continue;  // no registrado en la app
 
     for (const reg of ['RS', 'RC']) {
@@ -83,7 +127,7 @@ export default async function handler(req, res) {
         const completo = t.meses.every(m => tieneReg(c.contrato, t.anio, m, reg));
         if (!completo) continue;
 
-        const tieneActa = trimActa(c.contrato, c.nit ? String(c.nit) : null, regLabel, t);
+        const tieneActa = trimActa(c.contrato, c.nit, regLabel, t);
         if (!tieneActa) {
           pendientes.push({
             contrato: c.contrato,

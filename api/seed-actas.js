@@ -110,6 +110,10 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Acceso denegado. Usa ?key=DUSAKAWI2026' });
   }
 
+  // Desactivado: ya se ejecutó (26/10/2026, dos veces) y cada ejecución extra duplicaba actas HIST-…
+  // Las duplicadas se limpian en la app (deduplicarActas). Para reactivar, quitar este bloque.
+  return res.status(410).json({ ok: false, error: 'seed-actas desactivado: las actas históricas ya fueron creadas.' });
+
   const log = [];
 
   try {

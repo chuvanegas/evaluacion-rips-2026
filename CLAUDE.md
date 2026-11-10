@@ -298,6 +298,17 @@ Panel en el Dashboard (solo visible para admin) que muestra contratos pendientes
 - **Sin acta existente:** se omiten trimestres que ya tienen acta para ese contrato+régimen+período (`trimActa`).
 - **Radicación con datos:** contratos sin ninguna radicación no aparecen.
 
+### Reglas únicas de pendientes (v2.27)
+Antes había 4 cálculos distintos (panel, Estado Global, alerta de pendientes y `api/check-pending.js`) que no coincidían. Ahora todos usan las mismas funciones (App.tsx, nivel componente):
+- `radEstadoMes(contrato, anio, mesAtencion, reg)` → `'ok' | 'sin_radicar' | 'en_cero'`. **Desfase de facturación:** la atención del mes M llega en la factura del mes M+1 (`periodo_mes = M+1`); el mes cuenta si la factura trae `n_usuarios`, `n_servicios` o `meses_rips` > 0. Evidencia: el 29/10 aparecían chips 3T (requieren `periodo_mes` 10) antes de terminar octubre.
+- `radTrimCompleto`, `radActaDeTrim(contrato, nit, reg, t)` (busca por **meses** con `mesesDePeriodo`, prefiere la real sobre la histórica), `radContratoRegistrado(c)`.
+- **Un acta cuenta solo para SU contrato** (`actaEsDeContrato`): por contrato normalizado, o mismo NIT con los mismos números (`simContrato >= 3`, compara números: `04` = `4`). Por NIT sin contrato solo si el NIT tiene un único contrato en radicación. Antes cualquier acta del NIT servía: SUMINFARMA (NIT 901556821) tiene Uribia MDC-44847-2026-12 y Riohacha MDC-44001-2026-15, y el 3T de Uribia ocultaba el 3T de Riohacha.
+- Contratos incluidos: `radContratoRegistrado` (mismo número normalizado, o mismo NIT con los mismos números). Antes exigía el texto exacto.
+- `api/check-pending.js` replica estas reglas en JS (mantenerlas iguales).
+- **Diagnóstico en el buscador:** los contratos que coinciden con la búsqueda pero no están en la lista muestran por régimen y trimestre: `✓ acta`, `listo`, o `faltan Sep (factura Oct sin radicar)` / `(RIPS en cero)`, más la línea **"Facturas radicadas: Abr · May · …"** tal como las guarda radicación. Si no está registrado: "No registrado en la app".
+- **Datos frescos:** `/api/evaluar` se recarga cada 15 min y al volver a la pestaña del navegador (si pasaron > 5 min). Antes solo cada 12 horas.
+- Verificado en navegador (Playwright con PocketBase y radicación simulados): 13 actas → 7, Riohacha 3T aparece, el buscador explica Uribia.
+
 ### Prestador por contrato + régimen (v2.23 → v2.25)
 - **Cada régimen es un registro de prestador aparte con sus propias metas** (el subsidiado siempre tiene metas mayores que el contributivo). Nunca usar las metas de un régimen para el otro.
 - En radicación ambos regímenes suelen venir con el **mismo número de contrato**, pero el registro de la app puede tenerlo escrito distinto (espacios, guiones, prefijo, dígito de verificación en el NIT…).
@@ -326,6 +337,9 @@ Panel en el Dashboard (solo visible para admin) que muestra contratos pendientes
 3. Botón "Procesar y Generar Acta" en radFilesReady → setea refs (`radForcedPrestId`, `radForcedReg`, `radForcedScale`, `radPeriodoOverride`, `radPendingActa`) → `processFiles` → useEffect dispara `handleGenerarActa`
 4. Reintento automático: errores 5xx se reintentan 1 vez tras 2.5s; si falla, el mes se omite con aviso
 
+### Diagnóstico con datos reales
+El entorno cloud **Default** no permite salir a `radicacion.vercel.app` ni a `evaluacion-db.duckdns.org` (el proxy responde 403). Existe el entorno personal **`evaluacion-rips-2026`** (creado 10/11/2026) que permite exactamente esos dos hosts y corre `npm install` al iniciar: abrir las sesiones de este repo en ese entorno para revisar datos reales (solo lectura; no escribir en PocketBase sin confirmación).
+
 ### Endpoint radicación
 - `GET https://radicacion.vercel.app/api/evaluar` — lista contratos y registros (header `x-token: DUSAKAWI-RIPS-2026`)
 - `GET https://radicacion.vercel.app/api/rips-ext?contrato=X&anio=Y&mes=Z&regimen=RS&formato=txt` — descarga RIPS TXT
@@ -344,11 +358,19 @@ Panel en el Dashboard (solo visible para admin) que muestra contratos pendientes
   - Cerrar (X) pide confirmación si hay cambios sin guardar o si el acta está guardada pero no impresa.
   - `onSave` puede devolver `false` (p. ej. el usuario canceló el reemplazo de un acta duplicada en `handleSaveInlineActa`); en ese caso no se marca como guardada.
 
-### Deduplicación de actas (`deduplicarActas`) — v2.15
-Función en App.tsx (~línea 29). Corre en carga inicial, sync y poll. Tres pasos en cascada:
-1. **Por `id` exacto** — misma instancia guardada dos veces → queda una.
-2. **Por `prestadorId||numero`** — misma acta regenerada → queda la de mayor %.
-3. **Por `contrato||regimen||periodoEvaluado`** — mismo contrato + régimen + período → queda la de mayor %. Elimina duplicados creados antes de v2.15.
+### Deduplicación de actas (`deduplicarActas`) — v2.15 → v2.27
+Función de módulo en App.tsx. Corre en carga inicial, sync y poll; si elimina algo, guarda en PocketBase al instante.
+1. **Por `id` exacto.**
+2. **Misma acta regenerada:** `prestadorId + numero + meses del período` (antes sin período: dos actas de trimestres distintos con el mismo número —p. ej. tras una renumeración— se borraban entre sí).
+3. **Mismo contrato + régimen + meses evaluados:** clave `normContrato(contrato) || prestadorId` + régimen + `mesesDePeriodo(periodoEvaluado)`. Entiende cualquier formato: "Marzo 2026" = "1T 2026"; "Abril 2026, Mayo 2026, Junio 2026" = "Abril, Mayo y Junio 2026" = "2T 2026".
+   - Queda **la real antes que la histórica** (`esActaHistorica`: `_placeholder` o número `HIST-…`), y entre reales **la de mayor %**.
+- **Ya no renumera** (antes el "paso 4" cerraba huecos y cambiaba números ya impresos, en contra del sufijo fijo por trimestre `-1`=1T, `-2`=2T…).
+- `mesesDePeriodo(texto)` → `['2026-04','2026-05','2026-06']`: meses por nombre (cada mes toma el primer año escrito después), o códigos `1T…4T`, `O/S` según `RAD_TRIMS` (1T = solo marzo 2026; O/S = ene–feb 2027).
+
+### Actas históricas `HIST-…` (api/seed-actas.js)
+- Marcadores de períodos evaluados **fuera de la app** (hoja de seguimiento 2026): `servicios: []`, `_placeholder: true`. Sirven para que "Listos para evaluar" no muestre esos trimestres.
+- El script se ejecutó **dos veces** (26/10/2026 20:41 y 20:47) con formatos de período distintos ("1T 2026" y "Marzo 2026"), y el contrato quedó ligado al registro Subsidiado aunque el acta fuera Contributivo → actas repetidas al 0% (ej. SUMINFARMA MDC-44001-2026-15: 9 actas → 4 tras v2.27).
+- **v2.27:** el endpoint responde `410` (desactivado). En las listas se muestran como **"Histórico"** (sin %), con insignia **S/C** cuando su régimen difiere del contrato; en los cajones de Mantenimiento cada acta va al panel de **su** régimen.
 
 ### Validación al generar acta (`handleGenerarActa`) — v2.15
 Si ya existe un acta para el mismo `contrato + regimen + periodoEvaluado`, muestra alerta:
@@ -482,6 +504,7 @@ Objetivo: que el mismo contrato quede escrito **idéntico** en ambos regímenes 
 
 | Versión | Tag git | Descripción |
 |---|---|---|
+| **2.27** | `v2.27` | Actas HIST repetidas: dedup por meses del período (real antes que histórica) y sin renumeración; seed-actas desactivado; "Histórico" en listas. Pendientes con una sola regla en panel, Estado Global, alerta y check-pending; acta por contrato (no por NIT); diagnóstico en el buscador con facturas radicadas; radicación se recarga cada 15 min. |
 | **2.26** | `v2.26` | Validación del N° de contrato al crear/editar prestadores: normalización, bloqueo de duplicados por régimen, avisos y sugerencias "Usar …" contra el otro régimen y radicación; el régimen complementario precarga el mismo contrato. |
 | **2.25** | `v2.25` | Metas del régimen correcto aunque el número de contrato del registro no coincida con radicación (contrato normalizado → NIT + régimen → otro régimen con aviso); selector para elegir el registro en el preview. |
 | **2.24** | `v2.24` | El régimen complementario ya no copia las metas (inicia en cero); el preview indica el registro de origen de las metas y avisa si ambos regímenes tienen metas idénticas. |

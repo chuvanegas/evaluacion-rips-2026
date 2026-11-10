@@ -25,78 +25,91 @@ import ReportesTab from './components/ReportesTab';
 
 const MESES_NOMBRES_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
+// ── Períodos, contratos y actas históricas (compartido) ───────────────────
+const MESES_PERIODO = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+// Trimestres del ciclo de contratación (marzo 2026 – febrero 2027), igual que el panel de radicación
+const RAD_TRIMS = [
+  { id: '1T', label: '1T',  anio: 2026, meses: [3],         mesesES: ['Marzo 2026'] },
+  { id: '2T', label: '2T',  anio: 2026, meses: [4,5,6],     mesesES: ['Abril 2026','Mayo 2026','Junio 2026'] },
+  { id: '3T', label: '3T',  anio: 2026, meses: [7,8,9],     mesesES: ['Julio 2026','Agosto 2026','Septiembre 2026'] },
+  { id: '4T', label: '4T',  anio: 2026, meses: [10,11,12],  mesesES: ['Octubre 2026','Noviembre 2026','Diciembre 2026'] },
+  { id: 'OS', label: 'O/S', anio: 2027, meses: [1,2],       mesesES: ['Enero 2027','Febrero 2027'] },
+];
+const mesClave = (anio: number, mes: number) => `${anio}-${String(mes).padStart(2, '0')}`;
+
+// Meses (AAAA-MM) que cubre el período de un acta, sin importar cómo se escribió:
+// "Marzo 2026", "Abril 2026, Mayo 2026, Junio 2026", "Abril, Mayo y Junio 2026", "2T 2026", "O/S 2027"
+function mesesDePeriodo(texto: string): string[] {
+  const t = String(texto || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const out = new Set<string>();
+  const anios = t.match(/\b20\d{2}\b/g) || [];
+  const anioDef = anios.length ? anios[anios.length - 1] : '2026';
+  // Cada mes toma el primer año escrito después de él ("Abril, Mayo y Junio 2026")
+  let sinAnio: number[] = [];
+  (t.match(/[a-z]+|\d{4}/g) || []).forEach(tok => {
+    const mi = tok === 'setiembre' ? 8 : MESES_PERIODO.indexOf(tok);
+    if (mi >= 0) sinAnio.push(mi + 1);
+    else if (/^20\d{2}$/.test(tok)) { sinAnio.forEach(m => out.add(`${tok}-${String(m).padStart(2, '0')}`)); sinAnio = []; }
+  });
+  sinAnio.forEach(m => out.add(`${anioDef}-${String(m).padStart(2, '0')}`));
+  // Trimestres escritos como código: "1T 2026", "3T", "O/S"
+  if (out.size === 0) {
+    (t.match(/\b[1-4]\s*t\b/g) || []).forEach(code => {
+      const tr = RAD_TRIMS.find(x => x.id === `${code[0]}T`);
+      tr?.meses.forEach(m => out.add(mesClave(tr.anio, m)));
+    });
+    if (/\bo\s*\/?\s*s\b/.test(t)) RAD_TRIMS[4].meses.forEach(m => out.add(mesClave(RAD_TRIMS[4].anio, m)));
+  }
+  return [...out].sort();
+}
+
+const normContrato = (x: any) => String(x || '').toUpperCase().replace(/[‐-―−]/g, '-').replace(/\s+/g, '');
+const normNit = (x: any) => String(x || '').replace(/\D/g, '').slice(0, 9);
+// Cuántos grupos de dígitos coinciden en la misma posición (ASB-20001-2026-04 vs ASB 20001-2026-4 → 3)
+const simContrato = (x: string, y: string) => {
+  const gx = normContrato(x).match(/\d+/g) || [], gy = normContrato(y).match(/\d+/g) || [];
+  let n = 0;
+  for (let i = 0; i < Math.min(gx.length, gy.length); i++) if (Number(gx[i]) === Number(gy[i])) n++;
+  return n;
+};
+// Actas "HIST-…" creadas por api/seed-actas.js: marcan períodos evaluados fuera de la app (sin servicios)
+const esActaHistorica = (a: any) =>
+  a?._placeholder === true || a?._placeholder === 'true' || /^HIST-/i.test(String(a?.numero || ''));
+
 // ── Deduplicación de actas ─────────────────────────────────────────────────
+// No renumera: el número de acta usa un sufijo fijo por trimestre (-1 = 1T, -2 = 2T, …).
 function deduplicarActas(raw: import('./types').Acta[]): import('./types').Acta[] {
   const pct = (a: import('./types').Acta) => {
-    const prog = a.servicios.reduce((s, sv) => s + sv.programado, 0);
-    const ejec = a.servicios.reduce((s, sv) => s + Math.min(sv.ejecutado, sv.programado), 0);
+    const prog = (a.servicios || []).reduce((s, sv) => s + sv.programado, 0);
+    const ejec = (a.servicios || []).reduce((s, sv) => s + Math.min(sv.ejecutado, sv.programado), 0);
     return prog > 0 ? ejec / prog : 0;
   };
-  // Paso 1: dedup por id exacto (misma instancia guardada dos veces → queda una)
-  const byId = new Map<string, import('./types').Acta>();
-  raw.forEach(a => byId.set(a.id, a));
-  // Paso 2: dedup por número de acta exacto + mismo prestadorId
-  // (misma acta regenerada → queda la de mayor %)
-  const byNumeroYPrest = new Map<string, import('./types').Acta>();
-  [...byId.values()].forEach(a => {
-    const key = `${a.prestadorId}||${a.numero}`;
-    const ex = byNumeroYPrest.get(key);
-    if (!ex || pct(a) > pct(ex)) byNumeroYPrest.set(key, a);
-  });
-  // Paso 3: dedup por contrato + régimen + período (mismo período evaluado para el mismo contrato)
-  // Extrae meses del período para comparar semánticamente (robusto a variaciones de formato)
-  const MESES_DEDUP = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
-  const periodoKey = (periodo: string) => {
-    const words = (periodo || '').toLowerCase().replace(/[,]/g, ' ').split(/\s+/);
-    const meses: string[] = [];
-    for (let i = 0; i < words.length; i++) {
-      const idx = MESES_DEDUP.indexOf(words[i]);
-      if (idx >= 0 && i + 1 < words.length && /^\d{4}$/.test(words[i + 1])) {
-        meses.push(`${idx + 1}/${words[i + 1]}`);
-        i++;
-      }
-    }
-    return meses.sort().join('|') || (periodo || '').trim().toLowerCase();
+  // Entre dos actas del mismo período queda la real antes que la histórica; luego la de mayor %
+  const mejor = (ex: import('./types').Acta, a: import('./types').Acta) => {
+    if (esActaHistorica(ex) !== esActaHistorica(a)) return esActaHistorica(ex) ? a : ex;
+    return pct(a) > pct(ex) ? a : ex;
   };
-  const byContratoRegPeriodo = new Map<string, import('./types').Acta>();
-  [...byNumeroYPrest.values()].forEach(a => {
-    const key = `${a.contrato}||${(a.regimen || 'SUBSIDIADO').toUpperCase()}||${periodoKey(a.periodoEvaluado)}`;
-    const ex = byContratoRegPeriodo.get(key);
-    if (!ex || pct(a) > pct(ex)) byContratoRegPeriodo.set(key, a);
+  const periodoKey = (a: import('./types').Acta) =>
+    mesesDePeriodo(a.periodoEvaluado).join('|') || String(a.periodoEvaluado || '').trim().toLowerCase();
+  const reg = (a: import('./types').Acta) => (a.regimen || 'SUBSIDIADO').toUpperCase();
+  // Paso 1: mismo id → una
+  const byId = new Map<string, import('./types').Acta>();
+  (raw || []).forEach(a => byId.set(a.id, a));
+  // Paso 2: misma acta regenerada (mismo prestador + número + período)
+  const byNumero = new Map<string, import('./types').Acta>();
+  [...byId.values()].forEach(a => {
+    const key = `${a.prestadorId}||${a.numero}||${periodoKey(a)}`;
+    const ex = byNumero.get(key);
+    byNumero.set(key, ex ? mejor(ex, a) : a);
   });
-  // Paso 4: renumerar actas por contrato para eliminar huecos en la secuencia
-  // Ej: si quedan -2 y -3 después de borrar -1, se renumeran a -1 y -2
-  const deduped = [...byContratoRegPeriodo.values()];
-  const porContrato = new Map<string, import('./types').Acta[]>();
-  deduped.forEach(a => {
-    const key = `${a.contrato}||${a.regimen || 'SUBSIDIADO'}`;
-    if (!porContrato.has(key)) porContrato.set(key, []);
-    porContrato.get(key)!.push(a);
+  // Paso 3: mismo contrato + régimen + meses evaluados (aunque el período esté escrito distinto)
+  const byPeriodo = new Map<string, import('./types').Acta>();
+  [...byNumero.values()].forEach(a => {
+    const key = `${normContrato(a.contrato) || a.prestadorId}||${reg(a)}||${periodoKey(a)}`;
+    const ex = byPeriodo.get(key);
+    byPeriodo.set(key, ex ? mejor(ex, a) : a);
   });
-  const resultado: import('./types').Acta[] = [];
-  porContrato.forEach((lista) => {
-    // Ordenar por número de secuencia (último segmento numérico del numero)
-    lista.sort((a, b) => {
-      const seqA = parseInt(a.numero.split('-').pop() || '0', 10);
-      const seqB = parseInt(b.numero.split('-').pop() || '0', 10);
-      return seqA - seqB;
-    });
-    // Renumerar si hay huecos: base = todo excepto el último segmento
-    lista.forEach((a, idx) => {
-      const partes = a.numero.split('-');
-      const ultimoEsNum = /^\d+$/.test(partes[partes.length - 1]);
-      if (ultimoEsNum) {
-        const base = partes.slice(0, -1).join('-');
-        const nuevoNumero = `${base}-${idx + 1}`;
-        if (nuevoNumero !== a.numero) {
-          resultado.push({ ...a, numero: nuevoNumero });
-          return;
-        }
-      }
-      resultado.push(a);
-    });
-  });
-  return resultado;
+  return [...byPeriodo.values()];
 }
 
 const DEFAULT_USERS: AppUser[] = [
@@ -617,14 +630,16 @@ function App() {
     return () => clearInterval(id);
   }, []);
 
-  // Auto-cargar datos de radicación al abrir el Dashboard o el Monitor (admin)
-  // Se refresca automáticamente cada 12 horas (módulo de radicación actualiza en ese ciclo)
+  // Auto-cargar datos de radicación al abrir el Dashboard, el Monitor o el formulario de prestador (admin).
+  // Se refresca cada 15 min y al volver a la pestaña del navegador, para no evaluar con datos viejos.
+  const radLastFetchAt = React.useRef(0);
   useEffect(() => {
     if (currentUser?.role !== 'admin') return;
     const onDash = activeTab === 'dashboard';
     const onMonitor = activeTab === 'mantenimiento' && maintTab === 'monitor';
     if (!onDash && !onMonitor && !showPrestForm) return;
     const fetchRad = () => {
+      radLastFetchAt.current = Date.now();
       setRadFetching(true); setRadError(null);
       fetch('https://radicacion.vercel.app/api/evaluar', { headers: { 'x-token': 'DUSAKAWI-RIPS-2026' }, cache: 'no-store' })
         .then(r => r.ok ? r.json() : r.text().then(t => Promise.reject(`Error ${r.status}: ${t}`)))
@@ -632,10 +647,14 @@ function App() {
         .catch((e: any) => setRadError(String(e?.message || e)))
         .finally(() => setRadFetching(false));
     };
-    if (!radData && !radFetching) fetchRad();
-    // Refrescar cada 12 horas mientras el tab esté activo
-    const id = setInterval(fetchRad, 12 * 60 * 60 * 1000);
-    return () => clearInterval(id);
+    const viejo = Date.now() - radLastFetchAt.current > 15 * 60 * 1000;
+    if ((!radData || viejo) && !radFetching) fetchRad();
+    const id = setInterval(fetchRad, 15 * 60 * 1000);
+    const alVolver = () => {
+      if (document.visibilityState === 'visible' && Date.now() - radLastFetchAt.current > 5 * 60 * 1000) fetchRad();
+    };
+    document.addEventListener('visibilitychange', alVolver);
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', alVolver); };
   }, [activeTab, maintTab, showPrestForm]);
 
   // Auto-actualizar scale según meses detectados en los RIPS cargados
@@ -664,37 +683,14 @@ function App() {
     }
   }, [registros]);
 
-  // Alerta de pendientes cuando se cargan datos de radicación
+  // Alerta de pendientes cuando se cargan datos de radicación (mismas reglas que el panel)
   useEffect(() => {
     if (!radData || currentUser?.role !== 'admin') return;
-    const TRIMS_A = [
-      { anio: 2026, meses: [3],        mesesES: ['Marzo 2026'] },
-      { anio: 2026, meses: [4,5,6],    mesesES: ['Abril 2026','Mayo 2026','Junio 2026'] },
-      { anio: 2026, meses: [7,8,9],    mesesES: ['Julio 2026','Agosto 2026','Septiembre 2026'] },
-      { anio: 2026, meses: [10,11,12], mesesES: ['Octubre 2026','Noviembre 2026','Diciembre 2026'] },
-      { anio: 2027, meses: [1,2],      mesesES: ['Enero 2027','Febrero 2027'] },
-    ];
-    const regs2 = (radData.registros || []);
-    // Solo contratos registrados en la app (igual que el panel)
-    const cons2 = (radData.contratos || []).filter((c: any) => prestadores.some(p => p.contrato === c.contrato));
     let pend = 0;
-    cons2.forEach((c: any) => {
-      ['RS','RC'].forEach(reg => {
-        TRIMS_A.forEach(t => {
-          const completo = t.meses.every(m => regs2.some((r: any) => r.contrato === c.contrato && r.periodo_anio === t.anio && r.periodo_mes === m && r.regimen === reg));
-          if (!completo) return;
-          const regLabel = reg === 'RC' ? 'CONTRIBUTIVO' : 'SUBSIDIADO';
-          const nit = c.nit ? String(c.nit) : null;
-          const tieneActa = actas.some(a => {
-            const mismoContrato = a.contrato === c.contrato;
-            const mismoNit = nit && String(a.nit) === nit;
-            if (!mismoContrato && !mismoNit) return false;
-            if ((a.regimen || 'SUBSIDIADO').toUpperCase() !== regLabel) return false;
-            return t.mesesES.some(mes => (a.periodoEvaluado || '').toLowerCase().includes(mes.toLowerCase()));
-          });
-          if (!tieneActa) pend++;
-        });
-      });
+    (radData.contratos || []).filter((c: any) => radContratoRegistrado(c)).forEach((c: any) => {
+      ['RS', 'RC'].forEach(reg => RAD_TRIMS.forEach(t => {
+        if (radTrimCompleto(c.contrato, t, reg) && !radActaDeTrim(c.contrato, c.nit, reg, t)) pend++;
+      }));
     });
     if (pend > 0) {
       setMessage({ type: 'info', text: `⚠️ Hay ${pend} trimestre${pend !== 1 ? 's' : ''} pendiente${pend !== 1 ? 's' : ''} de evaluación en el módulo de radicación.` });
@@ -724,7 +720,7 @@ function App() {
       // Guardar inmediatamente en la nube para que el poll no restaure los eliminados
       if (cloudInitialized.current) CloudStorage.set('actas', clean);
       localStorage.setItem('actas', JSON.stringify(clean));
-      setMessage({ type: 'info', text: `🧹 Se eliminaron ${eliminadas} acta${eliminadas !== 1 ? 's' : ''} duplicada${eliminadas !== 1 ? 's' : ''} (se conservó la de mayor % en cada caso).` });
+      setMessage({ type: 'info', text: `🧹 Se eliminaron ${eliminadas} acta${eliminadas !== 1 ? 's' : ''} repetida${eliminadas !== 1 ? 's' : ''} del mismo contrato, régimen y período (se conservó la real sobre la histórica y, entre reales, la de mayor %).` });
     }
   }, [actas]);
 
@@ -1138,9 +1134,9 @@ function App() {
 
   // --- Acta Handlers ---
   const handleGenerarActa = (p: Prestador) => {
-    const prestadorActas = [...new Map(
+    const prestadorActas = [...new Map<string, Acta>(
       actas.filter(a => a.prestadorId === p.id || (a.nit && a.nit === p.nit && a.contrato === p.contrato))
-           .map(a => [a.id, a])
+           .map(a => [a.id, a] as [string, Acta])
     ).values()];
 
     // Validar: ya existe acta para este prestador en el mismo período
@@ -1353,7 +1349,7 @@ function App() {
       const next = idx >= 0
         ? prev.map((a, i) => i === idx ? actaToSave : a)
         : [...prev, actaToSave];
-      const deduped = [...new Map(next.map(a => [a.id, a])).values()];
+      const deduped = [...new Map<string, Acta>(next.map(a => [a.id, a] as [string, Acta])).values()];
       localStorage.setItem('actas', JSON.stringify(deduped));
       return deduped;
     });
@@ -1394,7 +1390,7 @@ function App() {
         const sin = prev.filter(a => a.id !== dup.id);
         const idx = sin.findIndex(a => a.id === actaToSave.id);
         const next = idx >= 0 ? sin.map((a, i) => i === idx ? actaToSave : a) : [...sin, actaToSave];
-        const deduped = [...new Map(next.map(a => [a.id, a])).values()];
+        const deduped = [...new Map<string, Acta>(next.map(a => [a.id, a] as [string, Acta])).values()];
         localStorage.setItem('actas', JSON.stringify(deduped));
         return deduped;
       });
@@ -2171,14 +2167,6 @@ function App() {
   // Cada régimen es un registro aparte con sus propias metas; el número de contrato del registro
   // puede no coincidir textualmente con el de radicación, así que se cae al NIT + régimen antes
   // de usar el registro del otro régimen.
-  const normContrato = (x: any) => String(x || '').toUpperCase().replace(/[\u2010-\u2015\u2212]/g, '-').replace(/\s+/g, '');
-  const normNit = (x: any) => String(x || '').replace(/\D/g, '').slice(0, 9);
-  const simContrato = (x: string, y: string) => {
-    const gx = normContrato(x).match(/\d+/g) || [], gy = normContrato(y).match(/\d+/g) || [];
-    let n = 0;
-    for (let i = 0; i < Math.min(gx.length, gy.length); i++) if (gx[i] === gy[i]) n++;
-    return n;
-  };
   const matchPrestadorRad = (contrato: string, nit: any, reg: string) => {
     const regFull = reg === 'RC' ? 'CONTRIBUTIVO' : 'SUBSIDIADO';
     const mismoReg = (p: Prestador) => (p.regimen || 'SUBSIDIADO').toUpperCase() === regFull;
@@ -2198,6 +2186,45 @@ function App() {
   };
   const findPrestadorRad = (contrato: string, nit: any, reg: string): Prestador | undefined =>
     matchPrestadorRad(contrato, nit, reg).p;
+
+  // ── Radicación: un único criterio para "trimestre completo" y "trimestre ya evaluado" ──
+  // Lo usan el panel Listos para evaluar, Estado Global y la alerta de pendientes.
+  // La API guarda por mes de FACTURACIÓN: la atención del mes M llega en la factura de M+1.
+  const radEstadoMes = (contrato: string, anio: number, mesAtencion: number, reg: string): 'ok' | 'sin_radicar' | 'en_cero' => {
+    const bMes  = mesAtencion === 12 ? 1 : mesAtencion + 1;
+    const bAnio = mesAtencion === 12 ? anio + 1 : anio;
+    const regs = (radData?.registros || []).filter((r: any) =>
+      r.contrato === contrato && r.periodo_anio === bAnio && r.periodo_mes === bMes && r.regimen === reg);
+    if (regs.length === 0) return 'sin_radicar';
+    return regs.some((r: any) => (r.n_usuarios > 0) || (r.n_servicios > 0) || (r.meses_rips > 0)) ? 'ok' : 'en_cero';
+  };
+  const radTrimCompleto = (contrato: string, t: typeof RAD_TRIMS[0], reg: string) =>
+    t.meses.every(m => radEstadoMes(contrato, t.anio, m, reg) === 'ok');
+  // Un acta cuenta para un contrato por su número de contrato (normalizado o con los mismos números).
+  // Por NIT solo si el acta no tiene contrato y el NIT tiene un único contrato en radicación:
+  // un NIT con varios contratos (ej. SUMINFARMA Uribia y Riohacha) necesita un acta por contrato.
+  const actaEsDeContrato = (a: Acta, contrato: string, nit: any) => {
+    const aNit = normNit(a.nit) || normNit(prestadores.find(p => p.id === a.prestadorId)?.nit);
+    if (normContrato(a.contrato)) {
+      return normContrato(a.contrato) === normContrato(contrato) ||
+        (!!aNit && aNit === normNit(nit) && simContrato(a.contrato, contrato) >= 3);
+    }
+    if (!aNit || aNit !== normNit(nit)) return false;
+    return (radData?.contratos || []).filter((rc: any) => normNit(rc.nit) === aNit).length <= 1;
+  };
+  const radActaDeTrim = (contrato: string, nit: any, reg: string, t: typeof RAD_TRIMS[0]): Acta | undefined => {
+    const regLabel = reg === 'RC' ? 'CONTRIBUTIVO' : 'SUBSIDIADO';
+    const mesesT = t.meses.map(m => mesClave(t.anio, m));
+    const lista = actas.filter(a =>
+      (a.regimen || 'SUBSIDIADO').toUpperCase() === regLabel &&
+      actaEsDeContrato(a, contrato, nit) &&
+      mesesDePeriodo(a.periodoEvaluado).some(m => mesesT.includes(m)));
+    return lista.find(a => !esActaHistorica(a)) || lista[0];
+  };
+  // Contrato de radicación registrado en la app (mismo número, o mismo NIT con los mismos números)
+  const radContratoRegistrado = (c: any) =>
+    prestadores.some(p => normContrato(p.contrato) === normContrato(c.contrato)) ||
+    prestadores.some(p => normNit(p.nit) === normNit(c.nit) && simContrato(p.contrato, c.contrato) >= 3);
 
   // Número de contrato tal como se guarda: mayúsculas, guiones normales, sin espacios
   const limpiarContrato = (x: any) => String(x || '').toUpperCase().trim()
@@ -2632,47 +2659,19 @@ function App() {
           const RAD_TOKEN = 'DUSAKAWI-RIPS-2026';
           const RAD_BASE  = 'https://radicacion.vercel.app';
           const MESES_N   = ['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'];
-          const TRIMS = [
-            { id: '1T', label: '1T',  anio: 2026, meses: [3],         mesesES: ['Marzo 2026'] },
-            { id: '2T', label: '2T',  anio: 2026, meses: [4,5,6],     mesesES: ['Abril 2026','Mayo 2026','Junio 2026'] },
-            { id: '3T', label: '3T',  anio: 2026, meses: [7,8,9],     mesesES: ['Julio 2026','Agosto 2026','Septiembre 2026'] },
-            { id: '4T', label: '4T',  anio: 2026, meses: [10,11,12],  mesesES: ['Octubre 2026','Noviembre 2026','Diciembre 2026'] },
-            { id: 'OS', label: 'O/S', anio: 2027, meses: [1,2],       mesesES: ['Enero 2027','Febrero 2027'] },
-          ];
+          const TRIMS = RAD_TRIMS;
           const mkKey = (anio: number, mes: number) => `${anio}-${mes}`;
 
-          // La API almacena por mes de FACTURACIÓN (billing). La atención de mes M
-          // llega en la factura de mes M+1 (ej: atenciones de marzo en factura de abril).
-          // Por eso buscamos periodo_mes = mesAtención + 1, con rollover de año en diciembre.
-          // Un mes tiene RIPS real si al menos un registro tiene n_usuarios, n_servicios o meses_rips > 0.
-          // "Aún en plazo" = no existe registro de facturación → false. "RIPS en cero" → false.
-          const tieneReg = (contrato: string, anio: number, mesAtencion: number, reg: string) => {
-            const bMes  = mesAtencion === 12 ? 1 : mesAtencion + 1;
-            const bAnio = mesAtencion === 12 ? anio + 1 : anio;
-            const regs = (radData?.registros || []).filter((r: any) =>
-              r.contrato === contrato && r.periodo_anio === bAnio && r.periodo_mes === bMes && r.regimen === reg
-            );
-            if (regs.length === 0) return false;
-            return regs.some((r: any) =>
-              (r.n_usuarios > 0) || (r.n_servicios > 0) || (r.meses_rips > 0)
-            );
-          };
+          // Reglas compartidas (ver radEstadoMes / radActaDeTrim): mes de atención M = factura de M+1;
+          // un mes cuenta si su factura tiene usuarios, servicios o meses RIPS.
+          const tieneReg = (contrato: string, anio: number, mesAtencion: number, reg: string) =>
+            radEstadoMes(contrato, anio, mesAtencion, reg) === 'ok';
 
-          const trimCompleto = (contrato: string, t: typeof TRIMS[0], reg: string) =>
-            t.meses.every(m => tieneReg(contrato, t.anio, m, reg));
+          const trimCompleto = (contrato: string, t: typeof TRIMS[0], reg: string) => radTrimCompleto(contrato, t, reg);
 
           const trimActa = (contrato: string, reg: string, t: typeof TRIMS[0]) => {
-            const regLabel = reg === 'RC' ? 'CONTRIBUTIVO' : 'SUBSIDIADO';
-            // Obtener NIT del contrato para búsqueda alternativa
-            const radCon = (radData?.contratos || []).find((rc: any) => rc.contrato === contrato);
-            const nit = radCon?.nit ? String(radCon.nit) : null;
-            return actas.some(a => {
-              const mismoContrato = a.contrato === contrato;
-              const mismoNit = nit && String(a.nit) === nit;
-              if (!mismoContrato && !mismoNit) return false;
-              if ((a.regimen || 'SUBSIDIADO').toUpperCase() !== regLabel) return false;
-              return t.mesesES.some(mes => (a.periodoEvaluado || '').toLowerCase().includes(mes.toLowerCase()));
-            });
+            const nit = (radData?.contratos || []).find((rc: any) => rc.contrato === contrato)?.nit;
+            return !!radActaDeTrim(contrato, nit, reg, t);
           };
 
           const mesesDispArray = (contrato: string, reg: string) => {
@@ -2689,8 +2688,8 @@ function App() {
           interface RCon { contrato: string; prestador: string; nit: string }
           const radContratos: RCon[] = radData?.contratos || [];
           const todosContratos = radContratos
-            // Solo contratos registrados exactamente en la app (por número de contrato)
-            .filter(c => prestadores.some(p => p.contrato === c.contrato))
+            // Solo contratos registrados en la app (mismo número, o mismo NIT con los mismos números)
+            .filter(c => radContratoRegistrado(c))
             .map(c => {
               const todosRegs = [...new Set(
                 (radData?.registros || [])
@@ -2793,6 +2792,45 @@ function App() {
               )
             : grupos;
 
+          // Diagnóstico de búsqueda: contratos que coinciden pero no están en la lista, con el motivo
+          const MES_CORTO = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+          const enLista = new Set(gruposFiltrados.flatMap(g => g.contratos.map((c: any) => c.contrato)));
+          const diagnostico = q ? radContratos
+            .filter((c: any) => !enLista.has(c.contrato) && (
+              String(c.contrato || '').toLowerCase().includes(q) ||
+              String(c.nit || '').toLowerCase().includes(q) ||
+              String(c.prestador || '').toLowerCase().includes(q)))
+            .slice(0, 6)
+            .map((c: any) => ({
+              c,
+              registrado: radContratoRegistrado(c),
+              regs: ['RS', 'RC']
+                .filter(reg => (radData?.registros || []).some((r: any) => r.contrato === c.contrato && (r.regimen || 'RS') === reg))
+                .map(reg => ({
+                  reg,
+                  // Facturas radicadas tal como las guarda radicación (mes de facturación)
+                  facturas: (() => {
+                    const porMes: Record<string, { anio: number; mes: number; ok: boolean }> = {};
+                    (radData?.registros || []).filter((r: any) => r.contrato === c.contrato && (r.regimen || 'RS') === reg).forEach((r: any) => {
+                      const k = mesClave(r.periodo_anio, r.periodo_mes);
+                      const ok = (r.n_usuarios > 0) || (r.n_servicios > 0) || (r.meses_rips > 0);
+                      porMes[k] = { anio: r.periodo_anio, mes: r.periodo_mes, ok: !!porMes[k]?.ok || ok };
+                    });
+                    return Object.keys(porMes).sort().map(k => porMes[k]);
+                  })(),
+                  trims: TRIMS.map(t => {
+                    const estados = t.meses.map(m => ({ m, e: radEstadoMes(c.contrato, t.anio, m, reg) }));
+                    return {
+                      t,
+                      acta: radActaDeTrim(c.contrato, c.nit, reg, t),
+                      completo: estados.every(x => x.e === 'ok'),
+                      nada: estados.every(x => x.e === 'sin_radicar'),
+                      faltan: estados.filter(x => x.e !== 'ok'),
+                    };
+                  }),
+                })),
+            })) : [];
+
           // ── Estadísticas globales de evaluación ──────────────────────────────
           const totalContratosApp = prestadores.length;
           const totalActasAnio = actas.length;
@@ -2808,7 +2846,7 @@ function App() {
             RC: { posible: 0, eval: 0 },
           };
           radContratos.forEach((c: any) => {
-            if (!prestadores.some(p => p.contrato === c.contrato)) return;
+            if (!radContratoRegistrado(c)) return;
             const regsDeEsteContrato = [...new Set(
               (radData?.registros || [])
                 .filter((r: any) => r.contrato === c.contrato)
@@ -2884,8 +2922,54 @@ function App() {
               )}
 
               {radData && grupos.length === 0 && <p className="text-[10px] text-slate-400 py-1">Sin radicaciones pendientes desde marzo 2026.</p>}
-              {radData && gruposFiltrados.length === 0 && grupos.length > 0 && (
+              {radData && gruposFiltrados.length === 0 && grupos.length > 0 && diagnostico.length === 0 && (
                 <p className="text-[10px] text-slate-400 py-1">Sin resultados para "{radSearch}".</p>
+              )}
+              {diagnostico.length > 0 && !radSelector && !radFilesReady && (
+                <div className="mb-2 space-y-1.5">
+                  <p className="text-[10px] font-semibold text-slate-500">
+                    {gruposFiltrados.length === 0 ? `"${radSearch}" no tiene trimestres listos para evaluar:` : 'Otros contratos que coinciden, sin trimestres listos:'}
+                  </p>
+                  {diagnostico.map(({ c, registrado, regs }) => (
+                    <div key={c.contrato} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/40 px-2.5 py-1.5">
+                      <div className="flex flex-wrap items-baseline gap-x-2 text-[10px]">
+                        <span className="font-mono font-semibold text-slate-700 dark:text-slate-200">{c.contrato}</span>
+                        <span className="text-slate-500 truncate">{c.prestador}</span>
+                        {!registrado && <span className="text-amber-600 font-semibold">· No registrado en la app</span>}
+                      </div>
+                      {registrado && regs.length === 0 && <p className="text-[10px] text-slate-400">Sin radicaciones.</p>}
+                      {registrado && regs.map(({ reg, trims, facturas }) => (
+                        <div key={reg} className="flex flex-wrap items-center gap-1 mt-1">
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${reg === 'RC' ? 'bg-orange-100 text-orange-600 dark:bg-orange-500/20 dark:text-orange-400' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'}`}>
+                            {reg === 'RC' ? 'Contributivo' : 'Subsidiado'}
+                          </span>
+                          {trims.filter(x => x.acta || !x.nada).map(({ t, acta, completo, faltan }) => (
+                            <span key={t.id} title={acta ? `Acta ${acta.numero} · ${acta.periodoEvaluado}` : undefined}
+                              className={`text-[9px] px-1.5 py-0.5 rounded border ${acta
+                                ? 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-500/10 dark:border-emerald-500/30 dark:text-emerald-300'
+                                : completo
+                                  ? 'bg-indigo-50 border-indigo-200 text-indigo-700 dark:bg-indigo-500/10 dark:border-indigo-500/30 dark:text-indigo-300'
+                                  : 'bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-500/10 dark:border-amber-500/30 dark:text-amber-300'}`}>
+                              <strong>{t.label}</strong>{' '}
+                              {acta
+                                ? `✓ ${esActaHistorica(acta) ? 'evaluado fuera de la app' : acta.numero}`
+                                : completo
+                                  ? 'listo'
+                                  : `faltan ${faltan.map(f => f.e === 'en_cero'
+                                      ? `${MES_CORTO[f.m - 1]} (RIPS en cero)`
+                                      : `${MES_CORTO[f.m - 1]} (factura ${MES_CORTO[f.m % 12]} sin radicar)`).join(', ')}`}
+                            </span>
+                          ))}
+                          <span className="basis-full text-[9px] text-slate-400">
+                            Facturas radicadas: {facturas.length
+                              ? facturas.map(f => `${MES_CORTO[f.mes - 1]}${f.anio !== 2026 ? ' ' + f.anio : ''}${f.ok ? '' : ' (en cero)'}`).join(' · ')
+                              : 'ninguna'} — la factura de cada mes trae las atenciones del mes anterior.
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
               )}
 
               {/* Lista agrupada por prestador — ultra compacta */}
@@ -3514,7 +3598,7 @@ function App() {
                       {isOpen && (
                         <div className="border-t border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800">
                           {grupo.map(p => {
-                            const pActas = [...new Map(actas.filter(a => a.prestadorId === p.id || (a.nit && a.nit === p.nit && a.contrato === p.contrato)).map(a => [a.id, a])).values()];
+                            const pActas = [...new Map<string, Acta>(actas.filter(a => a.prestadorId === p.id || (a.nit && a.nit === p.nit && a.contrato === p.contrato)).map(a => [a.id, a] as [string, Acta])).values()];
                             const isC = p.regimen === 'CONTRIBUTIVO';
                             return (
                               <div key={p.id} className="px-3 py-2.5 space-y-1.5">
@@ -3534,17 +3618,28 @@ function App() {
                                       const te = a.servicios.reduce((s, x) => s + x.ejecutado, 0);
                                       const cumpl = tp > 0 ? Math.min(Math.round((te / tp) * 100), 100) : 0;
                                       const col = cumpl >= 100 ? '#16a34a' : cumpl >= 80 ? '#ca8a04' : '#dc2626';
+                                      const hist = esActaHistorica(a);
+                                      const regA = (a.regimen || p.regimen || 'SUBSIDIADO').toUpperCase();
+                                      const otroReg = regA !== (p.regimen || 'SUBSIDIADO').toUpperCase();
                                       return (
                                         <div key={a.id} className="flex items-center justify-between bg-white dark:bg-slate-900/60 rounded-lg px-2 py-1 border border-slate-100 dark:border-slate-800">
                                           <div className="min-w-0 flex-1">
                                             <span className="text-[10px] font-mono font-bold text-indigo-600 dark:text-indigo-400">{a.numero}</span>
                                             {a.periodoEvaluado && <span className="text-[9px] text-slate-400 ml-1.5">{a.periodoEvaluado}</span>}
+                                            {otroReg && (
+                                              <span className={`text-[8px] font-bold ml-1.5 px-1 py-0.5 rounded ${regA === 'CONTRIBUTIVO' ? 'bg-orange-100 text-orange-600 dark:bg-orange-500/20 dark:text-orange-400' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'}`}
+                                                title={`Acta de régimen ${regA.toLowerCase()}`}>{regA === 'CONTRIBUTIVO' ? 'C' : 'S'}</span>
+                                            )}
                                           </div>
                                           <div className="flex items-center gap-1.5 shrink-0">
+                                            {hist ? (
+                                              <span className="text-[9px] italic text-slate-500" title="Registrado desde la hoja de seguimiento: evaluado fuera de la app">Histórico</span>
+                                            ) : (<>
                                             <div className="w-10 h-1 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
                                               <div className="h-1 rounded-full" style={{ width: `${cumpl}%`, backgroundColor: col }} />
                                             </div>
                                             <span className="text-[10px] font-bold w-8 text-right" style={{ color: col }}>{cumpl}%</span>
+                                            </>)}
                                             <button onClick={e => { e.stopPropagation(); setInlineActa(sanitizeActaServicios({ ...a })); setActiveTab('actas'); }} className="text-[9px] px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-300 rounded transition-colors">Ver</button>
                                           </div>
                                         </div>
@@ -4357,7 +4452,7 @@ function App() {
                   const q = searchPrestador.toLowerCase();
                   return p.nombre.toLowerCase().includes(q) || p.contrato.toLowerCase().includes(q);
                 }).map(p => {
-                  const pActas = [...new Map(actas.filter(a => a.prestadorId === p.id || (a.nit && a.nit === p.nit && a.contrato === p.contrato)).map(a => [a.id, a])).values()];
+                  const pActas = [...new Map<string, Acta>(actas.filter(a => a.prestadorId === p.id || (a.nit && a.nit === p.nit && a.contrato === p.contrato)).map(a => [a.id, a] as [string, Acta])).values()];
                   const isSelected = selectedDashPrestador === p.id;
                   return (
                     <div key={p.id}
@@ -4564,32 +4659,34 @@ function App() {
                           return next;
                         });
                         // All actas for this prestador, deduped
-                        const allActas = [...new Map(
+                        const allActas = [...new Map<string, Acta>(
                           grupo.flatMap(p => actas.filter(a => a.prestadorId === p.id || (a.nit && a.nit === p.nit && a.contrato === p.contrato)))
-                          .map(a => [a.id, a])
+                          .map(a => [a.id, a] as [string, Acta])
                         ).values()];
-                        const subActas = allActas.filter(a => {
+                        // Cada acta va al panel de SU régimen (no al del registro al que quedó ligada)
+                        const regDeActa = (a: Acta) => {
                           const p = grupo.find(pp => pp.id === a.prestadorId || (a.nit === pp.nit && a.contrato === pp.contrato));
-                          return !p || p.regimen !== 'CONTRIBUTIVO';
-                        });
-                        const contActas = allActas.filter(a => {
-                          const p = grupo.find(pp => pp.id === a.prestadorId || (a.nit === pp.nit && a.contrato === pp.contrato));
-                          return p?.regimen === 'CONTRIBUTIVO';
-                        });
+                          return (a.regimen || p?.regimen || 'SUBSIDIADO').toUpperCase();
+                        };
+                        const subActas = allActas.filter(a => regDeActa(a) !== 'CONTRIBUTIVO');
+                        const contActas = allActas.filter(a => regDeActa(a) === 'CONTRIBUTIVO');
                         const totalActas = allActas.length;
 
                         const ActaMiniCard = ({ acta }: { acta: Acta }) => {
                           const totalProg = acta.servicios.reduce((s, x) => s + x.programado, 0);
                           const totalEjec = acta.servicios.reduce((s, x) => s + Math.min(x.ejecutado, x.programado), 0);
                           const cumpl = totalProg > 0 ? Math.min(Math.round((totalEjec / totalProg) * 100), 100) : 0;
-                          const badgeColor = cumpl >= 100 ? 'bg-green-100 dark:bg-green-500/15 text-green-700 dark:text-green-400 border-green-200 dark:border-green-500/20' : cumpl >= 80 ? 'bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-500/20' : 'bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 border-red-200 dark:border-red-500/20';
+                          const hist = esActaHistorica(acta);
+                          const badgeColor = hist ? 'bg-slate-50 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700' : cumpl >= 100 ? 'bg-green-100 dark:bg-green-500/15 text-green-700 dark:text-green-400 border-green-200 dark:border-green-500/20' : cumpl >= 80 ? 'bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-500/20' : 'bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 border-red-200 dark:border-red-500/20';
                           return (
                             <div className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2 ${badgeColor} cursor-pointer hover:opacity-80 transition-opacity`} onClick={() => handleEditActa(acta)}>
                               <div className="min-w-0">
                                 <p className="text-[11px] font-mono font-bold truncate">{acta.numero}</p>
                                 <p className="text-[10px] opacity-70 truncate">{acta.periodoEvaluado}</p>
                               </div>
-                              <span className="text-sm font-black shrink-0">{cumpl}%</span>
+                              {hist
+                                ? <span className="text-[10px] italic shrink-0" title="Registrado desde la hoja de seguimiento: evaluado fuera de la app">Histórico</span>
+                                : <span className="text-sm font-black shrink-0">{cumpl}%</span>}
                             </div>
                           );
                         };
@@ -4677,7 +4774,7 @@ function App() {
                                 {/* Contracts table — funciones intactas */}
                                 <div className="divide-y divide-slate-100 dark:divide-slate-700/50">
                                   {grupo.map(p => {
-                                    const pActas = [...new Map(actas.filter(a => a.prestadorId === p.id || (a.nit && a.nit === p.nit && a.contrato === p.contrato)).map(a => [a.id, a])).values()];
+                                    const pActas = [...new Map<string, Acta>(actas.filter(a => a.prestadorId === p.id || (a.nit && a.nit === p.nit && a.contrato === p.contrato)).map(a => [a.id, a] as [string, Acta])).values()];
                                     return (
                                       <div key={p.id} className="px-5 py-3 hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors">
                                         <div className="flex items-start justify-between gap-3">
@@ -4711,7 +4808,13 @@ function App() {
                                                 <div key={acta.id} className="flex items-center gap-1.5 bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1">
                                                   <span className="text-[11px] font-mono font-semibold text-indigo-600 dark:text-indigo-400">{acta.numero}</span>
                                                   <span className="text-[10px] text-slate-400 hidden sm:inline">{acta.periodoEvaluado}</span>
-                                                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${badgeColor}`}>{cumpl}%</span>
+                                                  {(acta.regimen || p.regimen || 'SUBSIDIADO').toUpperCase() !== (p.regimen || 'SUBSIDIADO').toUpperCase() && (
+                                                    <span className={`text-[9px] font-bold px-1 py-0.5 rounded ${(acta.regimen || '').toUpperCase() === 'CONTRIBUTIVO' ? 'bg-orange-100 text-orange-600 dark:bg-orange-500/20 dark:text-orange-400' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'}`}
+                                                      title={`Acta de régimen ${(acta.regimen || '').toLowerCase()}`}>{(acta.regimen || '').toUpperCase() === 'CONTRIBUTIVO' ? 'C' : 'S'}</span>
+                                                  )}
+                                                  {esActaHistorica(acta)
+                                                    ? <span className="text-[10px] italic text-slate-500" title="Registrado desde la hoja de seguimiento: evaluado fuera de la app">Histórico</span>
+                                                    : <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${badgeColor}`}>{cumpl}%</span>}
                                                   <button onClick={() => handleEditActa(acta)} className="p-0.5 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors text-slate-400" title="Ver/Editar"><Pencil className="h-3 w-3" /></button>
                                                   <button onClick={() => handleDeleteActa(acta.id)} className="p-0.5 hover:text-red-500 transition-colors text-slate-400" title="Eliminar"><Trash2 className="h-3 w-3" /></button>
                                                 </div>
