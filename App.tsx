@@ -76,8 +76,14 @@ const simContrato = (x: string, y: string) => {
 const esActaHistorica = (a: any) =>
   a?._placeholder === true || a?._placeholder === 'true' || /^HIST-/i.test(String(a?.numero || ''));
 
+// Clave "mismo contrato + régimen + meses evaluados" (dedup y auditoría de limpieza)
+const clavePeriodoActa = (a: any) =>
+  `${normContrato(a?.contrato) || a?.prestadorId}||${(a?.regimen || 'SUBSIDIADO').toUpperCase()}||` +
+  (mesesDePeriodo(a?.periodoEvaluado).join('|') || String(a?.periodoEvaluado || '').trim().toLowerCase());
+
 // ── Deduplicación de actas ─────────────────────────────────────────────────
 // No renumera: el número de acta usa un sufijo fijo por trimestre (-1 = 1T, -2 = 2T, …).
+// Las actas recuperadas a mano desde "Ver limpieza" (_conservar) nunca se eliminan.
 function deduplicarActas(raw: import('./types').Acta[]): import('./types').Acta[] {
   const pct = (a: import('./types').Acta) => {
     const prog = (a.servicios || []).reduce((s, sv) => s + sv.programado, 0);
@@ -95,9 +101,11 @@ function deduplicarActas(raw: import('./types').Acta[]): import('./types').Acta[
   // Paso 1: mismo id → una
   const byId = new Map<string, import('./types').Acta>();
   (raw || []).forEach(a => byId.set(a.id, a));
+  // Las recuperadas a mano (_conservar) no pasan por los pasos 2 y 3
+  const conservadas = [...byId.values()].filter(a => (a as any)._conservar);
   // Paso 2: misma acta regenerada (mismo prestador + número + período)
   const byNumero = new Map<string, import('./types').Acta>();
-  [...byId.values()].forEach(a => {
+  [...byId.values()].filter(a => !(a as any)._conservar).forEach(a => {
     const key = `${a.prestadorId}||${a.numero}||${periodoKey(a)}`;
     const ex = byNumero.get(key);
     byNumero.set(key, ex ? mejor(ex, a) : a);
@@ -109,7 +117,7 @@ function deduplicarActas(raw: import('./types').Acta[]): import('./types').Acta[
     const ex = byPeriodo.get(key);
     byPeriodo.set(key, ex ? mejor(ex, a) : a);
   });
-  return [...byPeriodo.values()];
+  return [...byPeriodo.values(), ...conservadas];
 }
 
 const DEFAULT_USERS: AppUser[] = [
@@ -874,6 +882,35 @@ function App() {
       if (cloudInitialized.current) CloudStorage.set('actas', restored);
       setMessage({ type: 'success', text: `Respaldo restaurado: ${restored.length} actas recuperadas (${restored.length - actas.length >= 0 ? '+' + (restored.length - actas.length) : restored.length - actas.length} nuevas).` });
     } catch { setMessage({ type: 'error', text: 'Error al leer el respaldo.' }); }
+  };
+
+  // Auditoría de la limpieza automática: respaldo local (antes de limpiar) frente a las actas actuales
+  const [showLimpieza, setShowLimpieza] = useState(false);
+  const limpieza = useMemo(() => {
+    if (!showLimpieza) return null;
+    const respaldo = new Map<string, Acta>();
+    ['actas_backup', 'actas_backup_v1', 'actas_backup_v2', 'actas_backup_v3'].forEach(k => {
+      try {
+        (JSON.parse(localStorage.getItem(k) || '[]') as Acta[]).forEach(a => { if (a?.id && !respaldo.has(a.id)) respaldo.set(a.id, a); });
+      } catch { /* respaldo ilegible: se omite */ }
+    });
+    const actuales = new Set(actas.map(a => a.id));
+    const porClave = new Map<string, Acta>();
+    actas.forEach(a => porClave.set(clavePeriodoActa(a), a));
+    const eliminadas = [...respaldo.values()]
+      .filter(a => !actuales.has(a.id))
+      .map(a => ({ acta: a, historica: esActaHistorica(a), conservada: porClave.get(clavePeriodoActa(a)) || null }))
+      .sort((x, y) => Number(x.historica) - Number(y.historica) || String(x.acta.contrato || '').localeCompare(String(y.acta.contrato || '')));
+    return { respaldo: respaldo.size, eliminadas };
+  }, [showLimpieza, actas]);
+  const pctActa = (a: Acta) => {
+    const tp = (a.servicios || []).reduce((s, x) => s + x.programado, 0);
+    const te = (a.servicios || []).reduce((s, x) => s + Math.min(x.ejecutado, x.programado), 0);
+    return tp > 0 ? Math.min(Math.round((te / tp) * 100), 100) : 0;
+  };
+  const recuperarActa = (a: Acta) => {
+    setActas(prev => prev.some(x => x.id === a.id) ? prev : [...prev, { ...a, _conservar: true } as Acta]);
+    setMessage({ type: 'success', text: `Acta ${a.numero} recuperada (no la volverá a quitar la limpieza automática).` });
   };
 
   const handleSaveSession = async () => {
@@ -2187,16 +2224,41 @@ function App() {
   const findPrestadorRad = (contrato: string, nit: any, reg: string): Prestador | undefined =>
     matchPrestadorRad(contrato, nit, reg).p;
 
+  // Meses de ATENCIÓN que cubre un registro de radicación.
+  // 1) Si trae fecha_min/fecha_max de las atenciones (bot de radicación: fechas de ARCHIVO-CONSULTAS)
+  //    y son razonables (2026–2027, máximo 3 meses), se usan esos meses.
+  // 2) Si no, se asume que periodo_mes es el mes de factura: atenciones del mes anterior.
+  const mesesAtencionRegistro = (r: any): string[] => {
+    const f = (x: any) => { const m = String(x || '').match(/^(\d{4})-(\d{2})/); return m ? [Number(m[1]), Number(m[2])] : null; };
+    const ini = f(r.fecha_min), fin = f(r.fecha_max);
+    if (ini && fin && ini[0] >= 2026 && fin[0] <= 2027) {
+      const span = (fin[0] - ini[0]) * 12 + (fin[1] - ini[1]);
+      if (span >= 0 && span <= 2) {
+        const out: string[] = [];
+        for (let k = 0; k <= span; k++) {
+          const t = ini[0] * 12 + (ini[1] - 1) + k;
+          out.push(mesClave(Math.floor(t / 12), (t % 12) + 1));
+        }
+        return out;
+      }
+    }
+    if (!r.periodo_anio || !r.periodo_mes) return [];
+    return [r.periodo_mes === 1 ? mesClave(r.periodo_anio - 1, 12) : mesClave(r.periodo_anio, r.periodo_mes - 1)];
+  };
+
   // ── Radicación: un único criterio para "trimestre completo" y "trimestre ya evaluado" ──
   // Lo usan el panel Listos para evaluar, Estado Global y la alerta de pendientes.
   // La API guarda por mes de FACTURACIÓN: la atención del mes M llega en la factura de M+1.
   const radEstadoMes = (contrato: string, anio: number, mesAtencion: number, reg: string): 'ok' | 'sin_radicar' | 'en_cero' => {
-    const bMes  = mesAtencion === 12 ? 1 : mesAtencion + 1;
-    const bAnio = mesAtencion === 12 ? anio + 1 : anio;
+    const objetivo = mesClave(anio, mesAtencion);
     const regs = (radData?.registros || []).filter((r: any) =>
-      r.contrato === contrato && r.periodo_anio === bAnio && r.periodo_mes === bMes && r.regimen === reg);
+      r.contrato === contrato && r.regimen === reg && mesesAtencionRegistro(r).includes(objetivo));
     if (regs.length === 0) return 'sin_radicar';
-    return regs.some((r: any) => (r.n_usuarios > 0) || (r.n_servicios > 0) || (r.meses_rips > 0)) ? 'ok' : 'en_cero';
+    // Con conteos: algún conteo > 0. Sin conteos: solo si trae recepción, radicación o fechas de atención.
+    const conDatos = (r: any) => ['n_usuarios', 'n_servicios', 'meses_rips'].some(k => r[k] !== undefined)
+      ? ((r.n_usuarios > 0) || (r.n_servicios > 0) || (r.meses_rips > 0))
+      : !!(r.recepcion || r.radicacion || r.fecha_min);
+    return regs.some(conDatos) ? 'ok' : 'en_cero';
   };
   const radTrimCompleto = (contrato: string, t: typeof RAD_TRIMS[0], reg: string) =>
     t.meses.every(m => radEstadoMes(contrato, t.anio, m, reg) === 'ok');
@@ -2500,6 +2562,15 @@ function App() {
                 title="Restaurar actas desde respaldo local (solo administrador)"
               >
                 <HardDrive className="h-4 w-4" /> Restaurar
+              </button>
+            )}
+            {currentUser?.role === 'admin' && localStorage.getItem('actas_backup') && (
+              <button
+                onClick={() => setShowLimpieza(true)}
+                className="hidden md:flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-all"
+                title="Ver qué actas quitó la limpieza automática de repetidas"
+              >
+                <ClipboardList className="h-4 w-4" /> Ver limpieza
               </button>
             )}
             <div className="flex items-center gap-2">
@@ -6305,6 +6376,67 @@ echo "* * * * * root /usr/local/bin/metrics.sh; sleep 30; /usr/local/bin/metrics
                   }}
                   className="px-4 py-2 text-sm font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-colors"
                 >Sí, crear {regimenComp}</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* --- Auditoría de limpieza de actas --- */}
+      {showLimpieza && limpieza && (() => {
+        const nHist = limpieza.eliminadas.filter(e => e.historica).length;
+        const nReal = limpieza.eliminadas.length - nHist;
+        return (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setShowLimpieza(false)}>
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-5xl max-h-[85vh] flex flex-col border border-slate-200 dark:border-slate-800" onClick={e => e.stopPropagation()}>
+              <div className="flex justify-between items-start gap-4 p-5 border-b border-slate-200 dark:border-slate-800">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-800 dark:text-white">Actas quitadas por la limpieza de repetidas</h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    Respaldo de este navegador: <strong>{limpieza.respaldo}</strong> actas · Actuales: <strong>{actas.length}</strong> ·
+                    Quitadas: <strong>{limpieza.eliminadas.length}</strong> (<strong>{nHist}</strong> históricas HIST-… sin servicios, <strong>{nReal}</strong> reales).
+                  </p>
+                  <p className="text-[11px] text-slate-400 mt-1">Cada fila repetía el mismo contrato, régimen y meses de otra acta que se conservó. Las reales se pueden recuperar.</p>
+                </div>
+                <button onClick={() => setShowLimpieza(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"><X className="h-5 w-5 text-slate-500" /></button>
+              </div>
+              <div className="flex-1 overflow-y-auto custom-scroll p-4">
+                {limpieza.eliminadas.length === 0 ? (
+                  <p className="text-sm text-slate-500 text-center py-8">El respaldo de este navegador no tiene actas que falten en las actuales.</p>
+                ) : (
+                  <table className="w-full text-xs">
+                    <thead className="text-slate-500 dark:text-slate-400 text-left sticky top-0 bg-white dark:bg-slate-900">
+                      <tr>
+                        <th className="py-1.5 pr-2">Acta quitada</th><th className="py-1.5 pr-2">Contrato</th><th className="py-1.5 pr-2">Régimen</th>
+                        <th className="py-1.5 pr-2">Período</th><th className="py-1.5 pr-2 text-right">%</th><th className="py-1.5 pr-2">Se conservó</th><th className="py-1.5"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {limpieza.eliminadas.map(({ acta, historica, conservada }) => (
+                        <tr key={acta.id} className="text-slate-600 dark:text-slate-300">
+                          <td className="py-1 pr-2 font-mono">{acta.numero}{historica && <span className="ml-1 text-[10px] italic text-slate-400">histórica</span>}</td>
+                          <td className="py-1 pr-2 font-mono">{acta.contrato}</td>
+                          <td className="py-1 pr-2">{(acta.regimen || 'SUBSIDIADO').toUpperCase()}</td>
+                          <td className="py-1 pr-2">{acta.periodoEvaluado}</td>
+                          <td className="py-1 pr-2 text-right">{historica ? '—' : `${pctActa(acta)}%`}</td>
+                          <td className="py-1 pr-2">
+                            {conservada
+                              ? <span className="font-mono">{conservada.numero} <span className="text-slate-400">({esActaHistorica(conservada) ? 'histórica' : `${pctActa(conservada)}%`})</span></span>
+                              : <span className="text-amber-600">sin equivalente (borrada a mano o en otro equipo)</span>}
+                          </td>
+                          <td className="py-1 text-right">
+                            {!historica && (
+                              <button onClick={() => recuperarActa(acta)}
+                                className="px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 hover:bg-indigo-100">
+                                Recuperar
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
               </div>
             </div>
           </div>

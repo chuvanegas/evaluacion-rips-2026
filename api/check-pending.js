@@ -86,12 +86,28 @@ export default async function handler(req, res) {
   // 4. Calcular pendientes (misma lógica que el app)
   // La API guarda por mes de FACTURACIÓN: la atención del mes M llega en la factura de M+1,
   // y un mes cuenta solo si su factura trae usuarios, servicios o meses RIPS.
+  // Meses de atención de un registro: por fecha_min/fecha_max si son razonables; si no, periodo_mes - 1
+  const mesesAtencionRegistro = r => {
+    const f = x => { const m = String(x || '').match(/^(\d{4})-(\d{2})/); return m ? [Number(m[1]), Number(m[2])] : null; };
+    const ini = f(r.fecha_min), fin = f(r.fecha_max);
+    if (ini && fin && ini[0] >= 2026 && fin[0] <= 2027) {
+      const span = (fin[0] - ini[0]) * 12 + (fin[1] - ini[1]);
+      if (span >= 0 && span <= 2) {
+        const out = [];
+        for (let k = 0; k <= span; k++) { const t = ini[0] * 12 + (ini[1] - 1) + k; out.push(mesClave(Math.floor(t / 12), (t % 12) + 1)); }
+        return out;
+      }
+    }
+    if (!r.periodo_anio || !r.periodo_mes) return [];
+    return [r.periodo_mes === 1 ? mesClave(r.periodo_anio - 1, 12) : mesClave(r.periodo_anio, r.periodo_mes - 1)];
+  };
+  const conDatos = r => ['n_usuarios', 'n_servicios', 'meses_rips'].some(k => r[k] !== undefined)
+    ? ((r.n_usuarios > 0) || (r.n_servicios > 0) || (r.meses_rips > 0))
+    : !!(r.recepcion || r.radicacion || r.fecha_min);
   const tieneReg = (contrato, anio, mesAtencion, reg) => {
-    const bMes  = mesAtencion === 12 ? 1 : mesAtencion + 1;
-    const bAnio = mesAtencion === 12 ? anio + 1 : anio;
+    const objetivo = mesClave(anio, mesAtencion);
     return registros.some(r =>
-      r.contrato === contrato && r.periodo_anio === bAnio && r.periodo_mes === bMes && r.regimen === reg &&
-      ((r.n_usuarios > 0) || (r.n_servicios > 0) || (r.meses_rips > 0)));
+      r.contrato === contrato && r.regimen === reg && mesesAtencionRegistro(r).includes(objetivo) && conDatos(r));
   };
   // Un acta cuenta para un contrato por su número de contrato; por NIT solo si el acta no tiene
   // contrato y el NIT tiene un único contrato en radicación.

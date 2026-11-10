@@ -39,6 +39,12 @@ git fetch origin && git branch --set-upstream-to=origin/claude/general-improveme
 
 ---
 
+## ⚠️ Seguridad (v2.28)
+- `chuvanegas/evaluacion-rips-2026` y `chuvanegas/radicasion` son repositorios **públicos**. Nada de contraseñas, tokens ni llaves en archivos versionados (este CLAUDE.md incluido).
+- Expuesto y pendiente de rotar por el usuario: contraseña de root del VPS (publicada aquí 15/09–10/11/2026), token de DuckDNS, contraseña admin de PocketBase (`services/supabaseClient.ts` y `api/*.js`) y token de radicación `x-token`.
+- La contraseña admin de PocketBase viaja en el JavaScript del navegador: cualquiera que abra la app puede leerla. Arreglo propuesto: función serverless que guarde las credenciales en variables de entorno de Vercel y haga de intermediaria (requiere que el usuario cree las variables y luego cambie la contraseña). **No cambiar la contraseña de PocketBase antes de ese cambio**: la app dejaría de cargar datos.
+- Desde sesiones en la nube no hay SSH al VPS (puerto 22 cerrado) ni salida a hosts no permitidos; no intentar rodear el proxy.
+
 ## Base de datos — PocketBase en VPS Contabo (v2.10+)
 
 Desde v2.10 la app usa **PocketBase** en lugar de Supabase.
@@ -51,14 +57,14 @@ Desde v2.10 la app usa **PocketBase** en lugar de Supabase.
 | **Admin email** | `jd_vanegas@hotmail.com` |
 | **Colección** | `app_storage` (key-value JSON, 11 registros) |
 | **SSL** | Let's Encrypt via nginx reverse proxy — renueva automáticamente |
-| **DuckDNS token** | `7336e4f9-ef84-42e7-af5f-f065f031fad1` (cuenta `elprimordialjd29@gmail.com`) |
+| **DuckDNS token** | (fuera del repositorio — pedirlo al usuario) |
 
 ### Acceso SSH al VPS
 ```bash
 ssh root@207.180.243.127
-# Contraseña: V@negas1920
 ```
-> Cambiar contraseña SSH cuando sea posible (`passwd`).
+> ⚠️ Este repositorio es **público**: nunca escribir contraseñas, tokens ni llaves en este archivo ni en el código.
+> La contraseña de root estuvo publicada aquí entre el 15/09 y el 10/11/2026 → debe cambiarse (`passwd`) y usar llave SSH.
 
 ### Servicios en el VPS
 - **PocketBase**: `systemctl status pocketbase` — puerto 8090 interno
@@ -300,7 +306,11 @@ Panel en el Dashboard (solo visible para admin) que muestra contratos pendientes
 
 ### Reglas únicas de pendientes (v2.27)
 Antes había 4 cálculos distintos (panel, Estado Global, alerta de pendientes y `api/check-pending.js`) que no coincidían. Ahora todos usan las mismas funciones (App.tsx, nivel componente):
-- `radEstadoMes(contrato, anio, mesAtencion, reg)` → `'ok' | 'sin_radicar' | 'en_cero'`. **Desfase de facturación:** la atención del mes M llega en la factura del mes M+1 (`periodo_mes = M+1`); el mes cuenta si la factura trae `n_usuarios`, `n_servicios` o `meses_rips` > 0. Evidencia: el 29/10 aparecían chips 3T (requieren `periodo_mes` 10) antes de terminar octubre.
+- `radEstadoMes(contrato, anio, mesAtencion, reg)` → `'ok' | 'sin_radicar' | 'en_cero'`, usando `mesesAtencionRegistro(r)` (v2.28):
+  1. Si el registro trae `fecha_min`/`fecha_max` de las atenciones (2026–2027, máximo 3 meses de diferencia) → esos meses. Cubre radicaciones tardías (atenciones de septiembre radicadas en noviembre).
+  2. Si no → `periodo_mes - 1` (supuesto de facturación: la atención del mes M llega en la factura de M+1; el 29/10 ya había chips 3T, que con este supuesto requieren `periodo_mes` 10).
+  - Cuenta si algún conteo (`n_usuarios`, `n_servicios`, `meses_rips`) es > 0; si el registro no trae conteos, solo si tiene `recepcion`, `radicacion` o `fecha_min`.
+  - Contraste: el bot público `chuvanegas/radicasion` (v0.2.0, 06/10) define `periodo_mes` como el mes de **atención** más frecuente en ARCHIVO-CONSULTAS ("✓ Radicado = hay registro con periodo de atención en ese mes"). Pero la API viva de radicacion.vercel.app (`/api/evaluar`, `/api/rips-ext`, campos `n_*`) **no está en ese repo**: falta confirmar con el usuario dónde está y qué significa su `periodo_mes`.
 - `radTrimCompleto`, `radActaDeTrim(contrato, nit, reg, t)` (busca por **meses** con `mesesDePeriodo`, prefiere la real sobre la histórica), `radContratoRegistrado(c)`.
 - **Un acta cuenta solo para SU contrato** (`actaEsDeContrato`): por contrato normalizado, o mismo NIT con los mismos números (`simContrato >= 3`, compara números: `04` = `4`). Por NIT sin contrato solo si el NIT tiene un único contrato en radicación. Antes cualquier acta del NIT servía: SUMINFARMA (NIT 901556821) tiene Uribia MDC-44847-2026-12 y Riohacha MDC-44001-2026-15, y el 3T de Uribia ocultaba el 3T de Riohacha.
 - Contratos incluidos: `radContratoRegistrado` (mismo número normalizado, o mismo NIT con los mismos números). Antes exigía el texto exacto.
@@ -365,6 +375,8 @@ Función de módulo en App.tsx. Corre en carga inicial, sync y poll; si elimina 
 3. **Mismo contrato + régimen + meses evaluados:** clave `normContrato(contrato) || prestadorId` + régimen + `mesesDePeriodo(periodoEvaluado)`. Entiende cualquier formato: "Marzo 2026" = "1T 2026"; "Abril 2026, Mayo 2026, Junio 2026" = "Abril, Mayo y Junio 2026" = "2T 2026".
    - Queda **la real antes que la histórica** (`esActaHistorica`: `_placeholder` o número `HIST-…`), y entre reales **la de mayor %**.
 - **Ya no renumera** (antes el "paso 4" cerraba huecos y cambiaba números ya impresos, en contra del sufijo fijo por trimestre `-1`=1T, `-2`=2T…).
+- **v2.28 — "Ver limpieza"** (botón del encabezado, admin, junto a Restaurar): compara el respaldo local `actas_backup*` (que nunca se sobrescribe con menos actas) con las actas actuales y lista cada acta quitada, si era histórica, y cuál se conservó (`clavePeriodoActa`). Las reales tienen **Recuperar**: se agregan con `_conservar: true` y `deduplicarActas` las excluye de los pasos 2 y 3.
+- Caída 496 → 391 (10/11/2026) tras v2.27: corresponde a la limpieza de actas HIST repetidas (y reales del mismo período); el detalle exacto está en "Ver limpieza" del navegador que tenía el respaldo.
 - `mesesDePeriodo(texto)` → `['2026-04','2026-05','2026-06']`: meses por nombre (cada mes toma el primer año escrito después), o códigos `1T…4T`, `O/S` según `RAD_TRIMS` (1T = solo marzo 2026; O/S = ene–feb 2027).
 
 ### Actas históricas `HIST-…` (api/seed-actas.js)
@@ -504,6 +516,7 @@ Objetivo: que el mismo contrato quede escrito **idéntico** en ambos regímenes 
 
 | Versión | Tag git | Descripción |
 |---|---|---|
+| **2.28** | `v2.28` | "Ver limpieza" lista las actas quitadas por la limpieza (desde el respaldo local) con opción Recuperar; meses de atención desde fecha_min/fecha_max de radicación cuando existen; secretos fuera de CLAUDE.md y sección de seguridad. |
 | **2.27** | `v2.27` | Actas HIST repetidas: dedup por meses del período (real antes que histórica) y sin renumeración; seed-actas desactivado; "Histórico" en listas. Pendientes con una sola regla en panel, Estado Global, alerta y check-pending; acta por contrato (no por NIT); diagnóstico en el buscador con facturas radicadas; radicación se recarga cada 15 min. |
 | **2.26** | `v2.26` | Validación del N° de contrato al crear/editar prestadores: normalización, bloqueo de duplicados por régimen, avisos y sugerencias "Usar …" contra el otro régimen y radicación; el régimen complementario precarga el mismo contrato. |
 | **2.25** | `v2.25` | Metas del régimen correcto aunque el número de contrato del registro no coincida con radicación (contrato normalizado → NIT + régimen → otro régimen con aviso); selector para elegir el registro en el preview. |
