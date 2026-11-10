@@ -2288,6 +2288,54 @@ function App() {
     prestadores.some(p => normContrato(p.contrato) === normContrato(c.contrato)) ||
     prestadores.some(p => normNit(p.nit) === normNit(c.nit) && simContrato(p.contrato, c.contrato) >= 3);
 
+  // ── Validación: prestadores creados en la app frente a lo radicado (por mes de atención) ──
+  const MESES_CICLO = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(m => ({ anio: 2026, mes: m })).concat([1, 2].map(m => ({ anio: 2027, mes: m })));
+  const [showValidacion, setShowValidacion] = useState(false);
+  const [valFiltro, setValFiltro] = useState('');
+  const [valSoloProblemas, setValSoloProblemas] = useState(true);
+  const validacion = useMemo(() => {
+    if (!showValidacion || !radData) return null;
+    const radCons: any[] = radData.contratos || [];
+    const regsDe = (contrato: string, reg: string) =>
+      (radData.registros || []).filter((r: any) => r.contrato === contrato && (r.regimen || 'RS') === reg);
+    const filas = prestadores.map(p => {
+      const regLabel = (p.regimen || 'SUBSIDIADO').toUpperCase();
+      const reg = regLabel === 'CONTRIBUTIVO' ? 'RC' : 'RS';
+      const exacto = radCons.find(c => normContrato(c.contrato) === normContrato(p.contrato));
+      const parecido = exacto ? undefined : radCons.find(c => normNit(c.nit) === normNit(p.nit) && simContrato(c.contrato, p.contrato) >= 3);
+      const rc = exacto || parecido;
+      const delNit = radCons.filter(c => normNit(c.nit) === normNit(p.nit));
+      const problemas: string[] = [];
+      if (!rc) problemas.push(delNit.length
+        ? `El contrato no está en radicación. Ese NIT tiene: ${delNit.map(c => c.contrato).join(', ')}`
+        : 'Ni el contrato ni el NIT aparecen en radicación');
+      else if (parecido) problemas.push(`En radicación el contrato está escrito ${rc.contrato}`);
+      if (rc && regsDe(rc.contrato, reg).length === 0) problemas.push(`Radicación no tiene radicaciones ${regLabel.toLowerCase()} para este contrato`);
+      const duplicado = prestadores.some(q => q.id !== p.id && normContrato(q.contrato) === normContrato(p.contrato) &&
+        (q.regimen || 'SUBSIDIADO').toUpperCase() === regLabel);
+      if (duplicado) problemas.push(`Hay otro registro con el mismo contrato y régimen en la app`);
+      const meses = rc ? MESES_CICLO.map(({ anio, mes }) => radEstadoMes(rc.contrato, anio, mes, reg)) : [];
+      const trims = rc ? RAD_TRIMS.map(t => ({ t, completo: radTrimCompleto(rc.contrato, t, reg), acta: radActaDeTrim(rc.contrato, rc.nit, reg, t) })) : [];
+      return { p, regLabel, rc, problemas, meses, trims };
+    });
+    // Contratos radicados de NIT registrados que no tienen su registro (contrato + régimen) en la app
+    const nitsApp = new Set(prestadores.map(p => normNit(p.nit)).filter(Boolean));
+    const faltantes: { c: any; reg: string }[] = [];
+    radCons.filter(c => nitsApp.has(normNit(c.nit))).forEach(c => {
+      ['RS', 'RC'].forEach(reg => {
+        const conDatos = MESES_CICLO.some(({ anio, mes }) => radEstadoMes(c.contrato, anio, mes, reg) === 'ok');
+        if (!conDatos) return;
+        const regLabel = reg === 'RC' ? 'CONTRIBUTIVO' : 'SUBSIDIADO';
+        const existe = prestadores.some(p => (p.regimen || 'SUBSIDIADO').toUpperCase() === regLabel &&
+          (normContrato(p.contrato) === normContrato(c.contrato) ||
+           (normNit(p.nit) === normNit(c.nit) && simContrato(p.contrato, c.contrato) >= 3)));
+        if (!existe) faltantes.push({ c, reg });
+      });
+    });
+    const sinPrestador = radCons.filter(c => !nitsApp.has(normNit(c.nit)));
+    return { filas, faltantes, sinPrestador };
+  }, [showValidacion, radData, prestadores, actas]);
+
   // Número de contrato tal como se guarda: mayúsculas, guiones normales, sin espacios
   const limpiarContrato = (x: any) => String(x || '').toUpperCase().trim()
     .replace(/[\u2010-\u2015\u2212]/g, '-').replace(/\s*-\s*/g, '-').replace(/\s+/g, '-')
@@ -2956,6 +3004,13 @@ function App() {
                   <span className="text-[10px] font-medium bg-slate-100 dark:bg-slate-700 text-slate-500 px-1.5 py-0.5 rounded-full">Todo evaluado ✓</span>
                 )}
                 <div className="ml-auto flex items-center gap-1">
+                  {radData && (
+                    <button onClick={() => setShowValidacion(true)}
+                      className="text-[10px] px-2 py-0.5 rounded-lg border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                      title="Comparar los prestadores creados en la app con lo radicado, mes a mes">
+                      Validar prestadores
+                    </button>
+                  )}
                   <button onClick={() => { setRadData(null); setRadError(null); setRadFetching(true); setRadSelector(null); setRadFilesReady(null); setRadPreview(null);
                     fetch('https://radicacion.vercel.app/api/evaluar', { headers: { 'x-token': RAD_TOKEN }, cache: 'no-store' })
                       .then(r => r.ok ? r.json() : r.text().then(t2 => Promise.reject(`Error ${r.status}: ${t2}`)))
@@ -6376,6 +6431,124 @@ echo "* * * * * root /usr/local/bin/metrics.sh; sleep 30; /usr/local/bin/metrics
                   }}
                   className="px-4 py-2 text-sm font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-colors"
                 >Sí, crear {regimenComp}</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* --- Validación: prestadores de la app vs radicación --- */}
+      {showValidacion && validacion && (() => {
+        const MES_L = ['E','F','M','A','M','J','J','A','S','O','N','D'];
+        const MES_N = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+        const q = valFiltro.trim().toLowerCase();
+        const coincide = (txt: string) => !q || txt.toLowerCase().includes(q);
+        const filas = validacion.filas
+          .filter(f => coincide(`${f.p.nombre} ${f.p.nit} ${f.p.contrato} ${f.rc?.contrato || ''}`))
+          .filter(f => !valSoloProblemas || f.problemas.length > 0)
+          .sort((a, b) => b.problemas.length - a.problemas.length || String(a.p.nombre).localeCompare(String(b.p.nombre)));
+        const conProblemas = validacion.filas.filter(f => f.problemas.length > 0).length;
+        const faltantes = validacion.faltantes.filter(({ c }) => coincide(`${c.prestador} ${c.nit} ${c.contrato}`));
+        return (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setShowValidacion(false)}>
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-6xl max-h-[88vh] flex flex-col border border-slate-200 dark:border-slate-800" onClick={e => e.stopPropagation()}>
+              <div className="flex justify-between items-start gap-4 p-5 border-b border-slate-200 dark:border-slate-800">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-800 dark:text-white">Prestadores creados vs. lo radicado</h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    Registros en la app: <strong>{validacion.filas.length}</strong> · con observaciones: <strong>{conProblemas}</strong> ·
+                    contratos radicados sin registro en la app: <strong>{validacion.faltantes.length}</strong> · datos de radicación: {radLastFetch || '—'}
+                  </p>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Meses = mes de <strong>atención</strong> (la factura de cada mes trae las atenciones del mes anterior).
+                    ✓ radicado · 0 radicado en cero · · sin radicar. Trimestre: verde = tiene acta, azul = listo para evaluar, gris = incompleto.
+                  </p>
+                </div>
+                <button onClick={() => setShowValidacion(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"><X className="h-5 w-5 text-slate-500" /></button>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 px-5 py-2 border-b border-slate-100 dark:border-slate-800">
+                <input value={valFiltro} onChange={e => setValFiltro(e.target.value)} placeholder="Filtrar por prestador, NIT o contrato…"
+                  className="flex-1 min-w-[220px] text-xs px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 outline-none" />
+                <label className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300 cursor-pointer">
+                  <input type="checkbox" checked={valSoloProblemas} onChange={e => setValSoloProblemas(e.target.checked)} /> Solo con observaciones
+                </label>
+              </div>
+              <div className="flex-1 overflow-y-auto custom-scroll p-4 space-y-4">
+                {faltantes.length > 0 && (
+                  <div className="rounded-xl border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 p-3">
+                    <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 mb-1.5">Radicados con datos, pero sin registro en la app (crear con "+ Contrato" con este número y régimen):</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {faltantes.map(({ c, reg }) => (
+                        <span key={c.contrato + reg} className="text-[11px] px-2 py-0.5 rounded bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-500/30 text-slate-700 dark:text-slate-200">
+                          <span className="font-mono">{c.contrato}</span> · {reg === 'RC' ? 'Contributivo' : 'Subsidiado'} · {c.prestador}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <table className="w-full text-xs">
+                  <thead className="text-slate-500 dark:text-slate-400 text-left sticky top-0 bg-white dark:bg-slate-900 z-10">
+                    <tr>
+                      <th className="py-1.5 pr-2">Prestador / contrato en la app</th>
+                      <th className="py-1.5 pr-2">Régimen</th>
+                      <th className="py-1.5 pr-2">Meses de atención radicados (mar 2026 – feb 2027)</th>
+                      <th className="py-1.5 pr-2">Trimestres</th>
+                      <th className="py-1.5">Observaciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {filas.map(({ p, regLabel, rc, problemas, meses, trims }) => (
+                      <tr key={p.id} className="align-top text-slate-600 dark:text-slate-300">
+                        <td className="py-1.5 pr-2">
+                          <div className="font-medium text-slate-700 dark:text-slate-200">{p.nombre}</div>
+                          <div className="font-mono text-[10px] text-slate-400">{p.contrato} · NIT {p.nit}</div>
+                        </td>
+                        <td className="py-1.5 pr-2">
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${regLabel === 'CONTRIBUTIVO' ? 'bg-orange-100 text-orange-600 dark:bg-orange-500/20 dark:text-orange-400' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'}`}>
+                            {regLabel === 'CONTRIBUTIVO' ? 'C' : 'S'}
+                          </span>
+                        </td>
+                        <td className="py-1.5 pr-2">
+                          {rc ? (
+                            <div className="flex gap-0.5">
+                              {meses.map((e, i) => (
+                                <span key={i} title={`${MES_N[MESES_CICLO[i].mes - 1]} ${MESES_CICLO[i].anio}: ${e === 'ok' ? 'radicado' : e === 'en_cero' ? 'radicado en cero' : 'sin radicar'}`}
+                                  className={`w-5 h-5 flex flex-col items-center justify-center rounded text-[8px] leading-none ${e === 'ok'
+                                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
+                                    : e === 'en_cero' ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300'
+                                    : 'bg-slate-100 text-slate-400 dark:bg-slate-800'}`}>
+                                  <span>{MES_L[MESES_CICLO[i].mes - 1]}</span><span className="font-bold">{e === 'ok' ? '✓' : e === 'en_cero' ? '0' : '·'}</span>
+                                </span>
+                              ))}
+                            </div>
+                          ) : <span className="text-slate-400">—</span>}
+                        </td>
+                        <td className="py-1.5 pr-2">
+                          <div className="flex flex-wrap gap-0.5">
+                            {trims.filter(x => x.acta || x.completo).map(({ t, completo, acta }) => (
+                              <span key={t.id} title={acta ? `Acta ${acta.numero}` : 'Listo para evaluar'}
+                                className={`text-[9px] font-bold px-1 py-0.5 rounded ${acta ? 'bg-emerald-500 text-white' : completo ? 'bg-indigo-500 text-white' : 'bg-slate-200 text-slate-500'}`}>{t.label}</span>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="py-1.5">
+                          {problemas.length === 0
+                            ? <span className="text-emerald-600 dark:text-emerald-400">✓ Coincide</span>
+                            : problemas.map((x, i) => <div key={i} className="text-amber-700 dark:text-amber-400">• {x}</div>)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {filas.length === 0 && <p className="text-sm text-slate-500 text-center py-6">{valSoloProblemas ? 'Ningún registro con observaciones.' : 'Sin resultados.'}</p>}
+                {validacion.sinPrestador.length > 0 && !q && (
+                  <details className="text-xs text-slate-500">
+                    <summary className="cursor-pointer">Contratos de radicación cuyo NIT no está en la app ({validacion.sinPrestador.length})</summary>
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {validacion.sinPrestador.map((c: any) => <span key={c.contrato} className="font-mono px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800">{c.contrato} · {c.prestador}</span>)}
+                    </div>
+                  </details>
+                )}
               </div>
             </div>
           </div>
