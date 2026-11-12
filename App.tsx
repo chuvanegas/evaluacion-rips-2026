@@ -74,8 +74,10 @@ const simContrato = (x: string, y: string) => {
 };
 // Un registro de prestador = NIT + contrato + régimen. Sin el régimen, Subsidiado y Contributivo
 // con el mismo número de contrato se fusionaban al cargar/sincronizar y uno de los dos se perdía.
+// Se compara el texto tal cual (sin normalizar): los duplicados escritos distinto no se fusionan
+// solos —pueden tener metas distintas—; "Validar prestadores" los señala para resolverlos a mano.
 const clavePrestador = (p: any) =>
-  `${normNit(p?.nit) || String(p?.nit || '')}|${normContrato(p?.contrato)}|${String(p?.regimen || 'SUBSIDIADO').toUpperCase()}`;
+  `${String(p?.nit ?? '')}|${String(p?.contrato ?? '')}|${String(p?.regimen || 'SUBSIDIADO').toUpperCase()}`;
 
 // Actas "HIST-…" creadas por api/seed-actas.js: marcan períodos evaluados fuera de la app (sin servicios)
 const esActaHistorica = (a: any) =>
