@@ -418,8 +418,9 @@ Si el usuario cancela, no se genera la nueva. Si confirma, se elimina la existen
 | **Sincronizar** | Botón manual: pull → merge → push fusionado. |
 | **Ping 2 min** | `supabaseStatus` — verifica disponibilidad de PocketBase cada 2 minutos. Indicador verde/rojo/amarillo en header. |
 
-### Dedup de prestadores
-Clave secundaria: `${nit}|${contrato}` — evita duplicados por ID diferente.
+### Dedup de prestadores (corregido v2.30)
+Clave secundaria: `clavePrestador(p)` = **NIT + contrato + régimen** (normalizados). Se usa en la carga inicial (localStorage), la carga desde la nube, el poll de 60 s y "Sincronizar".
+> **Causa raíz (hasta v2.29):** la clave era `${nit}|${contrato}` sin régimen. Cuando Subsidiado y Contributivo tienen el mismo número de contrato (lo normal), cada carga/sincronización dejaba **solo uno** de los dos registros y lo guardaba en la nube. De ahí: "mismas metas en ambos regímenes", "no hay contrato Subsidiado registrado" y actas ligadas al registro del otro régimen. Los registros borrados hay que volver a crearlos (aparecen en "Validar prestadores" → "Radicados con datos, pero sin registro en la app" y en las filas "sin registro en la app" del panel Prestadores). Cualquier pestaña abierta con una versión anterior sigue borrando: recargar todas.
 
 ### Dedup de actas
 Ver sección **Deduplicación de actas** arriba.
@@ -449,6 +450,8 @@ Ver sección **Deduplicación de actas** arriba.
 - Badges **S** y **C** en el header indican regímenes disponibles.
 - Estado: `dashExpandedNits: Set<string>` — controla qué grupos están abiertos.
 - Grupos precalculados ANTES del `return (<>` en el IIFE del tab dashboard (patrón crítico — no definir dentro del JSX).
+- **v2.30 — cada acta en el contrato de SU régimen:** el grupo reparte sus actas por contrato normalizado + régimen del acta (`porDestino`). Si no existe el registro de ese régimen, las actas salen en una fila punteada **"contrato · RÉGIMEN · sin registro en la app"** con **"+ Crear contrato"** (abre el formulario con NIT, contrato y régimen precargados y metas en 0).
+- `reasignarActasPorRegimen(actas, prestadores)` (módulo, efecto en App): si el `prestadorId` de un acta apunta a un registro de otro régimen (o a uno borrado) y existe un único registro con el mismo contrato y el régimen del acta, cambia `prestadorId` y guarda el anterior en `prestadorIdAnterior`. Es idempotente; al crear el registro faltante, sus actas pasan solas.
 
 ---
 
@@ -520,6 +523,7 @@ Objetivo: que el mismo contrato quede escrito **idéntico** en ambos regímenes 
 
 | Versión | Tag git | Descripción |
 |---|---|---|
+| **2.30** | `v2.30` | Causa raíz: la fusión de prestadores usaba NIT + contrato sin régimen y borraba uno de los dos regímenes del mismo contrato; ahora incluye el régimen. Actas pasadas al contrato de su régimen (automático) y fila "sin registro en la app" con "+ Crear contrato". |
 | **2.29** | `v2.29` | "Validar prestadores": cada registro de la app frente a radicación mes a mes (meses de atención), con contratos faltantes, mal escritos o sin radicaciones. Confirmado con datos reales que `periodo_mes` es mes de factura (atención + 1). |
 | **2.28** | `v2.28` | "Ver limpieza" lista las actas quitadas por la limpieza (desde el respaldo local) con opción Recuperar; meses de atención desde fecha_min/fecha_max de radicación cuando existen; secretos fuera de CLAUDE.md y sección de seguridad. |
 | **2.27** | `v2.27` | Actas HIST repetidas: dedup por meses del período (real antes que histórica) y sin renumeración; seed-actas desactivado; "Histórico" en listas. Pendientes con una sola regla en panel, Estado Global, alerta y check-pending; acta por contrato (no por NIT); diagnóstico en el buscador con facturas radicadas; radicación se recarga cada 15 min. |

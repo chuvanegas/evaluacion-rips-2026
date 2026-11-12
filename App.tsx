@@ -72,6 +72,11 @@ const simContrato = (x: string, y: string) => {
   for (let i = 0; i < Math.min(gx.length, gy.length); i++) if (Number(gx[i]) === Number(gy[i])) n++;
   return n;
 };
+// Un registro de prestador = NIT + contrato + régimen. Sin el régimen, Subsidiado y Contributivo
+// con el mismo número de contrato se fusionaban al cargar/sincronizar y uno de los dos se perdía.
+const clavePrestador = (p: any) =>
+  `${normNit(p?.nit) || String(p?.nit || '')}|${normContrato(p?.contrato)}|${String(p?.regimen || 'SUBSIDIADO').toUpperCase()}`;
+
 // Actas "HIST-…" creadas por api/seed-actas.js: marcan períodos evaluados fuera de la app (sin servicios)
 const esActaHistorica = (a: any) =>
   a?._placeholder === true || a?._placeholder === 'true' || /^HIST-/i.test(String(a?.numero || ''));
@@ -118,6 +123,31 @@ function deduplicarActas(raw: import('./types').Acta[]): import('./types').Acta[
     byPeriodo.set(key, ex ? mejor(ex, a) : a);
   });
   return [...byPeriodo.values(), ...conservadas];
+}
+
+// Actas ligadas al registro del otro régimen (creadas cuando ambos regímenes compartían registro):
+// se pasan al registro con el mismo contrato y el régimen del acta. Guarda prestadorIdAnterior.
+function reasignarActasPorRegimen(actas: Acta[], prestadores: Prestador[]): { actas: Acta[]; movidas: number } {
+  const reg = (x: any) => String(x?.regimen || 'SUBSIDIADO').toUpperCase();
+  const porId = new Map<string, Prestador>(prestadores.map(p => [p.id, p] as [string, Prestador]));
+  let movidas = 0;
+  const out = actas.map(a => {
+    if (!a.regimen) return a;
+    const ligado = porId.get(a.prestadorId);
+    if (ligado && reg(ligado) === reg(a)) return a;
+    const contrato = a.contrato || ligado?.contrato;
+    const nit = a.nit || ligado?.nit;
+    if (!normContrato(contrato)) return a;
+    let cands = prestadores.filter(p => reg(p) === reg(a) && normContrato(p.contrato) === normContrato(contrato));
+    if (cands.length > 1 && normNit(nit)) cands = cands.filter(p => normNit(p.nit) === normNit(nit));
+    if (cands.length === 0 && normNit(nit)) {
+      cands = prestadores.filter(p => reg(p) === reg(a) && normNit(p.nit) === normNit(nit) && simContrato(p.contrato, contrato) >= 3);
+    }
+    if (cands.length !== 1 || cands[0].id === a.prestadorId) return a;
+    movidas++;
+    return { ...a, prestadorId: cands[0].id, prestadorIdAnterior: a.prestadorId } as Acta;
+  });
+  return { actas: out, movidas };
 }
 
 const DEFAULT_USERS: AppUser[] = [
@@ -288,10 +318,10 @@ function App() {
       const s = localStorage.getItem('prestadores');
       if (!s) return [];
       const raw: Prestador[] = JSON.parse(s);
-      // Dedup by id, then by nit+contrato (keep last)
+      // Dedup by id, then by NIT + contrato + régimen (keep last)
       const byId = new Map<string, Prestador>(); raw.forEach(p => byId.set(p.id, p));
       const byNitContrato = new Map<string, Prestador>();
-      [...byId.values()].forEach(p => byNitContrato.set(`${p.nit}|${p.contrato}`, p));
+      [...byId.values()].forEach(p => byNitContrato.set(clavePrestador(p), p));
       const clean = [...byNitContrato.values()].map(p =>
         p.tipoContrato ? p : { ...p, tipoContrato: 'ASISTENCIAL' as const }
       );
@@ -465,7 +495,7 @@ function App() {
           const byIdP = new Map<string, Prestador>();
           [...localP, ...rawP].forEach(p => byIdP.set(p.id, p)); // rawP va segundo → sobreescribe local
           const byNitContratoP = new Map<string, Prestador>();
-          [...byIdP.values()].forEach(p => byNitContratoP.set(`${p.nit}|${p.contrato}`, p));
+          [...byIdP.values()].forEach(p => byNitContratoP.set(clavePrestador(p), p));
           const cleanP = [...byNitContratoP.values()].map(p =>
             p.tipoContrato ? p : { ...p, tipoContrato: 'ASISTENCIAL' as const }
           );
@@ -543,7 +573,7 @@ function App() {
             const byId = new Map<string, Prestador>();
             [...prev, ...cloud].forEach(p => byId.set(p.id, p)); // cloud va segundo → gana en conflicto
             const byNitContrato = new Map<string, Prestador>();
-            [...byId.values()].forEach(p => byNitContrato.set(`${p.nit}|${p.contrato}`, p));
+            [...byId.values()].forEach(p => byNitContrato.set(clavePrestador(p), p));
             const result = [...byNitContrato.values()].map(p =>
               p.tipoContrato ? p : { ...p, tipoContrato: 'ASISTENCIAL' as const }
             );
@@ -716,6 +746,16 @@ function App() {
   useEffect(() => {
     setPageRips(1);
   }, [searchTerm]);
+
+  // Actas ligadas al registro del otro régimen → al registro de su régimen (idempotente; se guarda vía el efecto de actas)
+  useEffect(() => {
+    if (actas.length === 0 || prestadores.length === 0) return;
+    const { actas: nuevas, movidas } = reasignarActasPorRegimen(actas, prestadores);
+    if (movidas > 0) {
+      setActas(nuevas);
+      setMessage({ type: 'info', text: `🔀 ${movidas} acta${movidas !== 1 ? 's' : ''} pasada${movidas !== 1 ? 's' : ''} al contrato de su régimen (estaba${movidas !== 1 ? 'n' : ''} ligada${movidas !== 1 ? 's' : ''} al registro del otro régimen).` });
+    }
+  }, [actas, prestadores]);
 
   // Deduplicación automática de actas: si hay duplicados, limpia y guarda
   useEffect(() => {
@@ -921,12 +961,12 @@ function App() {
       // Paso 1: Descargar la nube PRIMERO para no destruir datos de otros PCs
       const data = await CloudStorage.getAll(keys);
 
-      // Paso 2: Fusionar prestadores (local + nube → dedup por nit|contrato)
+      // Paso 2: Fusionar prestadores (local + nube → dedup por NIT + contrato + régimen)
       const cloudP: Prestador[] = data['prestadores'] || [];
       const byIdP = new Map<string, Prestador>();
       [...prestadores, ...cloudP].forEach(p => byIdP.set(p.id, p)); // nube gana en conflicto de ID
       const byNitContratoP = new Map<string, Prestador>();
-      [...byIdP.values()].forEach(p => byNitContratoP.set(`${p.nit}|${p.contrato}`, p));
+      [...byIdP.values()].forEach(p => byNitContratoP.set(clavePrestador(p), p));
       const mergedP = [...byNitContratoP.values()].map(p =>
         p.tipoContrato ? p : { ...p, tipoContrato: 'ASISTENCIAL' as const }
       );
@@ -3697,8 +3737,59 @@ function App() {
                   const isOpen = dashExpandedNits.has(nit);
                   const hasS = grupo.some(p => p.regimen !== 'CONTRIBUTIVO');
                   const hasC = grupo.some(p => p.regimen === 'CONTRIBUTIVO');
-                  const totalActas = grupo.reduce((sum, p) =>
-                    sum + actas.filter(a => a.prestadorId === p.id || (a.nit === p.nit && a.contrato === p.contrato)).length, 0);
+                  // Cada acta va al contrato de SU régimen; si ese registro no existe, queda en "sin registro en la app"
+                  const regDeP = (x: any) => String(x?.regimen || 'SUBSIDIADO').toUpperCase();
+                  const grupoIds = new Set(grupo.map(p => p.id));
+                  const delGrupo = [...new Map<string, Acta>(actas
+                    .filter(a => grupoIds.has(a.prestadorId) || grupo.some(p => a.nit && a.nit === p.nit && a.contrato === p.contrato))
+                    .map(a => [a.id, a] as [string, Acta])).values()];
+                  const porDestino: Record<string, Acta[]> = {};
+                  const huerfanas: Record<string, Acta[]> = {};
+                  delGrupo.forEach(a => {
+                    const ligado = grupo.find(p => p.id === a.prestadorId) || grupo.find(p => a.nit === p.nit && a.contrato === p.contrato);
+                    const rA = String(a.regimen || ligado?.regimen || 'SUBSIDIADO').toUpperCase();
+                    let destino = ligado && regDeP(ligado) === rA ? ligado : undefined;
+                    if (!destino) {
+                      const c = a.contrato || ligado?.contrato;
+                      const m = grupo.filter(p => regDeP(p) === rA && normContrato(p.contrato) === normContrato(c));
+                      destino = m.length === 1 ? m[0] : undefined;
+                    }
+                    if (destino) (porDestino[destino.id] = porDestino[destino.id] || []).push(a);
+                    else { const k = `${a.contrato || ligado?.contrato || ''}||${rA}`; (huerfanas[k] = huerfanas[k] || []).push(a); }
+                  });
+                  const totalActas = delGrupo.length;
+                  const filaActa = (a: Acta, regCard: string) => {
+                    const tp = a.servicios.reduce((s, x) => s + x.programado, 0);
+                    const te = a.servicios.reduce((s, x) => s + x.ejecutado, 0);
+                    const cumpl = tp > 0 ? Math.min(Math.round((te / tp) * 100), 100) : 0;
+                    const col = cumpl >= 100 ? '#16a34a' : cumpl >= 80 ? '#ca8a04' : '#dc2626';
+                    const hist = esActaHistorica(a);
+                    const regA = String(a.regimen || regCard || 'SUBSIDIADO').toUpperCase();
+                    const otroReg = regA !== regCard;
+                    return (
+                      <div key={a.id} className="flex items-center justify-between bg-white dark:bg-slate-900/60 rounded-lg px-2 py-1 border border-slate-100 dark:border-slate-800">
+                        <div className="min-w-0 flex-1">
+                          <span className="text-[10px] font-mono font-bold text-indigo-600 dark:text-indigo-400">{a.numero}</span>
+                          {a.periodoEvaluado && <span className="text-[9px] text-slate-400 ml-1.5">{a.periodoEvaluado}</span>}
+                          {otroReg && (
+                            <span className={`text-[8px] font-bold ml-1.5 px-1 py-0.5 rounded ${regA === 'CONTRIBUTIVO' ? 'bg-orange-100 text-orange-600 dark:bg-orange-500/20 dark:text-orange-400' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'}`}
+                              title={`Acta de régimen ${regA.toLowerCase()}`}>{regA === 'CONTRIBUTIVO' ? 'C' : 'S'}</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {hist ? (
+                            <span className="text-[9px] italic text-slate-500" title="Registrado desde la hoja de seguimiento: evaluado fuera de la app">Histórico</span>
+                          ) : (<>
+                          <div className="w-10 h-1 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                            <div className="h-1 rounded-full" style={{ width: `${cumpl}%`, backgroundColor: col }} />
+                          </div>
+                          <span className="text-[10px] font-bold w-8 text-right" style={{ color: col }}>{cumpl}%</span>
+                          </>)}
+                          <button onClick={e => { e.stopPropagation(); setInlineActa(sanitizeActaServicios({ ...a })); setActiveTab('actas'); }} className="text-[9px] px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-300 rounded transition-colors">Ver</button>
+                        </div>
+                      </div>
+                    );
+                  };
                   return (
                     <div key={nit} className="rounded-xl border border-slate-200 dark:border-slate-700/60 overflow-hidden bg-slate-50/50 dark:bg-slate-800/30">
                       <button
@@ -3724,7 +3815,7 @@ function App() {
                       {isOpen && (
                         <div className="border-t border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800">
                           {grupo.map(p => {
-                            const pActas = [...new Map<string, Acta>(actas.filter(a => a.prestadorId === p.id || (a.nit && a.nit === p.nit && a.contrato === p.contrato)).map(a => [a.id, a] as [string, Acta])).values()];
+                            const pActas = porDestino[p.id] || [];
                             const isC = p.regimen === 'CONTRIBUTIVO';
                             return (
                               <div key={p.id} className="px-3 py-2.5 space-y-1.5">
@@ -3739,40 +3830,37 @@ function App() {
                                   <p className="text-[10px] text-slate-400 italic pl-1">Sin actas</p>
                                 ) : (
                                   <div className="space-y-0.5 pl-1">
-                                    {pActas.map(a => {
-                                      const tp = a.servicios.reduce((s, x) => s + x.programado, 0);
-                                      const te = a.servicios.reduce((s, x) => s + x.ejecutado, 0);
-                                      const cumpl = tp > 0 ? Math.min(Math.round((te / tp) * 100), 100) : 0;
-                                      const col = cumpl >= 100 ? '#16a34a' : cumpl >= 80 ? '#ca8a04' : '#dc2626';
-                                      const hist = esActaHistorica(a);
-                                      const regA = (a.regimen || p.regimen || 'SUBSIDIADO').toUpperCase();
-                                      const otroReg = regA !== (p.regimen || 'SUBSIDIADO').toUpperCase();
-                                      return (
-                                        <div key={a.id} className="flex items-center justify-between bg-white dark:bg-slate-900/60 rounded-lg px-2 py-1 border border-slate-100 dark:border-slate-800">
-                                          <div className="min-w-0 flex-1">
-                                            <span className="text-[10px] font-mono font-bold text-indigo-600 dark:text-indigo-400">{a.numero}</span>
-                                            {a.periodoEvaluado && <span className="text-[9px] text-slate-400 ml-1.5">{a.periodoEvaluado}</span>}
-                                            {otroReg && (
-                                              <span className={`text-[8px] font-bold ml-1.5 px-1 py-0.5 rounded ${regA === 'CONTRIBUTIVO' ? 'bg-orange-100 text-orange-600 dark:bg-orange-500/20 dark:text-orange-400' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'}`}
-                                                title={`Acta de régimen ${regA.toLowerCase()}`}>{regA === 'CONTRIBUTIVO' ? 'C' : 'S'}</span>
-                                            )}
-                                          </div>
-                                          <div className="flex items-center gap-1.5 shrink-0">
-                                            {hist ? (
-                                              <span className="text-[9px] italic text-slate-500" title="Registrado desde la hoja de seguimiento: evaluado fuera de la app">Histórico</span>
-                                            ) : (<>
-                                            <div className="w-10 h-1 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                                              <div className="h-1 rounded-full" style={{ width: `${cumpl}%`, backgroundColor: col }} />
-                                            </div>
-                                            <span className="text-[10px] font-bold w-8 text-right" style={{ color: col }}>{cumpl}%</span>
-                                            </>)}
-                                            <button onClick={e => { e.stopPropagation(); setInlineActa(sanitizeActaServicios({ ...a })); setActiveTab('actas'); }} className="text-[9px] px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-300 rounded transition-colors">Ver</button>
-                                          </div>
-                                        </div>
-                                      );
-                                    })}
+                                    {pActas.map(a => filaActa(a, regDeP(p)))}
                                   </div>
                                 )}
+                              </div>
+                            );
+                          })}
+                          {Object.entries(huerfanas).map(([k, lista]) => {
+                            const [contratoH, regH] = k.split('||');
+                            const isCH = regH === 'CONTRIBUTIVO';
+                            const rep0 = grupo[0];
+                            return (
+                              <div key={k} className="px-3 py-2.5 space-y-1.5 bg-amber-50/50 dark:bg-amber-500/5">
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className={`flex flex-wrap items-center gap-2 px-2 py-1 rounded-lg border border-dashed text-[10px] font-medium ${isCH ? 'border-orange-300 dark:border-orange-500/40' : 'border-emerald-300 dark:border-emerald-500/40'}`}>
+                                    <span className="font-mono text-slate-600 dark:text-slate-300">📋 {contratoH || 'sin contrato'}</span>
+                                    <span className={`font-bold ${isCH ? 'text-orange-600 dark:text-orange-400' : 'text-emerald-600 dark:text-emerald-400'}`}>{regH}</span>
+                                    <span className="text-amber-700 dark:text-amber-400">· sin registro en la app</span>
+                                  </div>
+                                  {isAdmin && contratoH && (
+                                    <button onClick={e => {
+                                        e.stopPropagation();
+                                        setPrestForm({ nombre: rep0.nombre, nit: rep0.nit, departamento: rep0.departamento, municipio: rep0.municipio, contrato: contratoH, vigencia: rep0.vigencia || '', regimen: regH, repLegalIPS: rep0.repLegalIPS || '', tipoContrato: 'ASISTENCIAL', metas: TIPOS_ASISTENCIAL.map(t => ({ type: t, monthlyGoal: 0, active: true })) });
+                                        setEditPrest(null); setShowPrestForm(true);
+                                      }}
+                                      className="text-[10px] px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition-colors font-medium whitespace-nowrap"
+                                      title="Crear el registro de este contrato y régimen; las actas pasarán a él solas">
+                                      + Crear contrato
+                                    </button>
+                                  )}
+                                </div>
+                                <div className="space-y-0.5 pl-1">{lista.map(a => filaActa(a, regH))}</div>
                               </div>
                             );
                           })}
