@@ -55,7 +55,7 @@ Desde v2.10 la app usa **PocketBase** en lugar de Supabase.
 | **Panel admin** | `https://evaluacion-db.duckdns.org/_/` |
 | **API** | `https://evaluacion-db.duckdns.org` |
 | **Admin email** | `jd_vanegas@hotmail.com` |
-| **Colección** | `app_storage` (key-value JSON, 11 registros) |
+| **Colección** | `app_storage` (key-value JSON, 11 registros + respaldos `prestadores_respaldo_<fecha>` creados por scripts) |
 | **SSL** | Let's Encrypt via nginx reverse proxy — renueva automáticamente |
 | **DuckDNS token** | (fuera del repositorio — pedirlo al usuario) |
 
@@ -456,6 +456,16 @@ Regla del usuario: **todo contrato debe tener un registro SUBSIDIADO y uno CONTR
 ### Datos reales (20/11/2026, solo lectura)
 146 registros (77 S, 69 C; sin bajas desde el 12/11 → ya no se borran registros), 421 actas (323 reales, 98 históricas). 117 contratos (NIT + contrato): **22 con los dos regímenes, 95 con uno** (40 sin Subsidiado, 55 sin Contributivo); 45 tienen actas del régimen faltante con metas recuperables; 42 tienen radicaciones con datos en el régimen faltante. Varios registros sin contrato, dos con el contrato escrito en el NIT y uno de prueba ("perpetuo"). **PocketBase no tiene respaldos** (`/api/backups` vacío): conviene activarlos en el panel de PocketBase.
 - ASB-44035-2026-25 (San Rafael de Albania): el Subsidiado se borró con el bug anterior a v2.30 y el usuario lo volvió a crear el 20/11 08:19; sus actas S (1T, 2T) quedaron en él. RS y RC tienen radicado jul–sep: el 3T está listo en ambos regímenes.
+
+### Creación de los Subsidiado faltantes desde sus actas (20/11/2026, pedido del usuario)
+Script `scripts/regimenes/crear-regimen-desde-actas.mjs` (usa las funciones de App.tsx extraídas con esbuild; credenciales leídas en memoria de `services/supabaseClient.ts`; en la nube `NODE_USE_ENV_PROXY=1`, entorno `evaluacion-rips-2026`):
+- `--plan`: solo lectura. Por cada contrato con registro del otro régimen y sin el pedido, decide: `crear`, `menor_que_contributivo_en_algun_servicio`, `iguales_al_otro_regimen`, `division_inexacta_revisar`, `sin_actas_del_regimen`, `pai_digitar_metas`, `nit_mal_digitado`, `sin_numero_de_contrato`. Calcula los dos regímenes.
+- `--aplicar --regimen=SUBSIDIADO --claves-archivo=<plan>.json`: vuelve a leer, guarda respaldo `prestadores_respaldo_<fecha>` en app_storage, reintenta si `prestadores` cambió mientras escribía, agrega los registros (`metasRecuperadasDe`, `creadoDesdeActas`) y verifica. No toca `actas` (la app las reasigna sola con `reasignarActasPorRegimen` al abrirse).
+- Regla: metas = acta real más reciente del régimen que divide exacto (programado ÷ meses); se crea SUBSIDIADO solo si **ningún servicio queda menor** que en el Contributivo y al menos uno es mayor (para CONTRIBUTIVO, al revés).
+- **Resultado:** 23 SUBSIDIADO creados y verificados (146 → 169 registros; siguen a los 4 min). Respaldo: `prestadores_respaldo_2026-11-20-14-17-16` (146). 10 de los 23 son contratos del ciclo anterior (formato `NNNNN-NNN-AS` / `-EB`, actas oct 2025–feb 2026).
+- Quedaron para revisar a mano: ALE SALUD ASE-44430-2026-60 (nutrición y psicología menores), DUSAKAWI IPS ASB-20045-2026-26 y ASB-20621-2026-17 (pediatría, psicología, nutrición menores); 2 con NIT mal digitado; 10 sin actas Subsidiado (metas a digitar).
+- Falta CONTRIBUTIVO (no se aplicó): 11 cumplen la regla (C menor que S), 2 con metas iguales al Subsidiado (acta C generada con las metas S: ANESHI WAYAA ASB-44078-2026-32, SANTA TERESA ASB-44090-2026-10), 1 con un servicio mayor que el S (WALEKERU 44001-133-AS), 1 PAI, 31 sin actas C.
+- Resultados detallados (sin valores de metas) en la rama `claude/crear-subsidiados`, carpeta `diagnostico/`.
 
 ## Lista de Prestadores — Cajones colapsables (v2.11+)
 *Pestaña Prestadores (gestión completa)*
