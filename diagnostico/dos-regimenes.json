@@ -1,0 +1,3104 @@
+{
+  "generado": "2026-11-20T13:27:57.819Z",
+  "fuente": {
+    "prestadoresUpdated": "2026-11-20 13:20:18.105Z",
+    "actasUpdated": "2026-11-20 13:20:18.562Z",
+    "radicacionGenerado": "2026-11-20T00:11:25-05:00",
+    "registrosRadicacion": 1626
+  },
+  "persistencia": {
+    "registro_1795180755950": {
+      "existe": true,
+      "nit": "825002525",
+      "nombre": "ESE HOSPITAL SAN RAFAEL DE ALBANIA",
+      "contrato": "ASB-44035-2026-25",
+      "regimen": "SUBSIDIADO",
+      "tipoContrato": "ASISTENCIAL"
+    },
+    "actual": {
+      "total": 146,
+      "SUBSIDIADO": 77,
+      "CONTRIBUTIVO": 69,
+      "updated": "2026-11-20 13:20:18.105Z"
+    },
+    "referencia_20_11_2026_1320Z": {
+      "total": 146,
+      "SUBSIDIADO": 77,
+      "CONTRIBUTIVO": 69
+    },
+    "sin_cambios": true,
+    "actas": {
+      "total": 421,
+      "reales": 323,
+      "historicas": 98,
+      "updated": "2026-11-20 13:20:18.562Z"
+    }
+  },
+  "dosRegimenes": {
+    "gruposTotal": 117,
+    "gruposConAmbos": 22,
+    "gruposConUno": 95,
+    "faltaSubsidiado": 40,
+    "faltaContributivo": 55,
+    "conEscritoDistinto": 0,
+    "conActasFaltante": 45,
+    "conActaRecuperable": 45,
+    "conRadicacionFaltante": 42,
+    "faltantes": [
+      {
+        "nit": "901660868",
+        "nombre": "ALE SALUD SAS",
+        "contrato": "ASE-44430-2026-60",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "CONTRIBUTIVO",
+        "falta": "SUBSIDIADO",
+        "idsExistentes": [
+          "1786481966351",
+          "1781622558382"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 3,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "ASE-44430-2026-60-1",
+              "periodoEvaluado": "Marzo 2026",
+              "meses": 1,
+              "serviciosConProgramado": 9,
+              "divisibles": 9,
+              "recuperable": true
+            },
+            {
+              "numero": "ASE-44430-2026-60-2",
+              "periodoEvaluado": "Abril 2026, Mayo 2026, Junio 2026",
+              "meses": 3,
+              "serviciosConProgramado": 9,
+              "divisibles": 9,
+              "recuperable": true
+            },
+            {
+              "numero": "ASE-44430-2026-60-3",
+              "periodoEvaluado": "Julio 2026, Agosto 2026, Septiembre 2026",
+              "meses": 3,
+              "serviciosConProgramado": 9,
+              "divisibles": 9,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 7,
+          "mesesAtencion": [
+            "2026-03",
+            "2026-04",
+            "2026-05",
+            "2026-06",
+            "2026-07",
+            "2026-08",
+            "2026-09"
+          ]
+        }
+      },
+      {
+        "nit": "900653282",
+        "nombre": "CLINICA ANESHI WAYAA IPS SAS",
+        "contrato": "EB-44078-2026-02",
+        "tipoContrato": "CAPITA AMPLIADA",
+        "tiene": "CONTRIBUTIVO",
+        "falta": "SUBSIDIADO",
+        "idsExistentes": [
+          "1790260826464",
+          "1781624607737"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 2,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "EB-44078-2026-02-1",
+              "periodoEvaluado": "Marzo 2026",
+              "meses": 1,
+              "serviciosConProgramado": 6,
+              "divisibles": 6,
+              "recuperable": true
+            },
+            {
+              "numero": "EB-44078-2026-02-2",
+              "periodoEvaluado": "Abril 2026, Mayo 2026, Junio 2026",
+              "meses": 3,
+              "serviciosConProgramado": 6,
+              "divisibles": 6,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 6,
+          "mesesAtencion": [
+            "2026-03",
+            "2026-04",
+            "2026-05",
+            "2026-06",
+            "2026-07",
+            "2026-08"
+          ]
+        }
+      },
+      {
+        "nit": "900653282",
+        "nombre": "CLINICA ANESHI WAYAA IPS SAS",
+        "contrato": "EB-44035-2026-03",
+        "tipoContrato": "CAPITA AMPLIADA",
+        "tiene": "CONTRIBUTIVO",
+        "falta": "SUBSIDIADO",
+        "idsExistentes": [
+          "1790259968616",
+          "1781627398465"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 2,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "EB-44035-2026-03-1",
+              "periodoEvaluado": "Marzo 2026",
+              "meses": 1,
+              "serviciosConProgramado": 6,
+              "divisibles": 6,
+              "recuperable": true
+            },
+            {
+              "numero": "EB-44035-2026-03-2",
+              "periodoEvaluado": "Abril 2026, Mayo 2026, Junio 2026",
+              "meses": 3,
+              "serviciosConProgramado": 6,
+              "divisibles": 6,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 6,
+          "mesesAtencion": [
+            "2026-03",
+            "2026-04",
+            "2026-05",
+            "2026-06",
+            "2026-07",
+            "2026-08"
+          ]
+        }
+      },
+      {
+        "nit": "900653282-7",
+        "nombre": "CLINICA ANESHI WAYAA IPS SAS",
+        "contrato": "MDC-44078-2026-14",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "CONTRIBUTIVO",
+        "falta": "SUBSIDIADO",
+        "idsExistentes": [
+          "1781626810367"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 1,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "MDC-44078-2026-14-1",
+              "periodoEvaluado": "Marzo 2026",
+              "meses": 1,
+              "serviciosConProgramado": 1,
+              "divisibles": 1,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 1,
+          "mesesAtencion": [
+            "2026-03",
+            "2026-04"
+          ]
+        }
+      },
+      {
+        "nit": "900653282",
+        "nombre": "CLINICA ANESHI WAYAA IPS SAS",
+        "contrato": "ASB-44078-2026-32",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1790258656329"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 2,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "ASB-44078-2026-32-1",
+              "periodoEvaluado": "Marzo 2026",
+              "meses": 1,
+              "serviciosConProgramado": 3,
+              "divisibles": 3,
+              "recuperable": true
+            },
+            {
+              "numero": "ASB-44078-2026-32-2",
+              "periodoEvaluado": "Abril 2026, Mayo 2026, Junio 2026",
+              "meses": 3,
+              "serviciosConProgramado": 3,
+              "divisibles": 3,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 5,
+          "mesesAtencion": [
+            "2026-03",
+            "2026-04",
+            "2026-05",
+            "2026-06",
+            "2026-07"
+          ]
+        }
+      },
+      {
+        "nit": "900653282",
+        "nombre": "CLINICA ANESHI WAYAA IPS SAS",
+        "contrato": "EB-44279-2026-05",
+        "tipoContrato": "CAPITA AMPLIADA",
+        "tiene": "CONTRIBUTIVO",
+        "falta": "SUBSIDIADO",
+        "idsExistentes": [
+          "1790199686653"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 1,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "EB-44279-2026-05-1",
+              "periodoEvaluado": "Abril 2026, Mayo 2026, Junio 2026",
+              "meses": 3,
+              "serviciosConProgramado": 6,
+              "divisibles": 6,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 6,
+          "mesesAtencion": [
+            "2026-03",
+            "2026-04",
+            "2026-05",
+            "2026-06",
+            "2026-07",
+            "2026-08"
+          ]
+        }
+      },
+      {
+        "nit": "824002362",
+        "nombre": "DUSAKAWI IPS",
+        "contrato": "EB-20001-2026-06",
+        "tipoContrato": "ESPECIALIDADES",
+        "tiene": "CONTRIBUTIVO",
+        "falta": "SUBSIDIADO",
+        "idsExistentes": [
+          "1783436550149"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 2,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "EB-20001-2026-06-1",
+              "periodoEvaluado": "Marzo 2026",
+              "meses": 1,
+              "serviciosConProgramado": 5,
+              "divisibles": 5,
+              "recuperable": true
+            },
+            {
+              "numero": "EB-20001-2026-06-2",
+              "periodoEvaluado": "Abril 2026, Mayo 2026, Junio 2026",
+              "meses": 3,
+              "serviciosConProgramado": 5,
+              "divisibles": 5,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 6,
+          "mesesAtencion": [
+            "2026-03",
+            "2026-04",
+            "2026-05",
+            "2026-06",
+            "2026-07",
+            "2026-08"
+          ]
+        }
+      },
+      {
+        "nit": "824002362",
+        "nombre": "DUSAKAWI IPS",
+        "contrato": "ASB-20045-2026-26",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "CONTRIBUTIVO",
+        "falta": "SUBSIDIADO",
+        "idsExistentes": [
+          "1783512747845"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 1,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "ASB-20045-2026-26-1",
+              "periodoEvaluado": "Abril 2026, Mayo 2026, Junio 2026",
+              "meses": 3,
+              "serviciosConProgramado": 4,
+              "divisibles": 4,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 6,
+          "mesesAtencion": [
+            "2026-03",
+            "2026-04",
+            "2026-05",
+            "2026-06",
+            "2026-07",
+            "2026-08"
+          ]
+        }
+      },
+      {
+        "nit": "824002362",
+        "nombre": "DUSAKAWI IPS",
+        "contrato": "ASB-20621-2026-17",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "CONTRIBUTIVO",
+        "falta": "SUBSIDIADO",
+        "idsExistentes": [
+          "1783513157044"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 1,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "ASB-20621-2026-17-1",
+              "periodoEvaluado": "Abril 2026, Mayo 2026, Junio 2026",
+              "meses": 3,
+              "serviciosConProgramado": 4,
+              "divisibles": 4,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 6,
+          "mesesAtencion": [
+            "2026-03",
+            "2026-04",
+            "2026-05",
+            "2026-06",
+            "2026-07",
+            "2026-08"
+          ]
+        }
+      },
+      {
+        "nit": "824002362",
+        "nombre": "DUSAKAWI IPS",
+        "contrato": "ASB-20013-2026-33",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1783515569092"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 6,
+          "mesesAtencion": [
+            "2026-03",
+            "2026-04",
+            "2026-05",
+            "2026-06",
+            "2026-07",
+            "2026-08"
+          ]
+        }
+      },
+      {
+        "nit": "824002362",
+        "nombre": "DUSAKAWI IPS",
+        "contrato": "MD-RCV-20001-2026-58",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1787146384664"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 1,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "MD-RCV-20001-2026-58-1",
+              "periodoEvaluado": "Marzo 2026",
+              "meses": 1,
+              "serviciosConProgramado": 1,
+              "divisibles": 1,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 6,
+          "mesesAtencion": [
+            "2026-03",
+            "2026-04",
+            "2026-05",
+            "2026-06",
+            "2026-07",
+            "2026-08"
+          ]
+        }
+      },
+      {
+        "nit": "824002362",
+        "nombre": "DUSAKAWI IPSI",
+        "contrato": "ASB-20001-2026-36",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "CONTRIBUTIVO",
+        "falta": "SUBSIDIADO",
+        "idsExistentes": [
+          "1783455782949"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 6,
+          "mesesAtencion": [
+            "2026-03",
+            "2026-04",
+            "2026-05",
+            "2026-06",
+            "2026-07",
+            "2026-08"
+          ]
+        }
+      },
+      {
+        "nit": "824002362",
+        "nombre": "DUSAKAWI IPSI",
+        "contrato": "ASE-44650-2026-62",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "CONTRIBUTIVO",
+        "falta": "SUBSIDIADO",
+        "idsExistentes": [
+          "1783458107175"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 2,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "ASE-44650-2026-62-1",
+              "periodoEvaluado": "Marzo 2026",
+              "meses": 1,
+              "serviciosConProgramado": 9,
+              "divisibles": 9,
+              "recuperable": true
+            },
+            {
+              "numero": "ASE-44650-2026-62-2",
+              "periodoEvaluado": "Abril 2026, Mayo 2026, Junio 2026",
+              "meses": 3,
+              "serviciosConProgramado": 9,
+              "divisibles": 9,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 6,
+          "mesesAtencion": [
+            "2026-03",
+            "2026-04",
+            "2026-05",
+            "2026-06",
+            "2026-07",
+            "2026-08"
+          ]
+        }
+      },
+      {
+        "nit": "824000725",
+        "nombre": "E S E HOSPITAL EDUARDO ARREDONDO DAZA",
+        "contrato": "ASB-20001-2026-04",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1793376149652"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 3,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "ASB-20001-2026-04-1",
+              "periodoEvaluado": "Marzo 2026",
+              "meses": 1,
+              "serviciosConProgramado": 2,
+              "divisibles": 2,
+              "recuperable": true
+            },
+            {
+              "numero": "ASB-20001-2026-04-2",
+              "periodoEvaluado": "Abril 2026, Mayo 2026, Junio 2026",
+              "meses": 3,
+              "serviciosConProgramado": 2,
+              "divisibles": 2,
+              "recuperable": true
+            },
+            {
+              "numero": "ASB-20001-2026-04-5",
+              "periodoEvaluado": "Julio 2026, Agosto 2026, Septiembre 2026",
+              "meses": 3,
+              "serviciosConProgramado": 2,
+              "divisibles": 2,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 7,
+          "mesesAtencion": [
+            "2026-03",
+            "2026-04",
+            "2026-05",
+            "2026-06",
+            "2026-07",
+            "2026-08",
+            "2026-09"
+          ]
+        }
+      },
+      {
+        "nit": "825000147",
+        "nombre": "E.S.E. HOSPITAL ARMANDO PABON LOPEZ",
+        "contrato": "ASB-44560-2026-09",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "CONTRIBUTIVO",
+        "falta": "SUBSIDIADO",
+        "idsExistentes": [
+          "1793108753356"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 2,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "ASB-44560-2026-09-1",
+              "periodoEvaluado": "Marzo 2026",
+              "meses": 1,
+              "serviciosConProgramado": 5,
+              "divisibles": 5,
+              "recuperable": true
+            },
+            {
+              "numero": "ASB-44560-2026-09-2",
+              "periodoEvaluado": "Abril 2026, Mayo 2026, Junio 2026",
+              "meses": 3,
+              "serviciosConProgramado": 5,
+              "divisibles": 5,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 6,
+          "mesesAtencion": [
+            "2026-03",
+            "2026-04",
+            "2026-05",
+            "2026-06",
+            "2026-07",
+            "2026-08"
+          ]
+        }
+      },
+      {
+        "nit": "819004070",
+        "nombre": "ESE ALEJANDRO PROSPERO REVEREND",
+        "contrato": "ASE-47001-2026-37",
+        "tipoContrato": "CAPITA AMPLIADA",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1793050175048"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 2,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "ASE-47001-2026-37-1",
+              "periodoEvaluado": "Marzo 2026",
+              "meses": 1,
+              "serviciosConProgramado": 10,
+              "divisibles": 10,
+              "recuperable": true
+            },
+            {
+              "numero": "ASE-47001-2026-37-3",
+              "periodoEvaluado": "Julio 2026, Agosto 2026, Septiembre 2026",
+              "meses": 3,
+              "serviciosConProgramado": 11,
+              "divisibles": 11,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 7,
+          "mesesAtencion": [
+            "2026-03",
+            "2026-04",
+            "2026-05",
+            "2026-06",
+            "2026-07",
+            "2026-08",
+            "2026-09"
+          ]
+        }
+      },
+      {
+        "nit": "825000620",
+        "nombre": "ESE HOSPITAL NUESTRA SEÑORA DEL CARMEN",
+        "contrato": "ASB-44378-2026-29",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "CONTRIBUTIVO",
+        "falta": "SUBSIDIADO",
+        "idsExistentes": [
+          "1790177876867"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 2,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "ASB-44378-2026-29-1",
+              "periodoEvaluado": "Marzo 2026",
+              "meses": 1,
+              "serviciosConProgramado": 8,
+              "divisibles": 8,
+              "recuperable": true
+            },
+            {
+              "numero": "ASB-44378-2026-29-2",
+              "periodoEvaluado": "Abril 2026, Mayo 2026, Junio 2026, ",
+              "meses": 3,
+              "serviciosConProgramado": 8,
+              "divisibles": 8,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 7,
+          "mesesAtencion": [
+            "2026-03",
+            "2026-04",
+            "2026-05",
+            "2026-06",
+            "2026-07",
+            "2026-08",
+            "2026-09"
+          ]
+        }
+      },
+      {
+        "nit": "800061765",
+        "nombre": "ESE HOSPITAL NUESTRA SEÑORA DEL PERPETUO SOCORRO",
+        "contrato": "ASB-44847-2026-08",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "CONTRIBUTIVO",
+        "falta": "SUBSIDIADO",
+        "idsExistentes": [
+          "1790714608745"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 1,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "ASB-44847-2026-08-1",
+              "periodoEvaluado": "Abril 2026, Mayo 2026, Junio 2026",
+              "meses": 3,
+              "serviciosConProgramado": 6,
+              "divisibles": 6,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 5,
+          "mesesAtencion": [
+            "2026-03",
+            "2026-04",
+            "2026-05",
+            "2026-06",
+            "2026-07"
+          ]
+        }
+      },
+      {
+        "nit": "800061765",
+        "nombre": "ESE HOSPITAL NUESTRA SEÑORA DEL PERPETUO SOCORRO",
+        "contrato": "ASB-44847-2026-35",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1793046296085"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 2,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "ASB-44847-2026-35-1",
+              "periodoEvaluado": "Marzo 2026",
+              "meses": 1,
+              "serviciosConProgramado": 3,
+              "divisibles": 3,
+              "recuperable": true
+            },
+            {
+              "numero": "ASB-44847-2026-35-2",
+              "periodoEvaluado": "Abril 2026, Mayo 2026, Junio 2026",
+              "meses": 3,
+              "serviciosConProgramado": 3,
+              "divisibles": 3,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 4,
+          "mesesAtencion": [
+            "2026-03",
+            "2026-04",
+            "2026-05",
+            "2026-06"
+          ]
+        }
+      },
+      {
+        "nit": "892170002",
+        "nombre": "ESE HOSPITAL SAN AGUSTIN DE FONSECA",
+        "contrato": "ASB-44279-2026-31",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "CONTRIBUTIVO",
+        "falta": "SUBSIDIADO",
+        "idsExistentes": [
+          "1790115731209"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 3,
+          "mesesAtencion": [
+            "2026-03",
+            "2026-04",
+            "2026-05"
+          ]
+        }
+      },
+      {
+        "nit": "825001037",
+        "nombre": "ESE HOSPITAL SANTA TERESA DE JESUS DE AVILA",
+        "contrato": "ASB-44090-2026-20",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1793053638538"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 2,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "ASB-44090-2026-20-1",
+              "periodoEvaluado": "Abril 2026, Mayo 2026, Junio 2026",
+              "meses": 3,
+              "serviciosConProgramado": 3,
+              "divisibles": 3,
+              "recuperable": true
+            },
+            {
+              "numero": "ASB-44090-2026-20-3",
+              "periodoEvaluado": "Julio 2026, Agosto 2026, Septiembre 2026",
+              "meses": 3,
+              "serviciosConProgramado": 3,
+              "divisibles": 3,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 8,
+          "mesesAtencion": [
+            "2026-03",
+            "2026-04",
+            "2026-05",
+            "2026-06",
+            "2026-07",
+            "2026-08",
+            "2026-09",
+            "2026-10"
+          ]
+        }
+      },
+      {
+        "nit": "825001037",
+        "nombre": "ESE HOSPITAL SANTA TERESA DE JESUS DE AVILA",
+        "contrato": "ASB-44090-2026-10",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1790169490353"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 3,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "ASB-44090-2026-10-1",
+              "periodoEvaluado": "Marzo 2026",
+              "meses": 1,
+              "serviciosConProgramado": 5,
+              "divisibles": 5,
+              "recuperable": true
+            },
+            {
+              "numero": "ASB-44090-2026-10-2",
+              "periodoEvaluado": "Abril 2026, Mayo 2026, Junio 2026",
+              "meses": 3,
+              "serviciosConProgramado": 5,
+              "divisibles": 5,
+              "recuperable": true
+            },
+            {
+              "numero": "ASB-44090-2026-10-4",
+              "periodoEvaluado": "Julio 2026, Agosto 2026, Septiembre 2026",
+              "meses": 3,
+              "serviciosConProgramado": 4,
+              "divisibles": 4,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 8,
+          "mesesAtencion": [
+            "2026-03",
+            "2026-04",
+            "2026-05",
+            "2026-06",
+            "2026-07",
+            "2026-08",
+            "2026-09",
+            "2026-10"
+          ]
+        }
+      },
+      {
+        "nit": "900144134",
+        "nombre": "EZEQ - SALUD IPSI",
+        "contrato": "ASE-44001-2026-51",
+        "tipoContrato": "CAPITA AMPLIADA",
+        "tiene": "CONTRIBUTIVO",
+        "falta": "SUBSIDIADO",
+        "idsExistentes": [
+          "1793376544049"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 2,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "ASE-44001-2026-51-1",
+              "periodoEvaluado": "Marzo 2026",
+              "meses": 1,
+              "serviciosConProgramado": 9,
+              "divisibles": 9,
+              "recuperable": true
+            },
+            {
+              "numero": "ASE-44001-2026-51-2",
+              "periodoEvaluado": "Abril 2026, Mayo 2026, Junio 2026",
+              "meses": 3,
+              "serviciosConProgramado": 9,
+              "divisibles": 9,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 4,
+          "mesesAtencion": [
+            "2026-03",
+            "2026-04",
+            "2026-05",
+            "2026-06"
+          ]
+        }
+      },
+      {
+        "nit": "819003539",
+        "nombre": "GONAWINDUA ETTE ENNAKA IPS INDIGENA",
+        "contrato": "ASB-47053-2026-22",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "CONTRIBUTIVO",
+        "falta": "SUBSIDIADO",
+        "idsExistentes": [
+          "1785169402855"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 1,
+          "mesesAtencion": [
+            "2026-03"
+          ]
+        }
+      },
+      {
+        "nit": "819003539",
+        "nombre": "GONAWINDUA ETTE ENNAKA IPS INDIGENA",
+        "contrato": "ASB-47288-2026-19",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "CONTRIBUTIVO",
+        "falta": "SUBSIDIADO",
+        "idsExistentes": [
+          "1785171104523"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 1,
+          "mesesAtencion": [
+            "2026-03"
+          ]
+        }
+      },
+      {
+        "nit": "819003539",
+        "nombre": "GONAWINDUA ETTE ENNAKA IPS INDIGENA",
+        "contrato": "ASB-47001-2026-27",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "CONTRIBUTIVO",
+        "falta": "SUBSIDIADO",
+        "idsExistentes": [
+          "1785244985141"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 2,
+          "mesesAtencion": [
+            "2026-03",
+            "2026-04"
+          ]
+        }
+      },
+      {
+        "nit": "819003539",
+        "nombre": "GONAWINDUA ETTE ENNAKA IPS INDIGENA",
+        "contrato": "ASB-44090-2026-34",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1785245694173"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 2,
+          "mesesAtencion": [
+            "2026-03",
+            "2026-04"
+          ]
+        }
+      },
+      {
+        "nit": "819003539",
+        "nombre": "GONAWINDUA ETTE ENNAKA IPS INDIGENA",
+        "contrato": "ASB-47189-2026-24",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "CONTRIBUTIVO",
+        "falta": "SUBSIDIADO",
+        "idsExistentes": [
+          "1785846994713"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 1,
+          "mesesAtencion": [
+            "2026-03"
+          ]
+        }
+      },
+      {
+        "nit": "892300358",
+        "nombre": "HOSPITAL AGUSTIN CODAZZI",
+        "contrato": "ASB-20013-2026-02",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "CONTRIBUTIVO",
+        "falta": "SUBSIDIADO",
+        "idsExistentes": [
+          "1793376958469"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 2,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "ASB-20013-2026-02-1",
+              "periodoEvaluado": "Abril 2026, Mayo 2026, Junio 2026",
+              "meses": 3,
+              "serviciosConProgramado": 4,
+              "divisibles": 4,
+              "recuperable": true
+            },
+            {
+              "numero": "ASB-20013-2026-02-3",
+              "periodoEvaluado": "Julio 2026, Agosto 2026, Septiembre 2026",
+              "meses": 3,
+              "serviciosConProgramado": 4,
+              "divisibles": 4,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 7,
+          "mesesAtencion": [
+            "2026-03",
+            "2026-04",
+            "2026-05",
+            "2026-06",
+            "2026-07",
+            "2026-08",
+            "2026-09"
+          ]
+        }
+      },
+      {
+        "nit": "900559160",
+        "nombre": "IPS SALUD INTEGRAL H&B S.A.S.",
+        "contrato": "EB-44378-2026-01",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "CONTRIBUTIVO",
+        "falta": "SUBSIDIADO",
+        "idsExistentes": [
+          "1786736429361",
+          "1781620816518"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 2,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "EB-44378-2026-01-1",
+              "periodoEvaluado": "Marzo 2026",
+              "meses": 1,
+              "serviciosConProgramado": 6,
+              "divisibles": 6,
+              "recuperable": true
+            },
+            {
+              "numero": "EB-44378-2026-01-3",
+              "periodoEvaluado": "Julio 2026, Agosto 2026, Septiembre 2026",
+              "meses": 3,
+              "serviciosConProgramado": 6,
+              "divisibles": 6,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 7,
+          "mesesAtencion": [
+            "2026-03",
+            "2026-04",
+            "2026-05",
+            "2026-06",
+            "2026-07",
+            "2026-08",
+            "2026-09"
+          ]
+        }
+      },
+      {
+        "nit": "900210003",
+        "nombre": "IPSI AYUULEEPALA WAYUU",
+        "contrato": "ASE-44430-2026-57",
+        "tipoContrato": "CAPITA AMPLIADA",
+        "tiene": "CONTRIBUTIVO",
+        "falta": "SUBSIDIADO",
+        "idsExistentes": [
+          "1793284274853",
+          "1781629796463"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 3,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "ASE-44430-2026-57-1",
+              "periodoEvaluado": "Marzo 2026",
+              "meses": 1,
+              "serviciosConProgramado": 9,
+              "divisibles": 9,
+              "recuperable": true
+            },
+            {
+              "numero": "ASE-44430-2026-57-2",
+              "periodoEvaluado": "Abril 2026, Mayo 2026, Junio 2026",
+              "meses": 3,
+              "serviciosConProgramado": 9,
+              "divisibles": 9,
+              "recuperable": true
+            },
+            {
+              "numero": "ASE-44430-2026-57-4",
+              "periodoEvaluado": "Julio 2026, Agosto 2026, Septiembre 2026",
+              "meses": 3,
+              "serviciosConProgramado": 9,
+              "divisibles": 9,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 7,
+          "mesesAtencion": [
+            "2026-03",
+            "2026-04",
+            "2026-05",
+            "2026-06",
+            "2026-07",
+            "2026-08",
+            "2026-09"
+          ]
+        }
+      },
+      {
+        "nit": "900517548",
+        "nombre": "IPSI CENTRO EPIDEMIOLOGICO Y DE SALUD INTEGRAL JEKEET AKUAITA",
+        "contrato": "ASE-44847-2026-47",
+        "tipoContrato": "CAPITA AMPLIADA",
+        "tiene": "CONTRIBUTIVO",
+        "falta": "SUBSIDIADO",
+        "idsExistentes": [
+          "1793307415253"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 1,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "ASE-44847-2026-47-5",
+              "periodoEvaluado": "Julio 2026, Agosto 2026, Septiembre 2026",
+              "meses": 3,
+              "serviciosConProgramado": 9,
+              "divisibles": 9,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 8,
+          "mesesAtencion": [
+            "2026-03",
+            "2026-04",
+            "2026-05",
+            "2026-06",
+            "2026-07",
+            "2026-08",
+            "2026-09",
+            "2026-10"
+          ]
+        }
+      },
+      {
+        "nit": "900795851",
+        "nombre": "IPSI EITERRA JAWAPIA",
+        "contrato": "ASE-44001-2026-49",
+        "tipoContrato": "CAPITA AMPLIADA",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1791908801812"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 2,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "ASE-44001-2026-49-1",
+              "periodoEvaluado": "Marzo 2026",
+              "meses": 1,
+              "serviciosConProgramado": 10,
+              "divisibles": 10,
+              "recuperable": true
+            },
+            {
+              "numero": "ASE-44001-2026-49-2",
+              "periodoEvaluado": "Abril 2026, Mayo 2026, Junio 2026",
+              "meses": 3,
+              "serviciosConProgramado": 10,
+              "divisibles": 10,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 6,
+          "mesesAtencion": [
+            "2026-03",
+            "2026-04",
+            "2026-05",
+            "2026-06",
+            "2026-07",
+            "2026-08"
+          ]
+        }
+      },
+      {
+        "nit": "839000936",
+        "nombre": "IPSI EREJEERIA WAYUU",
+        "contrato": "ASE-44430-2026-64",
+        "tipoContrato": "CAPITA AMPLIADA",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1792783388845"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 3,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "ASE-44430-2026-64-1",
+              "periodoEvaluado": "Marzo 2026",
+              "meses": 1,
+              "serviciosConProgramado": 9,
+              "divisibles": 9,
+              "recuperable": true
+            },
+            {
+              "numero": "ASE-44430-2026-64-2",
+              "periodoEvaluado": "Abril 2026, Mayo 2026, Junio 2026",
+              "meses": 3,
+              "serviciosConProgramado": 9,
+              "divisibles": 9,
+              "recuperable": true
+            },
+            {
+              "numero": "ASE-44430-2026-64-3",
+              "periodoEvaluado": "Julio 2026, Agosto 2026, Septiembre 2026",
+              "meses": 3,
+              "serviciosConProgramado": 9,
+              "divisibles": 9,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 8,
+          "mesesAtencion": [
+            "2026-03",
+            "2026-04",
+            "2026-05",
+            "2026-06",
+            "2026-07",
+            "2026-08",
+            "2026-09",
+            "2026-10"
+          ]
+        }
+      },
+      {
+        "nit": "900060562",
+        "nombre": "KANKUAMA IPSI",
+        "contrato": "ASE-20001-2026-50",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1783537955716"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 1,
+          "mesesAtencion": [
+            "2026-04"
+          ]
+        }
+      },
+      {
+        "nit": "901534837",
+        "nombre": "MUNDO MEDIC IPS SAS",
+        "contrato": "ASE-47660-2026-46",
+        "tipoContrato": "CAPITA AMPLIADA",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1790194026310"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 1,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "ASE-47660-2026-46-1",
+              "periodoEvaluado": "Marzo 2026",
+              "meses": 1,
+              "serviciosConProgramado": 7,
+              "divisibles": 7,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 6,
+          "mesesAtencion": [
+            "2026-03",
+            "2026-04",
+            "2026-05",
+            "2026-06",
+            "2026-07",
+            "2026-08"
+          ]
+        }
+      },
+      {
+        "nit": "901556821",
+        "nombre": "SUMINFARMA SAS",
+        "contrato": "MDC-44847-2026-12",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1787154551847"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 6,
+          "mesesAtencion": [
+            "2026-03",
+            "2026-04",
+            "2026-05",
+            "2026-06",
+            "2026-07",
+            "2026-08"
+          ]
+        }
+      },
+      {
+        "nit": "901556821",
+        "nombre": "SUMINFARMA SAS",
+        "contrato": "MDC-44001-2026-15",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1787155152991"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 6,
+          "mesesAtencion": [
+            "2026-03",
+            "2026-04",
+            "2026-05",
+            "2026-06",
+            "2026-07",
+            "2026-08"
+          ]
+        }
+      },
+      {
+        "nit": "900589110",
+        "nombre": "WALE KERU IPSI",
+        "contrato": "ASE-44001-2026-39",
+        "tipoContrato": "CAPITA AMPLIADA",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1793136351532"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 3,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "ASE-44001-2026-39-1",
+              "periodoEvaluado": "Marzo 2026",
+              "meses": 1,
+              "serviciosConProgramado": 8,
+              "divisibles": 8,
+              "recuperable": true
+            },
+            {
+              "numero": "ASE-44001-2026-39-2",
+              "periodoEvaluado": "Abril 2026, Mayo 2026, Junio 2026",
+              "meses": 3,
+              "serviciosConProgramado": 8,
+              "divisibles": 8,
+              "recuperable": true
+            },
+            {
+              "numero": "ASE-44001-2026-39-4",
+              "periodoEvaluado": "Julio 2026, Agosto 2026, Septiembre 2026",
+              "meses": 3,
+              "serviciosConProgramado": 8,
+              "divisibles": 8,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 7,
+          "mesesAtencion": [
+            "2026-03",
+            "2026-04",
+            "2026-05",
+            "2026-06",
+            "2026-07",
+            "2026-08",
+            "2026-09"
+          ]
+        }
+      },
+      {
+        "nit": "900073645",
+        "nombre": "WINTUKWA IPSI",
+        "contrato": "ASE-20570-2026-67",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1783526158944"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 3,
+          "mesesAtencion": [
+            "2026-03",
+            "2026-04",
+            "2026-05"
+          ]
+        }
+      },
+      {
+        "nit": "900073645",
+        "nombre": "WINTUKWA IPSI",
+        "contrato": "ASE-20001-2026-65",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1783527035400"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 3,
+          "mesesAtencion": [
+            "2026-03",
+            "2026-04",
+            "2026-05"
+          ]
+        }
+      },
+      {
+        "nit": "900073645",
+        "nombre": "WINTUKWA IPSI",
+        "contrato": "MDC-20001-2026-07",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1785161269973"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 3,
+          "mesesAtencion": [
+            "2026-03",
+            "2026-04",
+            "2026-05"
+          ]
+        }
+      },
+      {
+        "nit": "901660868-5",
+        "nombre": "ALE SALUD SAS",
+        "contrato": "",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1781215484107"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "900177624",
+        "nombre": "ANASHIWAYA IPSI",
+        "contrato": "44001-096-AS",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1785428231606"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "900653282",
+        "nombre": "CLINICA ANESHI WAYAA IPS SAS",
+        "contrato": "44078-097-AS",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1785425517628"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "900653282",
+        "nombre": "CLINICA ANESHI WAYAA IPS SAS",
+        "contrato": "44078-113-AS",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "CONTRIBUTIVO",
+        "falta": "SUBSIDIADO",
+        "idsExistentes": [
+          "1788299180638"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 1,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "44078-113-AS-1",
+              "periodoEvaluado": "Enero 2026, Febrero 2026",
+              "meses": 2,
+              "serviciosConProgramado": 3,
+              "divisibles": 3,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "824002362",
+        "nombre": "DUSAKAWI IPS",
+        "contrato": "",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1783513330220"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "825000147",
+        "nombre": "E.S.E. HOSPITAL ARMANDO PABON LOPEZ",
+        "contrato": "44560-084-AS",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "CONTRIBUTIVO",
+        "falta": "SUBSIDIADO",
+        "idsExistentes": [
+          "1787316818196"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "825000147",
+        "nombre": "E.S.E. HOSPITAL ARMANDO PABON LOPEZ",
+        "contrato": "44560-085-AS",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "CONTRIBUTIVO",
+        "falta": "SUBSIDIADO",
+        "idsExistentes": [
+          "1787321885657"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "819004070",
+        "nombre": "ESE ALEJANDRO PROSPERO REVEREND",
+        "contrato": "47001-138-AS",
+        "tipoContrato": "CAPITA AMPLIADA",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1790687038258"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 1,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "47001-138-AS-1",
+              "periodoEvaluado": "Enero 2026, Febrero 2026",
+              "meses": 2,
+              "serviciosConProgramado": 13,
+              "divisibles": 13,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "892115347",
+        "nombre": "ESE HOSPITAL DE NAZARETH",
+        "contrato": "44847-105-AS",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1788454465404"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "824000204",
+        "nombre": "ESE HOSPITAL MARINO ZULETA RAMIREZ",
+        "contrato": "ASB-20621-2026-01",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1789400645286"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "825000620",
+        "nombre": "ESE HOSPITAL NUESTRA SEÑORA DEL CARMEN",
+        "contrato": "ASB-44378-2026-29-2",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1790174868347"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "800061765",
+        "nombre": "ESE HOSPITAL NUESTRA SEÑORA DEL PERPETUO SOCORRO",
+        "contrato": "44847-082-AS",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "CONTRIBUTIVO",
+        "falta": "SUBSIDIADO",
+        "idsExistentes": [
+          "1784065615551"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "800061765",
+        "nombre": "ESE HOSPITAL NUESTRA SEÑORA DEL PERPETUO SOCORRO",
+        "contrato": "44847-083-AS",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1784067900766"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 1,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "44847-083-AS-1",
+              "periodoEvaluado": "Enero 2026, Febrero 2026",
+              "meses": 2,
+              "serviciosConProgramado": 3,
+              "divisibles": 3,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "44847-083-AS",
+        "nombre": "ESE HOSPITAL NUESTRA SEÑORA DEL PERPETUO SOCORRO",
+        "contrato": "44847-083-AS",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "CONTRIBUTIVO",
+        "falta": "SUBSIDIADO",
+        "idsExistentes": [
+          "1784068841438"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 1,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "44847-083-AS-1",
+              "periodoEvaluado": "Enero 2026, Febrero 2026",
+              "meses": 2,
+              "serviciosConProgramado": 3,
+              "divisibles": 3,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "800061765",
+        "nombre": "ESE HOSPITAL NUESTRA SEÑORA DEL PERPETUO SOCORRO",
+        "contrato": "PAI-44847-2026-49",
+        "tipoContrato": "PAI",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1789593193521"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "825000834",
+        "nombre": "ESE HOSPITAL SANTA RITA DE CASSIA",
+        "contrato": "",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1784234782469"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "825000834",
+        "nombre": "ESE HOSPITAL SANTA RITA DE CASSIA",
+        "contrato": "ASB-44098-2026-23",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1785848401732"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "825001037",
+        "nombre": "ESE HOSPITAL SANTA TERESA DE JESUS DE AVILA",
+        "contrato": "44090-086-AS",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1778596732130"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 1,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "44090-086-AS-1",
+              "periodoEvaluado": "Enero 2026, Febrero 2026",
+              "meses": 2,
+              "serviciosConProgramado": 3,
+              "divisibles": 3,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "825001037",
+        "nombre": "ESE HOSPITAL SANTA TERESA DE JESUS DE AVILA",
+        "contrato": "44090-086-AS_4",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "CONTRIBUTIVO",
+        "falta": "SUBSIDIADO",
+        "idsExistentes": [
+          "1778617171585"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "825001037",
+        "nombre": "ESE HOSPITAL SANTA TERESA DE JESUS DE AVILA",
+        "contrato": "44090-087-AS",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "CONTRIBUTIVO",
+        "falta": "SUBSIDIADO",
+        "idsExistentes": [
+          "1778620077643"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 1,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "44090-087-AS-1",
+              "periodoEvaluado": "Octubre 2025, Noviembre 2025, Diciembre 2025",
+              "meses": 3,
+              "serviciosConProgramado": 5,
+              "divisibles": 5,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "900144134",
+        "nombre": "EZEQ SALUD IPS",
+        "contrato": "44001-116-AS",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1774967539255"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "892300358",
+        "nombre": "HOSPITAL AGUSTIN CODAZZI",
+        "contrato": "20013-075-AS",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1790620062978"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 2,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "20013-075-AS-1",
+              "periodoEvaluado": "Octubre 2025, Noviembre 2025, Diciembre 2025",
+              "meses": 3,
+              "serviciosConProgramado": 4,
+              "divisibles": 4,
+              "recuperable": true
+            },
+            {
+              "numero": "20013-075-AS-2",
+              "periodoEvaluado": "Enero 2026, Febrero 2026",
+              "meses": 2,
+              "serviciosConProgramado": 4,
+              "divisibles": 4,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "824002672",
+        "nombre": "HOSPITAL CAMILO VILLAZON PUMAREJO",
+        "contrato": "ASB-20570-2026-03",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1789481505129"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "900209093",
+        "nombre": "I.P.S.I ANASHANTA SUPUSHUAYA",
+        "contrato": "44001-112-AS",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1787243443993"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "900209093",
+        "nombre": "I.P.S.I ANASHANTA SUPUSHUAYA",
+        "contrato": "ASE-44001-2026-41",
+        "tipoContrato": "CAPITA AMPLIADA",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1789398240438"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "900589110",
+        "nombre": "I.P.S.I. WALEKERU",
+        "contrato": "44001-133-AS",
+        "tipoContrato": "CAPITA AMPLIADA",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1791403164124"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 1,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "44001-133-AS-1",
+              "periodoEvaluado": "Enero 2026, Febrero 2026",
+              "meses": 2,
+              "serviciosConProgramado": 8,
+              "divisibles": 8,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "900679383",
+        "nombre": "IPS INDIGENA COTTUSHI SUSHI ANAIN WAKUA IPA IPS-I",
+        "contrato": "ASB-44560-2026-68",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1788901293718"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "900559160-5",
+        "nombre": "IPS SALUD INTEGRAL H&B S.A.S.",
+        "contrato": "",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1781193479260"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "900210003",
+        "nombre": "IPSI AYUULEEPALA WAYUU",
+        "contrato": "44430-114-AS",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1779483816518"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "900517548",
+        "nombre": "IPSI CENTRO EPIDEMIOLOGICO Y DE SALUD INTEGRAL JEKEET AKUAITA",
+        "contrato": "",
+        "tipoContrato": "CAPITA AMPLIADA",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1790095753614"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "900794134",
+        "nombre": "IPSI INDIGENA KOTTUSHI SAO ANA",
+        "contrato": "ASE-44560-2026-55",
+        "tipoContrato": "CAPITA AMPLIADA",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1790692670345"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "900794134",
+        "nombre": "IPSI INDIGENA KOTTUSHI SAO ANA",
+        "contrato": "EB-44090-2026-09",
+        "tipoContrato": "CAPITA AMPLIADA",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1790693126975"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "900794134",
+        "nombre": "IPSI INDIGENA KOTTUSHI SAO ANA",
+        "contrato": "EB-44560-2026-07",
+        "tipoContrato": "CAPITA AMPLIADA",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1790694477757"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "900794134",
+        "nombre": "IPSI INDIGENA KOTTUSHI SAO ANA",
+        "contrato": "ASE-44001-2026-45",
+        "tipoContrato": "CAPITA AMPLIADA",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1790695886460"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "900794134",
+        "nombre": "IPSI INDIGENA KOTTUSHI SAO ANA",
+        "contrato": "EB-44847-2026-08",
+        "tipoContrato": "CAPITA AMPLIADA",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1790696324620"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "900141404",
+        "nombre": "IPSI KARAQUITA",
+        "contrato": "44430-120-AS",
+        "tipoContrato": "CAPITA AMPLIADA",
+        "tiene": "CONTRIBUTIVO",
+        "falta": "SUBSIDIADO",
+        "idsExistentes": [
+          "1786554635102"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "900794134",
+        "nombre": "IPSI KOTTUSHI SAO ANA",
+        "contrato": "44090-09EB",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "CONTRIBUTIVO",
+        "falta": "SUBSIDIADO",
+        "idsExistentes": [
+          "1779741206623"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 2,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "44090-09EB-1",
+              "periodoEvaluado": "Octubre 2025, Noviembre 2025, Diciembre 2025",
+              "meses": 3,
+              "serviciosConProgramado": 6,
+              "divisibles": 6,
+              "recuperable": true
+            },
+            {
+              "numero": "44090-09EB-2",
+              "periodoEvaluado": "Enero 2026, Febrero 2026",
+              "meses": 2,
+              "serviciosConProgramado": 6,
+              "divisibles": 6,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "900794134",
+        "nombre": "IPSI KOTTUSHI SAO ANA",
+        "contrato": "44560-07EB",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "CONTRIBUTIVO",
+        "falta": "SUBSIDIADO",
+        "idsExistentes": [
+          "1779747177775"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 2,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "44560-07EB-1",
+              "periodoEvaluado": "Octubre 2025, Noviembre 2025, Diciembre 2025",
+              "meses": 3,
+              "serviciosConProgramado": 6,
+              "divisibles": 6,
+              "recuperable": true
+            },
+            {
+              "numero": "44560-07EB-2",
+              "periodoEvaluado": "Enero 2026, Febrero 2026",
+              "meses": 2,
+              "serviciosConProgramado": 6,
+              "divisibles": 6,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "900794134",
+        "nombre": "IPSI KOTTUSHI SAO ANA",
+        "contrato": "44847-08EB",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "CONTRIBUTIVO",
+        "falta": "SUBSIDIADO",
+        "idsExistentes": [
+          "1779749249435"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 2,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "44847-08EB-1",
+              "periodoEvaluado": "Octubre 2025, Noviembre 2025, Diciembre 2025",
+              "meses": 3,
+              "serviciosConProgramado": 6,
+              "divisibles": 6,
+              "recuperable": true
+            },
+            {
+              "numero": "44847-08EB-2",
+              "periodoEvaluado": "Enero 2026, Febrero 2026",
+              "meses": 2,
+              "serviciosConProgramado": 6,
+              "divisibles": 6,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "900794134",
+        "nombre": "IPSI KOTTUSHI SAO ANA",
+        "contrato": "44001-128-AS",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "CONTRIBUTIVO",
+        "falta": "SUBSIDIADO",
+        "idsExistentes": [
+          "1779722061779"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 2,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "44001-128-AS-1",
+              "periodoEvaluado": "Octubre 2025, Noviembre 2025, Diciembre 2025",
+              "meses": 3,
+              "serviciosConProgramado": 9,
+              "divisibles": 9,
+              "recuperable": true
+            },
+            {
+              "numero": "44001-128-AS-2",
+              "periodoEvaluado": "Enero 2026, Febrero 2026",
+              "meses": 2,
+              "serviciosConProgramado": 9,
+              "divisibles": 9,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "900794134",
+        "nombre": "IPSI KOTTUSHI SAO ANA",
+        "contrato": "44560-134-AS",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "CONTRIBUTIVO",
+        "falta": "SUBSIDIADO",
+        "idsExistentes": [
+          "1781300476829"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 2,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "44560-134-AS-1",
+              "periodoEvaluado": "Octubre 2025, Noviembre 2025, Diciembre 2025",
+              "meses": 3,
+              "serviciosConProgramado": 9,
+              "divisibles": 9,
+              "recuperable": true
+            },
+            {
+              "numero": "44560-134-AS-2",
+              "periodoEvaluado": "Enero 2026, Febrero 2026",
+              "meses": 2,
+              "serviciosConProgramado": 9,
+              "divisibles": 9,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "44560-134-AS",
+        "nombre": "IPSI KOTTUSHI SAO ANA",
+        "contrato": "44560-134-AS",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "CONTRIBUTIVO",
+        "falta": "SUBSIDIADO",
+        "idsExistentes": [
+          "1780607559183"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 2,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "44560-134-AS-1",
+              "periodoEvaluado": "Octubre 2025, Noviembre 2025, Diciembre 2025",
+              "meses": 3,
+              "serviciosConProgramado": 9,
+              "divisibles": 9,
+              "recuperable": true
+            },
+            {
+              "numero": "44560-134-AS-2",
+              "periodoEvaluado": "Enero 2026, Febrero 2026",
+              "meses": 2,
+              "serviciosConProgramado": 9,
+              "divisibles": 9,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "900191322",
+        "nombre": "IPSI OUTTAJIAPULEE",
+        "contrato": "44847-131-AS",
+        "tipoContrato": "CAPITA AMPLIADA",
+        "tiene": "CONTRIBUTIVO",
+        "falta": "SUBSIDIADO",
+        "idsExistentes": [
+          "1789567594972"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 2,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "44847-131-AS-1",
+              "periodoEvaluado": "Octubre 2025, Noviembre 2025, Diciembre 2025",
+              "meses": 3,
+              "serviciosConProgramado": 9,
+              "divisibles": 9,
+              "recuperable": true
+            },
+            {
+              "numero": "44847-131-AS-2",
+              "periodoEvaluado": "Enero 2026, Febrero 2026",
+              "meses": 2,
+              "serviciosConProgramado": 9,
+              "divisibles": 9,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "900185729",
+        "nombre": "IPSI PALAIMA",
+        "contrato": "44847-117-AS",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "CONTRIBUTIVO",
+        "falta": "SUBSIDIADO",
+        "idsExistentes": [
+          "1779202771769"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 2,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "44847-117-AS-1",
+              "periodoEvaluado": "Octubre 2025, Noviembre 2025, Diciembre 2025,",
+              "meses": 3,
+              "serviciosConProgramado": 9,
+              "divisibles": 4,
+              "recuperable": false
+            },
+            {
+              "numero": "44847-117-AS-2",
+              "periodoEvaluado": "Enero 2026, Febrero 2026",
+              "meses": 2,
+              "serviciosConProgramado": 9,
+              "divisibles": 9,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "825003149",
+        "nombre": "IPSI SUPULA WAYUU",
+        "contrato": "44430-132-AS",
+        "tipoContrato": "CAPITA AMPLIADA",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1788269666757"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "900144397",
+        "nombre": "IPSI WAYUU ANASHII",
+        "contrato": "",
+        "tipoContrato": "CAPITA AMPLIADA",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1786712413208"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "901217389",
+        "nombre": "MAKUSHAMA SALUD IPS SAS",
+        "contrato": "44001-121-AS",
+        "tipoContrato": "CAPITA AMPLIADA",
+        "tiene": "CONTRIBUTIVO",
+        "falta": "SUBSIDIADO",
+        "idsExistentes": [
+          "1791466097533"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 2,
+          "algunaRecuperable": true,
+          "detalle": [
+            {
+              "numero": "44001-121-AS-1",
+              "periodoEvaluado": "Octubre 2025, Noviembre 2025, Diciembre 2025",
+              "meses": 3,
+              "serviciosConProgramado": 8,
+              "divisibles": 8,
+              "recuperable": true
+            },
+            {
+              "numero": "44001-121-AS-2",
+              "periodoEvaluado": "Enero 2026, Febrero 2026",
+              "meses": 2,
+              "serviciosConProgramado": 8,
+              "divisibles": 8,
+              "recuperable": true
+            }
+          ]
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "901217389",
+        "nombre": "MAKUSHAMA SALUD IPS SAS",
+        "contrato": "44090-130-AS",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1781643160456"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "901534837",
+        "nombre": "MUNDO MEDIC IPS SAS",
+        "contrato": "47660-137-AS",
+        "tipoContrato": "CAPITA AMPLIADA",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1788357904834"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "10650645065",
+        "nombre": "perpetuo",
+        "contrato": "2026",
+        "tipoContrato": "PAI",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1787258978611"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "900073645",
+        "nombre": "WINTUKWA I.P.S.I.",
+        "contrato": "20001-081-AS",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1780503735131"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "900073645",
+        "nombre": "WINTUKWA I.P.S.I.",
+        "contrato": "20570-093-AS",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1780505207410"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      },
+      {
+        "nit": "900073645",
+        "nombre": "WINTUKWA I.P.S.I.",
+        "contrato": "20001-094-AS",
+        "tipoContrato": "ASISTENCIAL",
+        "tiene": "SUBSIDIADO",
+        "falta": "CONTRIBUTIVO",
+        "idsExistentes": [
+          "1780515426734"
+        ],
+        "escritoDistinto": [],
+        "actasRealesRegimenFaltante": {
+          "cantidad": 0,
+          "algunaRecuperable": false,
+          "detalle": []
+        },
+        "radicacionRegimenFaltante": {
+          "registrosConDatos": 0,
+          "mesesAtencion": []
+        }
+      }
+    ]
+  },
+  "contratosConActasSinRegistro": [],
+  "asb44035": {
+    "SUBSIDIADO": {
+      "codigo": "RS",
+      "registrosRadicacion": 7,
+      "registrosContratoExacto": 7,
+      "meses": {
+        "2026-03": "ok",
+        "2026-04": "ok",
+        "2026-05": "ok",
+        "2026-06": "ok",
+        "2026-07": "ok",
+        "2026-08": "ok",
+        "2026-09": "ok",
+        "2026-10": "sin_radicar",
+        "2026-11": "sin_radicar",
+        "2026-12": "sin_radicar",
+        "2027-01": "sin_radicar",
+        "2027-02": "sin_radicar"
+      },
+      "trim3T_completo": true,
+      "registrosApp": [
+        "1795180755950"
+      ],
+      "actas": [
+        {
+          "numero": "ASB-44035-2026-25-1",
+          "periodoEvaluado": "Marzo 2026",
+          "meses": [
+            "2026-03"
+          ],
+          "historica": false,
+          "prestadorId": "1795180755950"
+        },
+        {
+          "numero": "ASB-44035-2026-25-2",
+          "periodoEvaluado": "Abril 2026, Mayo 2026, Junio 2026",
+          "meses": [
+            "2026-04",
+            "2026-05",
+            "2026-06"
+          ],
+          "historica": false,
+          "prestadorId": "1795180755950"
+        }
+      ]
+    },
+    "CONTRIBUTIVO": {
+      "codigo": "RC",
+      "registrosRadicacion": 8,
+      "registrosContratoExacto": 8,
+      "meses": {
+        "2026-03": "ok",
+        "2026-04": "ok",
+        "2026-05": "ok",
+        "2026-06": "ok",
+        "2026-07": "ok",
+        "2026-08": "ok",
+        "2026-09": "ok",
+        "2026-10": "sin_radicar",
+        "2026-11": "sin_radicar",
+        "2026-12": "sin_radicar",
+        "2027-01": "sin_radicar",
+        "2027-02": "sin_radicar"
+      },
+      "trim3T_completo": true,
+      "registrosApp": [
+        "1791305244338"
+      ],
+      "actas": [
+        {
+          "numero": "ASB-44035-2026-25-1",
+          "periodoEvaluado": "Marzo 2026",
+          "meses": [
+            "2026-03"
+          ],
+          "historica": false,
+          "prestadorId": "1791305244338"
+        },
+        {
+          "numero": "ASB-44035-2026-25-2",
+          "periodoEvaluado": "Abril 2026, Mayo 2026, Junio 2026",
+          "meses": [
+            "2026-04",
+            "2026-05",
+            "2026-06"
+          ],
+          "historica": false,
+          "prestadorId": "1791305244338"
+        }
+      ]
+    },
+    "contratoEnRadicacion": [
+      {
+        "contrato": "ASB-44035-2026-25",
+        "prestador": "ESE HOSPITAL SAN RAFAEL DE ALBANIA",
+        "nit": "825002525",
+        "municipio": "ALBANIA"
+      }
+    ]
+  }
+}
