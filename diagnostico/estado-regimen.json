@@ -1,0 +1,322 @@
+{
+  "fechaRevision": "2026-11-20T13:20:53.567Z",
+  "conteos": {
+    "prestadores": 146,
+    "porRegimen": {
+      "SUBSIDIADO": 77,
+      "CONTRIBUTIVO": 69
+    },
+    "actas": 421,
+    "actasReales": 323,
+    "actasHistoricas": 98,
+    "prestadoresUpdated": "2026-11-20 13:20:18.105Z",
+    "actasUpdated": "2026-11-20 13:20:18.562Z"
+  },
+  "comparacion12nov": {
+    "prestadores": 134,
+    "SUBSIDIADO": 70,
+    "CONTRIBUTIVO": 64,
+    "actas": 402,
+    "reales": 304,
+    "historicas": 98
+  },
+  "nit825002525": {
+    "registros": [
+      {
+        "id": "1787673777612",
+        "contrato": "44035-090-AS",
+        "regimen": "SUBSIDIADO",
+        "regimenOriginal": "SUBSIDIADO",
+        "tipoContrato": "ASISTENCIAL",
+        "metasConMeta": 8,
+        "metasTotal": 11
+      },
+      {
+        "id": "1791305244338",
+        "contrato": "ASB-44035-2026-25",
+        "regimen": "CONTRIBUTIVO",
+        "regimenOriginal": "CONTRIBUTIVO",
+        "tipoContrato": "ASISTENCIAL",
+        "metasConMeta": 7,
+        "metasTotal": 11
+      },
+      {
+        "id": "1795010206028",
+        "contrato": "44035-090-AS",
+        "regimen": "CONTRIBUTIVO",
+        "regimenOriginal": "CONTRIBUTIVO",
+        "tipoContrato": "ASISTENCIAL",
+        "metasConMeta": 8,
+        "metasTotal": 11
+      },
+      {
+        "id": "1795180755950",
+        "contrato": "ASB-44035-2026-25",
+        "regimen": "SUBSIDIADO",
+        "regimenOriginal": "SUBSIDIADO",
+        "tipoContrato": "ASISTENCIAL",
+        "metasConMeta": 8,
+        "metasTotal": 11
+      }
+    ],
+    "actasASB_44035_2026_25": [
+      {
+        "numero": "ASB-44035-2026-25-1",
+        "regimen": "SUBSIDIADO",
+        "historica": false,
+        "periodoEvaluado": "Marzo 2026",
+        "prestadorIdExiste": true,
+        "regimenDelPrestador": "SUBSIDIADO",
+        "contratoDelPrestador": "ASB-44035-2026-25",
+        "prestadorIdAnterior": "1790022518996"
+      },
+      {
+        "numero": "ASB-44035-2026-25-2",
+        "regimen": "SUBSIDIADO",
+        "historica": false,
+        "periodoEvaluado": "Abril 2026, Mayo 2026, Junio 2026",
+        "prestadorIdExiste": true,
+        "regimenDelPrestador": "SUBSIDIADO",
+        "contratoDelPrestador": "ASB-44035-2026-25",
+        "prestadorIdAnterior": "1790024898955"
+      },
+      {
+        "numero": "ASB-44035-2026-25-1",
+        "regimen": "CONTRIBUTIVO",
+        "historica": false,
+        "periodoEvaluado": "Marzo 2026",
+        "prestadorIdExiste": true,
+        "regimenDelPrestador": "CONTRIBUTIVO",
+        "contratoDelPrestador": "ASB-44035-2026-25",
+        "prestadorIdAnterior": "1790028256331"
+      },
+      {
+        "numero": "ASB-44035-2026-25-2",
+        "regimen": "CONTRIBUTIVO",
+        "historica": false,
+        "periodoEvaluado": "Abril 2026, Mayo 2026, Junio 2026",
+        "prestadorIdExiste": true,
+        "regimenDelPrestador": "CONTRIBUTIVO",
+        "contratoDelPrestador": "ASB-44035-2026-25",
+        "prestadorIdAnterior": null
+      }
+    ]
+  },
+  "paresConActasRealesSinRegistro": {
+    "total": 42,
+    "actasAfectadas": 77,
+    "pares": [
+      {
+        "contrato": "20013-075-AS",
+        "regimen": "CONTRIBUTIVO",
+        "actasReales": 2
+      },
+      {
+        "contrato": "44001-121-AS",
+        "regimen": "SUBSIDIADO",
+        "actasReales": 2
+      },
+      {
+        "contrato": "44001-128-AS",
+        "regimen": "SUBSIDIADO",
+        "actasReales": 2
+      },
+      {
+        "contrato": "44001-133-AS",
+        "regimen": "CONTRIBUTIVO",
+        "actasReales": 1
+      },
+      {
+        "contrato": "44078-113-AS",
+        "regimen": "SUBSIDIADO",
+        "actasReales": 1
+      },
+      {
+        "contrato": "44090-086-AS",
+        "regimen": "CONTRIBUTIVO",
+        "actasReales": 1
+      },
+      {
+        "contrato": "44090-087-AS",
+        "regimen": "SUBSIDIADO",
+        "actasReales": 1
+      },
+      {
+        "contrato": "44090-09EB",
+        "regimen": "SUBSIDIADO",
+        "actasReales": 2
+      },
+      {
+        "contrato": "44560-07EB",
+        "regimen": "SUBSIDIADO",
+        "actasReales": 2
+      },
+      {
+        "contrato": "44560-134-AS",
+        "regimen": "SUBSIDIADO",
+        "actasReales": 2
+      },
+      {
+        "contrato": "44847-08EB",
+        "regimen": "SUBSIDIADO",
+        "actasReales": 2
+      },
+      {
+        "contrato": "44847-117-AS",
+        "regimen": "SUBSIDIADO",
+        "actasReales": 2
+      },
+      {
+        "contrato": "44847-131-AS",
+        "regimen": "SUBSIDIADO",
+        "actasReales": 2
+      },
+      {
+        "contrato": "47001-138-AS",
+        "regimen": "CONTRIBUTIVO",
+        "actasReales": 1
+      },
+      {
+        "contrato": "ASB-20001-2026-04",
+        "regimen": "CONTRIBUTIVO",
+        "actasReales": 3
+      },
+      {
+        "contrato": "ASB-20013-2026-02",
+        "regimen": "SUBSIDIADO",
+        "actasReales": 2
+      },
+      {
+        "contrato": "ASB-20045-2026-26",
+        "regimen": "SUBSIDIADO",
+        "actasReales": 1
+      },
+      {
+        "contrato": "ASB-20621-2026-17",
+        "regimen": "SUBSIDIADO",
+        "actasReales": 1
+      },
+      {
+        "contrato": "ASB-44078-2026-32",
+        "regimen": "CONTRIBUTIVO",
+        "actasReales": 2
+      },
+      {
+        "contrato": "ASB-44090-2026-10",
+        "regimen": "CONTRIBUTIVO",
+        "actasReales": 3
+      },
+      {
+        "contrato": "ASB-44090-2026-20",
+        "regimen": "CONTRIBUTIVO",
+        "actasReales": 2
+      },
+      {
+        "contrato": "ASB-44378-2026-29",
+        "regimen": "SUBSIDIADO",
+        "actasReales": 2
+      },
+      {
+        "contrato": "ASB-44560-2026-09",
+        "regimen": "SUBSIDIADO",
+        "actasReales": 2
+      },
+      {
+        "contrato": "ASB-44847-2026-08",
+        "regimen": "SUBSIDIADO",
+        "actasReales": 1
+      },
+      {
+        "contrato": "ASB-44847-2026-35",
+        "regimen": "CONTRIBUTIVO",
+        "actasReales": 2
+      },
+      {
+        "contrato": "ASE-44001-2026-39",
+        "regimen": "CONTRIBUTIVO",
+        "actasReales": 3
+      },
+      {
+        "contrato": "ASE-44001-2026-49",
+        "regimen": "CONTRIBUTIVO",
+        "actasReales": 2
+      },
+      {
+        "contrato": "ASE-44001-2026-51",
+        "regimen": "SUBSIDIADO",
+        "actasReales": 2
+      },
+      {
+        "contrato": "ASE-44430-2026-57",
+        "regimen": "SUBSIDIADO",
+        "actasReales": 3
+      },
+      {
+        "contrato": "ASE-44430-2026-60",
+        "regimen": "SUBSIDIADO",
+        "actasReales": 3
+      },
+      {
+        "contrato": "ASE-44430-2026-64",
+        "regimen": "CONTRIBUTIVO",
+        "actasReales": 3
+      },
+      {
+        "contrato": "ASE-44650-2026-62",
+        "regimen": "SUBSIDIADO",
+        "actasReales": 2
+      },
+      {
+        "contrato": "ASE-44847-2026-47",
+        "regimen": "SUBSIDIADO",
+        "actasReales": 1
+      },
+      {
+        "contrato": "ASE-47001-2026-37",
+        "regimen": "CONTRIBUTIVO",
+        "actasReales": 2
+      },
+      {
+        "contrato": "ASE-47660-2026-46",
+        "regimen": "CONTRIBUTIVO",
+        "actasReales": 1
+      },
+      {
+        "contrato": "EB-20001-2026-06",
+        "regimen": "SUBSIDIADO",
+        "actasReales": 2
+      },
+      {
+        "contrato": "EB-44035-2026-03",
+        "regimen": "SUBSIDIADO",
+        "actasReales": 2
+      },
+      {
+        "contrato": "EB-44078-2026-02",
+        "regimen": "SUBSIDIADO",
+        "actasReales": 2
+      },
+      {
+        "contrato": "EB-44279-2026-05",
+        "regimen": "SUBSIDIADO",
+        "actasReales": 1
+      },
+      {
+        "contrato": "EB-44378-2026-01",
+        "regimen": "SUBSIDIADO",
+        "actasReales": 2
+      },
+      {
+        "contrato": "MD-RCV-20001-2026-58",
+        "regimen": "CONTRIBUTIVO",
+        "actasReales": 1
+      },
+      {
+        "contrato": "MDC-44078-2026-14",
+        "regimen": "SUBSIDIADO",
+        "actasReales": 1
+      }
+    ]
+  },
+  "backupsPocketBase": []
+}
