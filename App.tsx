@@ -108,10 +108,13 @@ function deduplicarActas(raw: import('./types').Acta[]): import('./types').Acta[
   (raw || []).forEach(a => byId.set(a.id, a));
   // Las recuperadas a mano (_conservar) no pasan por los pasos 2 y 3
   const conservadas = [...byId.values()].filter(a => (a as any)._conservar);
-  // Paso 2: misma acta regenerada (mismo prestador + número + período)
+  // Paso 2: misma acta regenerada (mismo prestador + régimen + número + período).
+  // El régimen es obligatorio: el número de acta es igual en Subsidiado y Contributivo
+  // (contrato + sufijo del trimestre) y, mientras faltó el registro de un régimen, sus actas
+  // quedaron ligadas al registro del otro; sin el régimen, una borraba a la otra.
   const byNumero = new Map<string, import('./types').Acta>();
   [...byId.values()].filter(a => !(a as any)._conservar).forEach(a => {
-    const key = `${a.prestadorId}||${a.numero}||${periodoKey(a)}`;
+    const key = `${a.prestadorId}||${reg(a)}||${a.numero}||${periodoKey(a)}`;
     const ex = byNumero.get(key);
     byNumero.set(key, ex ? mejor(ex, a) : a);
   });
@@ -148,6 +151,198 @@ function reasignarActasPorRegimen(actas: Acta[], prestadores: Prestador[]): { ac
     return { ...a, prestadorId: cands[0].id, prestadorIdAnterior: a.prestadorId } as Acta;
   });
   return { actas: out, movidas };
+}
+
+// ── Cada contrato con sus dos regímenes (v2.33) ────────────────────────────
+// Todo contrato debe tener un registro SUBSIDIADO y uno CONTRIBUTIVO, cada uno con sus propias metas.
+type Regimen = 'SUBSIDIADO' | 'CONTRIBUTIVO';
+const REGIMENES: Regimen[] = ['SUBSIDIADO', 'CONTRIBUTIVO'];
+const regimenDe = (x: any): Regimen => /CONTRIB/i.test(String(x?.regimen || '')) ? 'CONTRIBUTIVO' : 'SUBSIDIADO';
+// Identidad de un contrato sin importar cómo se escribió: letras + números ("ASB-44035-2026-025" = "ASB 44035-2026-25").
+// Prefijos distintos (ASB / ASE / EB) son contratos distintos.
+const firmaContrato = (c: any) => {
+  const n = normContrato(c);
+  const nums = (n.match(/\d+/g) || []).map(Number);
+  return nums.length ? `${n.replace(/[^A-Z]/g, '')}|${nums.join('-')}` : '';
+};
+const claveContratoRegimen = (nit: any, contrato: any, regimen: Regimen) => `${normNit(nit)}|${firmaContrato(contrato)}|${regimen}`;
+const listaTiposDe = (tipo?: string) =>
+  tipo === 'ESPECIALIDADES' ? TIPOS_ESPECIALIDADES : tipo === 'CAPITA AMPLIADA' ? TIPOS_CAPITA_AMPLIADA : tipo === 'PAI' ? TIPOS_PAI : TIPOS_ASISTENCIAL;
+const metasEnCero = (p: { metas?: ServiceTypeMeta[] }) => !(p.metas || []).some(m => m.active && m.monthlyGoal > 0);
+
+type PropuestaMetas = { metas: ServiceTypeMeta[]; tipoContrato: NonNullable<Prestador['tipoContrato']>; fuente: string | null; aviso: string | null };
+// Metas mensuales de un régimen a partir de SUS actas: programado ÷ meses del período (acta más reciente).
+// Nunca se copian del otro régimen: si no hay actas, quedan en 0 para digitarlas.
+function metasDesdeActas(actasReg: Acta[], tipoBase?: string, metasOtro?: ServiceTypeMeta[]): PropuestaMetas {
+  const reales = actasReg.filter(a => !esActaHistorica(a) && (a.servicios || []).some(s => s.programado > 0));
+  const tiposActa = new Set(reales.flatMap(a => (a.servicios || []).map(s => s.tipo)));
+  const contiene = (lista: string[]) => [...tiposActa].every(t => lista.includes(t));
+  let tipo = (tipoBase || 'ASISTENCIAL') as PropuestaMetas['tipoContrato'];
+  if (tiposActa.has('PAI') || (tiposActa.size > 0 && contiene(TIPOS_PAI))) tipo = 'PAI';
+  else if (tiposActa.size > 0 && !contiene(listaTiposDe(tipo))) {
+    tipo = contiene(TIPOS_ASISTENCIAL) ? 'ASISTENCIAL' : contiene(TIPOS_CAPITA_AMPLIADA) ? 'CAPITA AMPLIADA' : contiene(TIPOS_ESPECIALIDADES) ? 'ESPECIALIDADES' : tipo;
+  }
+  const lista = listaTiposDe(tipo);
+  const cero: ServiceTypeMeta[] = lista.map(t => ({ type: t, monthlyGoal: 0, active: true }));
+  if (tipo === 'PAI') {
+    return { metas: cero, tipoContrato: tipo, fuente: null,
+      aviso: reales.length ? 'Contrato PAI: el acta guarda el total de biológicos, no la meta de cada uno. Digite las metas.' : null };
+  }
+  const ultimoMes = (a: Acta) => [...mesesDePeriodo(a.periodoEvaluado)].sort().slice(-1)[0] || '';
+  const cands = reales.filter(a => mesesDePeriodo(a.periodoEvaluado).length > 0)
+    .sort((x, y) => ultimoMes(y).localeCompare(ultimoMes(x)) || String(y.createdAt || '').localeCompare(String(x.createdAt || '')));
+  if (!cands.length) return { metas: cero, tipoContrato: tipo, fuente: null, aviso: null };
+  const a = cands[0];
+  const n = mesesDePeriodo(a.periodoEvaluado).length;
+  const mapa: Record<string, number> = {};
+  let inexactas = 0;
+  (a.servicios || []).forEach(s => {
+    if (!(s.programado > 0)) return;
+    if (s.programado % n !== 0) inexactas++;
+    mapa[s.tipo] = Math.round(s.programado / n);
+  });
+  const metas: ServiceTypeMeta[] = lista.map(t => ({ type: t, monthlyGoal: mapa[t] || 0, active: true }));
+  Object.keys(mapa).filter(t => !lista.includes(t)).forEach(t => metas.push({ type: t, monthlyGoal: mapa[t], active: true }));
+  const avisos: string[] = [];
+  if (inexactas) avisos.push(`${inexactas} servicio(s) no dan exacto al dividir entre ${n} mes(es): revíselos.`);
+  if (metasOtro) {
+    const firma = (ms: ServiceTypeMeta[]) => ms.filter(m => m.active && m.monthlyGoal > 0).map(m => `${m.type}=${m.monthlyGoal}`).sort().join(';');
+    if (firma(metas) && firma(metas) === firma(metasOtro)) avisos.push('Salen iguales a las del otro régimen: el acta pudo generarse con las metas equivocadas. Revíselas.');
+  }
+  return { metas, tipoContrato: tipo, fuente: `acta ${a.numero} (${a.periodoEvaluado}): programado ÷ ${n} mes${n === 1 ? '' : 'es'}`, aviso: avisos.join(' ') || null };
+}
+
+type FaltanteRegimen = {
+  clave: string;
+  nit: string; nombre: string;
+  contrato: string;                // tal como está escrito en el registro existente (o en el acta)
+  regimen: Regimen;                // régimen que falta
+  base: Prestador | null;          // registro del otro régimen; null = el contrato solo existe en actas
+  plantilla: Partial<Prestador>;   // datos para precargar el formulario
+  actas: Acta[];                   // actas reales de este contrato y régimen
+  propuesta: PropuestaMetas;
+};
+type RevisionRegimenes = {
+  totalContratos: number; completos: number;
+  faltantes: FaltanteRegimen[];    // contratos con un solo régimen registrado
+  soloActas: FaltanteRegimen[];    // contratos con actas reales pero sin ningún registro
+  escritosDistinto: { nit: string; nombre: string; registros: Prestador[] }[];
+  duplicados: { nit: string; nombre: string; regimen: Regimen; registros: Prestador[] }[];
+  sinContrato: Prestador[];        // registros sin número de contrato
+  porClave: Record<string, FaltanteRegimen>;
+  claveDe: (nit: any, contrato: any, regimen: Regimen) => string;
+};
+function revisarRegimenes(prestadores: Prestador[], actas: Acta[]): RevisionRegimenes {
+  const porId = new Map<string, Prestador>(prestadores.map(p => [p.id, p] as [string, Prestador]));
+  // Firmas de contrato registradas por NIT. Una variante con un número de más al final
+  // ("ASB-44378-2026-29-2", "44090-086-AS_4": número de acta digitado como contrato) se toma
+  // como el mismo contrato si el NIT tiene registrado el número sin ese sufijo.
+  const firmasNit: Record<string, Set<string>> = {};
+  prestadores.forEach(p => {
+    const f = firmaContrato(p.contrato);
+    if (f) (firmasNit[normNit(p.nit)] = firmasNit[normNit(p.nit)] || new Set()).add(f);
+  });
+  const canon = (nitK: string, f: string) => {
+    if (!f) return f;
+    const nums = f.split('|')[1].split('-').length;
+    const base = [...(firmasNit[nitK] || [])].find(b => b !== f && f.startsWith(b + '-') && b.split('|')[1].split('-').length === nums - 1);
+    return base || f;
+  };
+  const claveDe = (nit: any, contrato: any, regimen: Regimen) => {
+    const nitK = normNit(nit);
+    return `${nitK}|${canon(nitK, firmaContrato(contrato))}|${regimen}`;
+  };
+  const contratoDeActa = (a: Acta) => a.contrato || porId.get(a.prestadorId)?.contrato || '';
+  const nitDeActa = (a: Acta) => a.nit || porId.get(a.prestadorId)?.nit || '';
+  const actasReales: Record<string, Acta[]> = {};
+  actas.forEach(a => {
+    if (esActaHistorica(a) || !firmaContrato(contratoDeActa(a))) return;
+    const k = claveDe(nitDeActa(a), contratoDeActa(a), regimenDe(a.regimen ? a : porId.get(a.prestadorId)));
+    (actasReales[k] = actasReales[k] || []).push(a);
+  });
+  const out: RevisionRegimenes = { totalContratos: 0, completos: 0, faltantes: [], soloActas: [], escritosDistinto: [], duplicados: [], sinContrato: [], porClave: {}, claveDe };
+  const grupos: Record<string, Prestador[]> = {};
+  prestadores.forEach(p => {
+    if (!firmaContrato(p.contrato)) { out.sinContrato.push(p); return; }
+    const k = claveDe(p.nit, p.contrato, 'SUBSIDIADO').replace(/\|SUBSIDIADO$/, '');
+    (grupos[k] = grupos[k] || []).push(p);
+  });
+  Object.values(grupos).forEach(regs => {
+    out.totalContratos++;
+    const rep = regs[0];
+    REGIMENES.forEach(r => {
+      const delReg = regs.filter(p => regimenDe(p) === r);
+      if (delReg.length > 1) out.duplicados.push({ nit: rep.nit, nombre: rep.nombre, regimen: r, registros: delReg });
+    });
+    if (new Set(regs.map(p => normContrato(p.contrato))).size > 1) out.escritosDistinto.push({ nit: rep.nit, nombre: rep.nombre, registros: regs });
+    const faltan = REGIMENES.filter(r => !regs.some(p => regimenDe(p) === r));
+    if (faltan.length === 0) { out.completos++; return; }
+    faltan.forEach(r => {
+      // Base: el registro existente con más metas (si hay repetidos)
+      const base = [...regs].sort((x, y) => (y.metas || []).filter(m => m.monthlyGoal > 0).length - (x.metas || []).filter(m => m.monthlyGoal > 0).length)[0];
+      const clave = claveDe(base.nit, base.contrato, r);
+      const actasR = actasReales[clave] || [];
+      const f: FaltanteRegimen = {
+        clave, nit: base.nit, nombre: base.nombre, contrato: base.contrato, regimen: r, base, actas: actasR,
+        plantilla: { nombre: base.nombre, nit: base.nit, departamento: base.departamento, municipio: base.municipio, vigencia: base.vigencia || '', repLegalIPS: base.repLegalIPS || '' },
+        propuesta: metasDesdeActas(actasR, base.tipoContrato, base.metas),
+      };
+      out.faltantes.push(f); out.porClave[clave] = f;
+    });
+  });
+  // Contratos que solo existen en actas (su registro se borró o nunca se creó)
+  Object.entries(actasReales).forEach(([clave, lista]) => {
+    const grupoK = clave.replace(/\|(SUBSIDIADO|CONTRIBUTIVO)$/, '');
+    if (grupos[grupoK]) return;
+    const a0 = [...lista].sort((x, y) => String(y.createdAt || '').localeCompare(String(x.createdAt || '')))[0];
+    const r = regimenDe(a0.regimen ? a0 : porId.get(a0.prestadorId));
+    const nitK = normNit(nitDeActa(a0));
+    const delNit = prestadores.find(p => normNit(p.nit) === nitK);
+    const nombre = delNit?.nombre || a0.empresa || (a0 as any).prestadorNombre || '';
+    const f: FaltanteRegimen = {
+      clave, nit: delNit?.nit || nitDeActa(a0), nombre, contrato: limpiarContratoTexto(contratoDeActa(a0)), regimen: r, base: null, actas: lista,
+      plantilla: {
+        nombre, nit: delNit?.nit || nitDeActa(a0),
+        departamento: delNit?.departamento || a0.departamento || '', municipio: delNit?.municipio || a0.municipio || '',
+        vigencia: a0.vigencia || '', repLegalIPS: a0.repLegalIPS || delNit?.repLegalIPS || '',
+      },
+      propuesta: metasDesdeActas(lista, undefined, undefined),
+    };
+    out.soloActas.push(f); out.porClave[clave] = f;
+  });
+  const orden = (x: FaltanteRegimen, y: FaltanteRegimen) => String(x.nombre).localeCompare(String(y.nombre)) || x.contrato.localeCompare(y.contrato);
+  out.faltantes.sort(orden); out.soloActas.sort(orden);
+  return out;
+}
+// Mismo criterio que limpiarContrato del formulario (mayúsculas, guiones normales, sin espacios)
+const limpiarContratoTexto = (x: any) => String(x || '').toUpperCase().trim()
+  .replace(/[‐-―−]/g, '-').replace(/\s*-\s*/g, '-').replace(/\s+/g, '-')
+  .replace(/-+/g, '-').replace(/^-|-$/g, '');
+
+// Reparte las actas de un grupo de registros (mismo NIT) en el registro de SU contrato y régimen.
+// Las que no tienen registro de su régimen quedan en `huerfanas`.
+function repartirActasGrupo(grupo: Prestador[], actas: Acta[]) {
+  const ids = new Set(grupo.map(p => p.id));
+  const delGrupo = [...new Map<string, Acta>(actas
+    .filter(a => ids.has(a.prestadorId) || grupo.some(p => a.nit && a.nit === p.nit && a.contrato === p.contrato))
+    .map(a => [a.id, a] as [string, Acta])).values()];
+  const porDestino: Record<string, Acta[]> = {};
+  const huerfanasPorClave: Record<string, { contrato: string; regimen: Regimen; firma: string; actas: Acta[] }> = {};
+  delGrupo.forEach(a => {
+    const ligado = grupo.find(p => p.id === a.prestadorId) || grupo.find(p => a.nit === p.nit && a.contrato === p.contrato);
+    const rA = regimenDe(a.regimen ? a : ligado);
+    let destino = ligado && regimenDe(ligado) === rA ? ligado : undefined;
+    const c = a.contrato || ligado?.contrato || '';
+    if (!destino) {
+      const m = grupo.filter(p => regimenDe(p) === rA && normContrato(p.contrato) === normContrato(c));
+      const m2 = m.length ? m : grupo.filter(p => regimenDe(p) === rA && firmaContrato(p.contrato) === firmaContrato(c));
+      destino = m2.length === 1 ? m2[0] : undefined;
+    }
+    if (destino) { (porDestino[destino.id] = porDestino[destino.id] || []).push(a); return; }
+    const k = `${firmaContrato(c) || normContrato(c)}||${rA}`;
+    (huerfanasPorClave[k] = huerfanasPorClave[k] || { contrato: c, regimen: rA, firma: firmaContrato(c), actas: [] }).actas.push(a);
+  });
+  return { delGrupo, porDestino, huerfanas: Object.values(huerfanasPorClave) };
 }
 
 const DEFAULT_USERS: AppUser[] = [
@@ -332,6 +527,7 @@ function App() {
   const [showPrestForm, setShowPrestForm] = useState(false);
   const [editPrest, setEditPrest] = useState<Prestador | null>(null);
   const [ofrecerComplementario, setOfrecerComplementario] = useState<Omit<Prestador,'id'> | null>(null);
+  const [showRegimenes, setShowRegimenes] = useState(false); // ventana "Cada contrato con sus dos regímenes"
   const [prestForm, setPrestForm] = useState<Omit<Prestador, 'id'>>({
     nombre: '', nit: '', departamento: '', municipio: '', contrato: '', vigencia: '', regimen: 'SUBSIDIADO', repLegalIPS: '',
     metas: []
@@ -675,7 +871,7 @@ function App() {
     if (currentUser?.role !== 'admin') return;
     const onDash = activeTab === 'dashboard';
     const onMonitor = activeTab === 'mantenimiento' && maintTab === 'monitor';
-    if (!onDash && !onMonitor && !showPrestForm) return;
+    if (!onDash && !onMonitor && !showPrestForm && !showRegimenes) return;
     const fetchRad = () => {
       radLastFetchAt.current = Date.now();
       setRadFetching(true); setRadError(null);
@@ -693,7 +889,7 @@ function App() {
     };
     document.addEventListener('visibilitychange', alVolver);
     return () => { clearInterval(id); document.removeEventListener('visibilitychange', alVolver); };
-  }, [activeTab, maintTab, showPrestForm]);
+  }, [activeTab, maintTab, showPrestForm, showRegimenes]);
 
   // Auto-actualizar scale según meses detectados en los RIPS cargados
   useEffect(() => {
@@ -1226,16 +1422,18 @@ function App() {
     // Normalizar: quitar espacios extra y pasar a minúsculas para comparar período
     const normPeriodo = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
     const periodoNorm = normPeriodo(periodoEfectivo);
+    const mesesNuevo = mesesDePeriodo(periodoEfectivo).join('|');
     const todasActasMismoPeriodo = actas.filter(a => {
-      if ((a.regimen || 'SUBSIDIADO') !== regimen) return false;
+      if (regimenDe(a) !== regimenDe({ regimen })) return false;
       if (!periodoNorm) return false;
-      // Coincide si el período normalizado es igual o si se incluyen los mismos meses
+      // Coincide si el período escrito es igual o si cubre los mismos meses ("Marzo 2026" = "1T 2026")
       const aNorm = normPeriodo(a.periodoEvaluado || '');
-      return aNorm === periodoNorm;
+      return aNorm === periodoNorm || (!!mesesNuevo && mesesDePeriodo(a.periodoEvaluado).join('|') === mesesNuevo);
     });
+    // Solo actas de ESTE contrato (un NIT puede tener varios contratos); por NIT solo si el acta no tiene contrato
     const actaPeriodoExistente =
-      todasActasMismoPeriodo.find(a => a.contrato === p.contrato) ||
-      (p.nit ? todasActasMismoPeriodo.find(a => String(a.nit) === String(p.nit)) : undefined);
+      todasActasMismoPeriodo.find(a => !!firmaContrato(a.contrato) && firmaContrato(a.contrato) === firmaContrato(p.contrato)) ||
+      (p.nit ? todasActasMismoPeriodo.find(a => !firmaContrato(a.contrato) && normNit(a.nit) === normNit(p.nit)) : undefined);
     if (actaPeriodoExistente) {
       const cumplPct = (() => { const prog = actaPeriodoExistente.servicios.reduce((s, sv) => s + sv.programado, 0); const ejec = actaPeriodoExistente.servicios.reduce((s, sv) => s + Math.min(sv.ejecutado, sv.programado), 0); return prog > 0 ? Math.round(ejec / prog * 100) : 0; })();
       const mismoContrato = actaPeriodoExistente.contrato === p.contrato;
@@ -1442,16 +1640,19 @@ function App() {
       actaToSave = { ...actaToSave, numero: `${contrato}-${existing.length + 1}` };
       setInlineActa(actaToSave);
     }
-    // Check for duplicates: mismo número exacto para el mismo prestador
+    // Check for duplicates: mismo número exacto para el mismo prestador y régimen
+    // (el número es igual en Subsidiado y Contributivo: sin el régimen se reemplazaba el del otro)
     const dupByNumero = actas.find(a =>
       a.id !== actaToSave.id &&
       a.numero === actaToSave.numero &&
-      a.prestadorId === actaToSave.prestadorId
+      a.prestadorId === actaToSave.prestadorId &&
+      regimenDe(a) === regimenDe(actaToSave)
     );
-    // También: mismo prestador + mismo período (dos actas distintas para mismo contrato+período)
+    // También: mismo prestador + régimen + período (dos actas distintas para mismo contrato+período)
     const dupByPrestPeriodo = actas.find(a =>
       a.id !== actaToSave.id &&
       a.prestadorId === actaToSave.prestadorId &&
+      regimenDe(a) === regimenDe(actaToSave) &&
       a.periodoEvaluado === actaToSave.periodoEvaluado
     );
     const dup = dupByNumero || dupByPrestPeriodo;
@@ -2420,6 +2621,84 @@ function App() {
       }
     }
     return out;
+  };
+
+  // ── Cada contrato con sus dos regímenes (v2.33) ──
+  const revisionRegimenes = useMemo(() => revisarRegimenes(prestadores, actas), [prestadores, actas]);
+  // Meses de atención con datos por contrato y régimen de radicación (para la ventana de regímenes)
+  const radIndiceMeses = useMemo(() => {
+    const idx: Record<string, Set<string>> = {};
+    (radData?.registros || []).forEach((r: any) => {
+      const conDatos = ['n_usuarios', 'n_servicios', 'meses_rips'].some(k => r[k] !== undefined)
+        ? ((r.n_usuarios > 0) || (r.n_servicios > 0) || (r.meses_rips > 0))
+        : !!(r.recepcion || r.radicacion || r.fecha_min);
+      if (!conDatos) return;
+      const k = `${normContrato(r.contrato)}|${r.regimen || 'RS'}`;
+      mesesAtencionRegistro(r).forEach(m => (idx[k] = idx[k] || new Set()).add(m));
+    });
+    return idx;
+  }, [radData]);
+  const [regFiltro, setRegFiltro] = useState('');
+  const [regSel, setRegSel] = useState<Set<string> | null>(null); // null = todos los válidos marcados
+  const [prestFormNota, setPrestFormNota] = useState<{ tipo: 'info' | 'aviso'; texto: string } | null>(null);
+  useEffect(() => { if (!showPrestForm) setPrestFormNota(null); }, [showPrestForm]);
+  useEffect(() => { if (showRegimenes) setRegSel(null); }, [showRegimenes]);
+  // Fecha de creación aproximada desde el id (Date.now() al crear)
+  const fechaDeId = (id: string) => { const n = Number(id); return n > 1.6e12 && n < 2.2e12 ? new Date(n).toLocaleDateString('es-CO') : '—'; };
+  // Problemas de datos que impiden crear el régimen que falta sin revisar antes
+  const problemaFaltante = (f: FaltanteRegimen): string | null => {
+    if (!firmaContrato(f.contrato)) return 'Sin número de contrato: edite el registro';
+    if (!/^\d{9,10}(-\d)?$/.test(String(f.nit || '').replace(/[\s.]/g, ''))) return `NIT "${f.nit}" mal digitado: edite el registro`;
+    return null;
+  };
+  const camposFaltante = (f: FaltanteRegimen): Omit<Prestador, 'id'> => ({
+    nombre: f.plantilla.nombre || f.nombre, nit: String(f.plantilla.nit || f.nit || '').trim().replace(/[\s.]/g, ''),
+    departamento: f.plantilla.departamento || '', municipio: f.plantilla.municipio || '',
+    contrato: limpiarContrato(f.contrato), vigencia: f.plantilla.vigencia || '', regimen: f.regimen,
+    repLegalIPS: f.plantilla.repLegalIPS || '', tipoContrato: f.propuesta.tipoContrato, metas: f.propuesta.metas.map(m => ({ ...m })),
+  });
+  const notaFaltante = (f: FaltanteRegimen): { tipo: 'info' | 'aviso'; texto: string } => f.propuesta.fuente
+    ? { tipo: f.propuesta.aviso ? 'aviso' : 'info', texto: `Metas del ${f.regimen.toLowerCase()} recuperadas del ${f.propuesta.fuente}. ${f.propuesta.aviso || 'Revíselas antes de guardar.'}` }
+    : { tipo: 'aviso', texto: `${f.propuesta.aviso ? f.propuesta.aviso + ' ' : ''}El ${f.regimen.toLowerCase()} no tiene actas de donde recuperar metas: digítelas (no se copian del otro régimen).` };
+  // Abre el formulario precargado para crear el régimen que le falta a un contrato
+  const abrirCrearRegimen = (f: FaltanteRegimen) => {
+    setPrestForm(camposFaltante(f));
+    setEditPrest(null);
+    setPrestFormNota(notaFaltante(f));
+    setShowPrestForm(true);
+  };
+  const abrirEditarPrestador = (p: Prestador) => {
+    setEditPrest(p);
+    const saved = new Map((p.metas || []).map((m: ServiceTypeMeta) => [m.type, m]));
+    const merged = metas.map(m => saved.get(m.type) ?? { ...m, monthlyGoal: 0 });
+    (p.metas || []).filter(m => !merged.some(x => x.type === m.type)).forEach(m => merged.push(m));
+    setPrestForm({ nombre: p.nombre, nit: p.nit, departamento: p.departamento, municipio: p.municipio, contrato: p.contrato, vigencia: p.vigencia || '', regimen: p.regimen || 'SUBSIDIADO', repLegalIPS: p.repLegalIPS || '', metas: merged, tipoContrato: p.tipoContrato });
+    setShowPrestForm(true);
+  };
+  // Crea de una vez los registros que faltan (metas desde sus actas, o en 0 para digitarlas)
+  const crearRegimenesFaltantes = (lista: FaltanteRegimen[]) => {
+    if (!lista.length) return;
+    const conMetas = lista.filter(f => f.propuesta.fuente).length;
+    if (!window.confirm(
+      `Se crearán ${lista.length} registro(s) de prestador:\n\n` +
+      `• ${conMetas} con las metas recuperadas de sus propias actas\n` +
+      `• ${lista.length - conMetas} con las metas en 0 (digítelas antes de evaluar)\n\n` +
+      `No se copian metas del otro régimen. ¿Continuar?`)) return;
+    const t0 = Date.now();
+    setPrestadores(prev => {
+      const existentes = new Set(prev.map(p => revisionRegimenes.claveDe(p.nit, p.contrato, regimenDe(p))));
+      return [...prev, ...lista.filter(f => !existentes.has(f.clave)).map((f, i) => ({ ...camposFaltante(f), id: String(t0 + i) }))];
+    });
+    setRegSel(null);
+    setMessage({ type: 'success', text: `Se crearon ${lista.length} registros. Los que quedaron con metas en 0 aparecen como "sin metas": edítelos antes de evaluar.` });
+  };
+  // Deja el mismo número de contrato en todos los registros de un contrato escrito distinto
+  const unificarContrato = (registros: Prestador[], texto: string) => {
+    const t = limpiarContrato(texto);
+    if (!window.confirm(`Se escribirá el contrato como ${t} en ${registros.length} registro(s):\n\n${registros.map(p => `• ${p.contrato} · ${regimenDe(p)}`).join('\n')}\n\n¿Continuar?`)) return;
+    const ids = new Set(registros.map(p => p.id));
+    setPrestadores(prev => prev.map(p => ids.has(p.id) ? { ...p, contrato: t } : p));
+    setMessage({ type: 'success', text: `Contrato unificado como ${t}.` });
   };
 
   // Auto-consolidate PAI actas when opened or when RIPS change
@@ -3738,25 +4017,16 @@ function App() {
                   const hasS = grupo.some(p => p.regimen !== 'CONTRIBUTIVO');
                   const hasC = grupo.some(p => p.regimen === 'CONTRIBUTIVO');
                   // Cada acta va al contrato de SU régimen; si ese registro no existe, queda en "sin registro en la app"
-                  const regDeP = (x: any) => String(x?.regimen || 'SUBSIDIADO').toUpperCase();
-                  const grupoIds = new Set(grupo.map(p => p.id));
-                  const delGrupo = [...new Map<string, Acta>(actas
-                    .filter(a => grupoIds.has(a.prestadorId) || grupo.some(p => a.nit && a.nit === p.nit && a.contrato === p.contrato))
-                    .map(a => [a.id, a] as [string, Acta])).values()];
-                  const porDestino: Record<string, Acta[]> = {};
-                  const huerfanas: Record<string, Acta[]> = {};
-                  delGrupo.forEach(a => {
-                    const ligado = grupo.find(p => p.id === a.prestadorId) || grupo.find(p => a.nit === p.nit && a.contrato === p.contrato);
-                    const rA = String(a.regimen || ligado?.regimen || 'SUBSIDIADO').toUpperCase();
-                    let destino = ligado && regDeP(ligado) === rA ? ligado : undefined;
-                    if (!destino) {
-                      const c = a.contrato || ligado?.contrato;
-                      const m = grupo.filter(p => regDeP(p) === rA && normContrato(p.contrato) === normContrato(c));
-                      destino = m.length === 1 ? m[0] : undefined;
-                    }
-                    if (destino) (porDestino[destino.id] = porDestino[destino.id] || []).push(a);
-                    else { const k = `${a.contrato || ligado?.contrato || ''}||${rA}`; (huerfanas[k] = huerfanas[k] || []).push(a); }
-                  });
+                  const regDeP = (x: any) => regimenDe(x);
+                  const { delGrupo, porDestino, huerfanas } = repartirActasGrupo(grupo, actas);
+                  // Contratos de este grupo a los que les falta un régimen (con o sin actas de ese régimen)
+                  const grupoIdsDash = new Set(grupo.map(p => p.id));
+                  const faltaDash = revisionRegimenes.faltantes.filter(f => f.base && grupoIdsDash.has(f.base.id));
+                  const filasFalta = [
+                    ...faltaDash.map(f => ({ f, contrato: f.contrato, regimen: f.regimen, lista: huerfanas.find(h => revisionRegimenes.claveDe(f.nit, h.contrato, h.regimen) === f.clave)?.actas || [] })),
+                    ...huerfanas.filter(h => !faltaDash.some(f => revisionRegimenes.claveDe(f.nit, h.contrato, h.regimen) === f.clave))
+                      .map(h => ({ f: revisionRegimenes.porClave[revisionRegimenes.claveDe(grupo[0].nit, h.contrato, h.regimen)], contrato: h.contrato, regimen: h.regimen, lista: h.actas })),
+                  ];
                   const totalActas = delGrupo.length;
                   const filaActa = (a: Acta, regCard: string) => {
                     const tp = a.servicios.reduce((s, x) => s + x.programado, 0);
@@ -3806,6 +4076,12 @@ function App() {
                         <div className="flex items-center gap-1.5 shrink-0 ml-2">
                           {hasS && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400">S</span>}
                           {hasC && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-orange-100 dark:bg-orange-500/15 text-orange-700 dark:text-orange-400">C</span>}
+                          {faltaDash.length > 0 && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400"
+                              title={faltaDash.map(f => `${f.contrato}: falta ${f.regimen.toLowerCase()}`).join('\n')}>
+                              falta {[...new Set(faltaDash.map(f => f.regimen === 'CONTRIBUTIVO' ? 'C' : 'S'))].join('/')}
+                            </span>
+                          )}
                           <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${totalActas > 0 ? 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'}`}>
                             {totalActas} acta{totalActas !== 1 ? 's' : ''}
                           </span>
@@ -3836,31 +4112,36 @@ function App() {
                               </div>
                             );
                           })}
-                          {Object.entries(huerfanas).map(([k, lista]) => {
-                            const [contratoH, regH] = k.split('||');
+                          {filasFalta.map(({ f, contrato: contratoH, regimen: regH, lista }) => {
                             const isCH = regH === 'CONTRIBUTIVO';
                             const rep0 = grupo[0];
+                            const fCrear: FaltanteRegimen | undefined = f || (contratoH ? {
+                              clave: revisionRegimenes.claveDe(rep0.nit, contratoH, regH), nit: rep0.nit, nombre: rep0.nombre, contrato: contratoH, regimen: regH, base: null, actas: lista,
+                              plantilla: { nombre: rep0.nombre, nit: rep0.nit, departamento: rep0.departamento, municipio: rep0.municipio, vigencia: rep0.vigencia || '', repLegalIPS: rep0.repLegalIPS || '' },
+                              propuesta: metasDesdeActas(lista, undefined, undefined),
+                            } : undefined);
                             return (
-                              <div key={k} className="px-3 py-2.5 space-y-1.5 bg-amber-50/50 dark:bg-amber-500/5">
+                              <div key={`${contratoH}||${regH}`} className="px-3 py-2.5 space-y-1.5 bg-amber-50/50 dark:bg-amber-500/5">
                                 <div className="flex items-center justify-between gap-2">
                                   <div className={`flex flex-wrap items-center gap-2 px-2 py-1 rounded-lg border border-dashed text-[10px] font-medium ${isCH ? 'border-orange-300 dark:border-orange-500/40' : 'border-emerald-300 dark:border-emerald-500/40'}`}>
                                     <span className="font-mono text-slate-600 dark:text-slate-300">📋 {contratoH || 'sin contrato'}</span>
                                     <span className={`font-bold ${isCH ? 'text-orange-600 dark:text-orange-400' : 'text-emerald-600 dark:text-emerald-400'}`}>{regH}</span>
-                                    <span className="text-amber-700 dark:text-amber-400">· sin registro en la app</span>
+                                    <span className="text-amber-700 dark:text-amber-400">· {f?.base ? 'falta este régimen' : 'sin registro en la app'}</span>
                                   </div>
-                                  {isAdmin && contratoH && (
-                                    <button onClick={e => {
-                                        e.stopPropagation();
-                                        setPrestForm({ nombre: rep0.nombre, nit: rep0.nit, departamento: rep0.departamento, municipio: rep0.municipio, contrato: contratoH, vigencia: rep0.vigencia || '', regimen: regH, repLegalIPS: rep0.repLegalIPS || '', tipoContrato: 'ASISTENCIAL', metas: TIPOS_ASISTENCIAL.map(t => ({ type: t, monthlyGoal: 0, active: true })) });
-                                        setEditPrest(null); setShowPrestForm(true);
-                                      }}
+                                  {isAdmin && fCrear && problemaFaltante(fCrear) && (
+                                    <span className="text-[10px] text-red-600 dark:text-red-400 text-right">{problemaFaltante(fCrear)}</span>
+                                  )}
+                                  {isAdmin && fCrear && !problemaFaltante(fCrear) && (
+                                    <button onClick={e => { e.stopPropagation(); abrirCrearRegimen(fCrear); }}
                                       className="text-[10px] px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition-colors font-medium whitespace-nowrap"
-                                      title="Crear el registro de este contrato y régimen; las actas pasarán a él solas">
-                                      + Crear contrato
+                                      title={fCrear.propuesta.fuente ? `Crear el registro ${regH.toLowerCase()} con las metas de sus actas; las actas pasarán a él solas` : `Crear el registro ${regH.toLowerCase()} (metas en 0 para digitarlas)`}>
+                                      + Crear {regH === 'CONTRIBUTIVO' ? 'Contributivo' : 'Subsidiado'}
                                     </button>
                                   )}
                                 </div>
-                                <div className="space-y-0.5 pl-1">{lista.map(a => filaActa(a, regH))}</div>
+                                {lista.length > 0
+                                  ? <div className="space-y-0.5 pl-1">{lista.map(a => filaActa(a, regH))}</div>
+                                  : <p className="text-[10px] text-slate-400 italic pl-1">Sin actas de este régimen</p>}
                               </div>
                             );
                           })}
@@ -4796,6 +5077,18 @@ function App() {
                     <Building2 className="h-5 w-5 text-indigo-500" /> Prestadores de Servicio
                   </h2>
                   <div className="flex gap-2 flex-wrap">
+                    <button
+                      onClick={() => setShowRegimenes(true)}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all border ${revisionRegimenes.faltantes.length > 0
+                        ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-500/40 hover:bg-amber-100'
+                        : 'glass-panel text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                      title="Revisar que cada contrato tenga su registro Subsidiado y su registro Contributivo"
+                    >
+                      <ShieldCheck className="h-4 w-4" /> Validar regímenes
+                      {revisionRegimenes.faltantes.length > 0 && (
+                        <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500 text-white">{revisionRegimenes.faltantes.length}</span>
+                      )}
+                    </button>
                     <label className="flex items-center gap-2 px-3 py-2 glass-panel text-slate-600 dark:text-slate-300 rounded-lg text-sm font-medium cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-all border border-slate-200 dark:border-slate-700">
                       <input type="file" accept=".json" className="hidden" onChange={handleImportConfig} />
                       <Upload className="h-4 w-4" /> Importar JSON
@@ -4819,6 +5112,17 @@ function App() {
                     </button>
                   </div>
                 </div>
+
+                {revisionRegimenes.faltantes.length > 0 && (
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 px-4 py-2.5">
+                    <p className="text-sm text-amber-800 dark:text-amber-300">
+                      <strong>{revisionRegimenes.faltantes.length}</strong> contrato{revisionRegimenes.faltantes.length !== 1 ? 's' : ''} sin sus dos regímenes
+                      ({revisionRegimenes.faltantes.filter(f => f.regimen === 'SUBSIDIADO').length} sin Subsidiado, {revisionRegimenes.faltantes.filter(f => f.regimen === 'CONTRIBUTIVO').length} sin Contributivo).
+                      Cada régimen es un registro aparte con sus propias metas.
+                    </p>
+                    <button onClick={() => setShowRegimenes(true)} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white">Revisar y crear</button>
+                  </div>
+                )}
 
                 {/* Search bar */}
                 <div className="relative">
@@ -4872,28 +5176,30 @@ function App() {
                           if (next.has(nit)) next.delete(nit); else next.add(nit);
                           return next;
                         });
-                        // All actas for this prestador, deduped
-                        const allActas = [...new Map<string, Acta>(
-                          grupo.flatMap(p => actas.filter(a => a.prestadorId === p.id || (a.nit && a.nit === p.nit && a.contrato === p.contrato)))
-                          .map(a => [a.id, a] as [string, Acta])
-                        ).values()];
+                        // Actas del grupo: cada una en el registro de SU contrato y régimen
+                        const { delGrupo: allActas, porDestino: actasDeRegistro, huerfanas: huerfanasM } = repartirActasGrupo(grupo, actas);
                         // Cada acta va al panel de SU régimen (no al del registro al que quedó ligada)
                         const regDeActa = (a: Acta) => {
                           const p = grupo.find(pp => pp.id === a.prestadorId || (a.nit === pp.nit && a.contrato === pp.contrato));
-                          return (a.regimen || p?.regimen || 'SUBSIDIADO').toUpperCase();
+                          return regimenDe(a.regimen ? a : p);
                         };
                         const subActas = allActas.filter(a => regDeActa(a) !== 'CONTRIBUTIVO');
                         const contActas = allActas.filter(a => regDeActa(a) === 'CONTRIBUTIVO');
                         const totalActas = allActas.length;
+                        // Contratos del grupo a los que les falta un régimen + actas sin registro de su régimen
+                        const grupoIdsM = new Set(grupo.map(p => p.id));
+                        const faltaM = revisionRegimenes.faltantes.filter(f => f.base && grupoIdsM.has(f.base.id));
+                        const actasDeFalta = (f: FaltanteRegimen) => huerfanasM.find(h => revisionRegimenes.claveDe(f.nit, h.contrato, h.regimen) === f.clave)?.actas || [];
+                        const huerfanasSueltas = huerfanasM.filter(h => !faltaM.some(f => revisionRegimenes.claveDe(f.nit, h.contrato, h.regimen) === f.clave));
 
-                        const ActaMiniCard = ({ acta }: { acta: Acta }) => {
+                        const miniCard = (acta: Acta) => {
                           const totalProg = acta.servicios.reduce((s, x) => s + x.programado, 0);
                           const totalEjec = acta.servicios.reduce((s, x) => s + Math.min(x.ejecutado, x.programado), 0);
                           const cumpl = totalProg > 0 ? Math.min(Math.round((totalEjec / totalProg) * 100), 100) : 0;
                           const hist = esActaHistorica(acta);
                           const badgeColor = hist ? 'bg-slate-50 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700' : cumpl >= 100 ? 'bg-green-100 dark:bg-green-500/15 text-green-700 dark:text-green-400 border-green-200 dark:border-green-500/20' : cumpl >= 80 ? 'bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-500/20' : 'bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 border-red-200 dark:border-red-500/20';
                           return (
-                            <div className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2 ${badgeColor} cursor-pointer hover:opacity-80 transition-opacity`} onClick={() => handleEditActa(acta)}>
+                            <div key={acta.id} className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2 ${badgeColor} cursor-pointer hover:opacity-80 transition-opacity`} onClick={() => handleEditActa(acta)}>
                               <div className="min-w-0">
                                 <p className="text-[11px] font-mono font-bold truncate">{acta.numero}</p>
                                 <p className="text-[10px] opacity-70 truncate">{acta.periodoEvaluado}</p>
@@ -4901,6 +5207,52 @@ function App() {
                               {hist
                                 ? <span className="text-[10px] italic shrink-0" title="Registrado desde la hoja de seguimiento: evaluado fuera de la app">Histórico</span>
                                 : <span className="text-sm font-black shrink-0">{cumpl}%</span>}
+                            </div>
+                          );
+                        };
+                        const chipActaContrato = (acta: Acta) => {
+                          const totalProg = acta.servicios.reduce((s, x) => s + x.programado, 0);
+                          const totalEjec = acta.servicios.reduce((s, x) => s + Math.min(x.ejecutado, x.programado), 0);
+                          const cumpl = totalProg > 0 ? Math.min(Math.round((totalEjec / totalProg) * 100), 100) : 0;
+                          const badgeColor = cumpl >= 100 ? 'bg-green-100 dark:bg-green-500/15 text-green-700 dark:text-green-400' : cumpl >= 80 ? 'bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400' : 'bg-red-100 dark:bg-red-500/15 text-red-600 dark:text-red-400';
+                          return (
+                            <div key={acta.id} className="flex items-center gap-1.5 bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1">
+                              <span className="text-[11px] font-mono font-semibold text-indigo-600 dark:text-indigo-400">{acta.numero}</span>
+                              <span className="text-[10px] text-slate-400 hidden sm:inline">{acta.periodoEvaluado}</span>
+                              {esActaHistorica(acta)
+                                ? <span className="text-[10px] italic text-slate-500" title="Registrado desde la hoja de seguimiento: evaluado fuera de la app">Histórico</span>
+                                : <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${badgeColor}`}>{cumpl}%</span>}
+                              <button onClick={() => handleEditActa(acta)} className="p-0.5 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors text-slate-400" title="Ver/Editar"><Pencil className="h-3 w-3" /></button>
+                              <button onClick={() => handleDeleteActa(acta.id)} className="p-0.5 hover:text-red-500 transition-colors text-slate-400" title="Eliminar"><Trash2 className="h-3 w-3" /></button>
+                            </div>
+                          );
+                        };
+                        // Fila punteada: el régimen que le falta a un contrato, con sus actas y el botón para crearlo
+                        const filaFaltaRegimen = (f: FaltanteRegimen, lista: Acta[]) => {
+                          const esC = f.regimen === 'CONTRIBUTIVO';
+                          const problema = problemaFaltante(f);
+                          return (
+                            <div key={`falta-${f.clave}`} className="px-5 py-3 bg-amber-50/60 dark:bg-amber-500/5">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="flex flex-wrap items-center gap-2 min-w-0">
+                                  <span className={`font-mono text-sm font-semibold px-2 py-0.5 rounded-lg border border-dashed ${esC ? 'border-orange-300 dark:border-orange-500/40' : 'border-emerald-300 dark:border-emerald-500/40'} text-slate-600 dark:text-slate-300`}>📋 {f.contrato || 'sin contrato'}</span>
+                                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border border-dashed ${esC ? 'border-orange-300 text-orange-600 dark:text-orange-400' : 'border-emerald-300 text-emerald-700 dark:text-emerald-400'}`}>{f.regimen}</span>
+                                  <span className="text-[11px] font-semibold text-amber-700 dark:text-amber-400">{f.base ? '⚠ falta este régimen' : '⚠ sin registro en la app'}</span>
+                                  <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                                    {problema ? problema : f.propuesta.fuente ? `metas desde ${f.propuesta.fuente}` : 'sin actas: metas en 0 para digitar'}
+                                  </span>
+                                </div>
+                                {isAdmin && !problema && (
+                                  <button onClick={() => abrirCrearRegimen(f)}
+                                    className="text-[11px] flex items-center gap-1 px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-medium transition-colors whitespace-nowrap shrink-0"
+                                    title="Abre el formulario con los datos del contrato y este régimen; revise las metas y guarde">
+                                    <Plus className="h-3 w-3" /> Crear {esC ? 'Contributivo' : 'Subsidiado'}
+                                  </button>
+                                )}
+                              </div>
+                              {lista.length > 0 && (
+                                <div className="mt-2 flex flex-wrap gap-1.5">{lista.map(acta => chipActaContrato(acta))}</div>
+                              )}
                             </div>
                           );
                         };
@@ -4930,6 +5282,12 @@ function App() {
                                 {contActas.length > 0 && (
                                   <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-orange-100 dark:bg-orange-500/20 text-orange-600 dark:text-orange-300">
                                     C: {contActas.length}
+                                  </span>
+                                )}
+                                {faltaM.length > 0 && (
+                                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300"
+                                    title={faltaM.map(f => `${f.contrato}: falta ${f.regimen.toLowerCase()}`).join('\n')}>
+                                    ⚠ falta {[...new Set(faltaM.map(f => f.regimen === 'CONTRIBUTIVO' ? 'C' : 'S'))].join('/')}
                                   </span>
                                 )}
                                 <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full ${totalActas > 0 ? 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-400'}`}>
@@ -4962,7 +5320,7 @@ function App() {
                                       </div>
                                       {subActas.length > 0 ? (
                                         <div className="space-y-1.5">
-                                          {subActas.map(a => <ActaMiniCard key={a.id} acta={a} />)}
+                                          {subActas.map(a => miniCard(a))}
                                         </div>
                                       ) : (
                                         <p className="text-[11px] text-slate-400 italic">Sin actas</p>
@@ -4976,7 +5334,7 @@ function App() {
                                       </div>
                                       {contActas.length > 0 ? (
                                         <div className="space-y-1.5">
-                                          {contActas.map(a => <ActaMiniCard key={a.id} acta={a} />)}
+                                          {contActas.map(a => miniCard(a))}
                                         </div>
                                       ) : (
                                         <p className="text-[11px] text-slate-400 italic">Sin actas</p>
@@ -4985,59 +5343,55 @@ function App() {
                                   </div>
                                 )}
 
-                                {/* Contracts table — funciones intactas */}
+                                {/* Contratos del grupo: cada registro con las actas de SU régimen; debajo, el régimen que le falte */}
                                 <div className="divide-y divide-slate-100 dark:divide-slate-700/50">
                                   {grupo.map(p => {
-                                    const pActas = [...new Map<string, Acta>(actas.filter(a => a.prestadorId === p.id || (a.nit && a.nit === p.nit && a.contrato === p.contrato)).map(a => [a.id, a] as [string, Acta])).values()];
+                                    const pActas = actasDeRegistro[p.id] || [];
+                                    const faltaDeP = faltaM.filter(f => f.base?.id === p.id);
+                                    const sinMetas = metasEnCero(p);
                                     return (
-                                      <div key={p.id} className="px-5 py-3 hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors">
+                                      <React.Fragment key={p.id}>
+                                      <div className="px-5 py-3 hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors">
                                         <div className="flex items-start justify-between gap-3">
                                           <div className="flex flex-wrap items-center gap-2 min-w-0">
-                                            {p.contrato && (
-                                              <span className="font-mono text-sm font-semibold text-slate-700 dark:text-slate-200">📋 {p.contrato}</span>
-                                            )}
-                                            <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${p.regimen === 'CONTRIBUTIVO' ? 'bg-orange-100 dark:bg-orange-500/15 text-orange-600 dark:text-orange-400' : 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'}`}>
+                                            {p.contrato
+                                              ? <span className="font-mono text-sm font-semibold text-slate-700 dark:text-slate-200">📋 {p.contrato}</span>
+                                              : <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400 border border-red-200 dark:border-red-500/30">sin número de contrato</span>}
+                                            <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${regimenDe(p) === 'CONTRIBUTIVO' ? 'bg-orange-100 dark:bg-orange-500/15 text-orange-600 dark:text-orange-400' : 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'}`}>
                                               {p.regimen || 'SUBSIDIADO'}
                                             </span>
-                                            <span className="text-[11px] text-slate-400 dark:text-slate-500">{p.metas.filter(m => m.monthlyGoal > 0).length} servicios</span>
+                                            {sinMetas
+                                              ? <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300" title="Todas las metas están en 0: edite el registro y digítelas antes de evaluar">⚠ sin metas</span>
+                                              : <span className="text-[11px] text-slate-400 dark:text-slate-500">{p.metas.filter(m => m.monthlyGoal > 0).length} servicios</span>}
                                             {p.vigencia && <span className="text-[11px] text-slate-400">vigencia: {p.vigencia}</span>}
                                           </div>
                                           <div className="flex gap-1 shrink-0">
                                             <button onClick={() => handleLoadPrestadorMetas(p)} className="text-[11px] px-2.5 py-1 bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 rounded-lg font-medium transition-colors border border-indigo-200 dark:border-indigo-500/20">Cargar Metas</button>
                                             <button onClick={() => handleGenerarActa(p)} className="text-[11px] flex items-center gap-1 px-2.5 py-1 bg-emerald-50 dark:bg-emerald-500/10 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 rounded-lg font-medium transition-colors border border-emerald-200 dark:border-emerald-500/20"><ClipboardList className="h-3 w-3" /> Acta</button>
                                             {isAdmin && (<>
-                                              <button onClick={() => { setEditPrest(p); const savedMetasMap = new Map((p.metas||[]).map((m: ServiceTypeMeta) => [m.type, m])); const mergedMetas = metas.map(m => savedMetasMap.get(m.type) ?? { ...m, monthlyGoal: 0 }); setPrestForm({ nombre: p.nombre, nit: p.nit, departamento: p.departamento, municipio: p.municipio, contrato: p.contrato, vigencia: p.vigencia || '', regimen: p.regimen || 'SUBSIDIADO', repLegalIPS: p.repLegalIPS || '', metas: mergedMetas, tipoContrato: p.tipoContrato }); setShowPrestForm(true); }} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors" title="Editar contrato"><Pencil className="h-3.5 w-3.5" /></button>
+                                              <button onClick={() => abrirEditarPrestador(p)} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors" title="Editar contrato"><Pencil className="h-3.5 w-3.5" /></button>
                                               <button onClick={() => handleDeletePrestador(p.id)} className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 text-slate-500 hover:text-red-500 transition-colors" title="Eliminar contrato"><Trash2 className="h-3.5 w-3.5" /></button>
                                             </>)}
                                           </div>
                                         </div>
                                         {pActas.length > 0 && (
                                           <div className="mt-2 flex flex-wrap gap-1.5">
-                                            {pActas.map(acta => {
-                                              const totalProg = acta.servicios.reduce((s, x) => s + x.programado, 0);
-                                              const totalEjec = acta.servicios.reduce((s, x) => s + Math.min(x.ejecutado, x.programado), 0);
-                                              const cumpl = totalProg > 0 ? Math.min(Math.round((totalEjec / totalProg) * 100), 100) : 0;
-                                              const badgeColor = cumpl >= 100 ? 'bg-green-100 dark:bg-green-500/15 text-green-700 dark:text-green-400' : cumpl >= 80 ? 'bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400' : 'bg-red-100 dark:bg-red-500/15 text-red-600 dark:text-red-400';
-                                              return (
-                                                <div key={acta.id} className="flex items-center gap-1.5 bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1">
-                                                  <span className="text-[11px] font-mono font-semibold text-indigo-600 dark:text-indigo-400">{acta.numero}</span>
-                                                  <span className="text-[10px] text-slate-400 hidden sm:inline">{acta.periodoEvaluado}</span>
-                                                  {(acta.regimen || p.regimen || 'SUBSIDIADO').toUpperCase() !== (p.regimen || 'SUBSIDIADO').toUpperCase() && (
-                                                    <span className={`text-[9px] font-bold px-1 py-0.5 rounded ${(acta.regimen || '').toUpperCase() === 'CONTRIBUTIVO' ? 'bg-orange-100 text-orange-600 dark:bg-orange-500/20 dark:text-orange-400' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'}`}
-                                                      title={`Acta de régimen ${(acta.regimen || '').toLowerCase()}`}>{(acta.regimen || '').toUpperCase() === 'CONTRIBUTIVO' ? 'C' : 'S'}</span>
-                                                  )}
-                                                  {esActaHistorica(acta)
-                                                    ? <span className="text-[10px] italic text-slate-500" title="Registrado desde la hoja de seguimiento: evaluado fuera de la app">Histórico</span>
-                                                    : <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${badgeColor}`}>{cumpl}%</span>}
-                                                  <button onClick={() => handleEditActa(acta)} className="p-0.5 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors text-slate-400" title="Ver/Editar"><Pencil className="h-3 w-3" /></button>
-                                                  <button onClick={() => handleDeleteActa(acta.id)} className="p-0.5 hover:text-red-500 transition-colors text-slate-400" title="Eliminar"><Trash2 className="h-3 w-3" /></button>
-                                                </div>
-                                              );
-                                            })}
+                                            {pActas.map(acta => chipActaContrato(acta))}
                                           </div>
                                         )}
                                       </div>
+                                      {faltaDeP.map(f => filaFaltaRegimen(f, actasDeFalta(f)))}
+                                      </React.Fragment>
                                     );
+                                  })}
+                                  {huerfanasSueltas.map(h => {
+                                    const f = revisionRegimenes.porClave[revisionRegimenes.claveDe(grupo[0].nit, h.contrato, h.regimen)] || {
+                                      clave: revisionRegimenes.claveDe(grupo[0].nit, h.contrato, h.regimen), nit: grupo[0].nit, nombre: grupo[0].nombre,
+                                      contrato: h.contrato, regimen: h.regimen, base: null, actas: h.actas,
+                                      plantilla: { nombre: grupo[0].nombre, nit: grupo[0].nit, departamento: grupo[0].departamento, municipio: grupo[0].municipio, vigencia: grupo[0].vigencia || '', repLegalIPS: grupo[0].repLegalIPS || '' },
+                                      propuesta: metasDesdeActas(h.actas, undefined, undefined),
+                                    };
+                                    return filaFaltaRegimen(f, h.actas);
                                   })}
                                 </div>
                               </div>
@@ -6484,9 +6838,9 @@ echo "* * * * * root /usr/local/bin/metrics.sh; sleep 30; /usr/local/bin/metrics
       {ofrecerComplementario && !showPrestForm && (() => {
         const regimenActual = ofrecerComplementario.regimen;
         const regimenComp = regimenActual === 'SUBSIDIADO' ? 'CONTRIBUTIVO' : 'SUBSIDIADO';
-        const yaExiste = prestadores.some(p =>
-          p.nit === ofrecerComplementario.nit && p.regimen === regimenComp
-        );
+        // Por contrato: un NIT con varios contratos necesita los dos regímenes en cada uno
+        const yaExiste = prestadores.some(p => regimenDe(p) === regimenDe({ regimen: regimenComp }) &&
+          revisionRegimenes.claveDe(p.nit, p.contrato, regimenDe(p)) === revisionRegimenes.claveDe(ofrecerComplementario.nit, ofrecerComplementario.contrato, regimenDe(p)));
         if (yaExiste) { setOfrecerComplementario(null); return null; }
         return (
           <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
@@ -6510,15 +6864,208 @@ echo "* * * * * root /usr/local/bin/metrics.sh; sleep 30; /usr/local/bin/metrics
                 >No, gracias</button>
                 <button
                   onClick={() => {
-                    // Las metas del otro régimen son distintas: mismos servicios, valores en cero
+                    // Las metas del otro régimen son distintas: se recuperan de sus actas o quedan en cero
+                    const fComp = revisionRegimenes.porClave[revisionRegimenes.claveDe(ofrecerComplementario.nit, ofrecerComplementario.contrato, regimenDe({ regimen: regimenComp }))];
+                    setOfrecerComplementario(null);
+                    if (fComp) { abrirCrearRegimen(fComp); return; }
                     setPrestForm({ ...ofrecerComplementario, regimen: regimenComp, contrato: limpiarContrato(ofrecerComplementario.contrato),
                       metas: (ofrecerComplementario.metas || []).map(m => ({ ...m, monthlyGoal: 0, renuencias: 0 })) });
                     setEditPrest(null);
-                    setOfrecerComplementario(null);
                     setShowPrestForm(true);
                   }}
                   className="px-4 py-2 text-sm font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-colors"
                 >Sí, crear {regimenComp}</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* --- Cada contrato con sus dos regímenes (v2.33) --- */}
+      {showRegimenes && (() => {
+        const rv = revisionRegimenes;
+        const q = regFiltro.trim().toLowerCase();
+        const coincide = (txt: string) => !q || txt.toLowerCase().includes(q);
+        const filas = rv.faltantes.filter(f => coincide(`${f.nombre} ${f.nit} ${f.contrato}`));
+        const validas = filas.filter(f => !problemaFaltante(f));
+        const sel = regSel ?? new Set(validas.map(f => f.clave));
+        const marcadas = validas.filter(f => sel.has(f.clave));
+        const toggle = (k: string) => { const n = new Set(sel); if (n.has(k)) n.delete(k); else n.add(k); setRegSel(n); };
+        const todas = validas.length > 0 && marcadas.length === validas.length;
+        const radDe = (f: FaltanteRegimen): { texto: string; n: number } | null => {
+          if (!radData) return null;
+          const cons: any[] = radData.contratos || [];
+          const rc = cons.find(c => normContrato(c.contrato) === normContrato(f.contrato))
+            || cons.find(c => normNit(c.nit) === normNit(f.nit) && firmaContrato(c.contrato) === firmaContrato(f.contrato));
+          if (!rc) return { texto: 'no está en radicación', n: 0 };
+          const meses = radIndiceMeses[`${normContrato(rc.contrato)}|${f.regimen === 'CONTRIBUTIVO' ? 'RC' : 'RS'}`];
+          const n = meses ? MESES_CICLO.filter(({ anio, mes }) => meses.has(mesClave(anio, mes))).length : 0;
+          return { texto: n ? `${n} mes${n === 1 ? '' : 'es'} radicado${n === 1 ? '' : 's'}` : 'sin radicaciones', n };
+        };
+        const escritos = rv.escritosDistinto.filter(e => coincide(`${e.nombre} ${e.nit} ${e.registros.map(p => p.contrato).join(' ')}`));
+        const dups = rv.duplicados.filter(d => coincide(`${d.nombre} ${d.nit} ${d.registros.map(p => p.contrato).join(' ')}`));
+        const sinC = rv.sinContrato.filter(p => coincide(`${p.nombre} ${p.nit}`));
+        const soloA = rv.soloActas.filter(f => coincide(`${f.nombre} ${f.nit} ${f.contrato}`));
+        const actasDeReg = (p: Prestador) => actas.filter(a => a.prestadorId === p.id).length;
+        const regChip = (r: Regimen, punteado = false) => (
+          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${punteado ? 'border border-dashed ' : ''}${r === 'CONTRIBUTIVO'
+            ? 'bg-orange-100 text-orange-600 dark:bg-orange-500/20 dark:text-orange-400 border-orange-300'
+            : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400 border-emerald-300'}`}>{r === 'CONTRIBUTIVO' ? 'C' : 'S'}</span>
+        );
+        return (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setShowRegimenes(false)}>
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-6xl max-h-[88vh] flex flex-col border border-slate-200 dark:border-slate-800" onClick={e => e.stopPropagation()}>
+              <div className="flex justify-between items-start gap-4 p-5 border-b border-slate-200 dark:border-slate-800">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-800 dark:text-white">Cada contrato con sus dos regímenes</h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    Contratos registrados: <strong>{rv.totalContratos}</strong> · con Subsidiado y Contributivo: <strong className="text-emerald-600 dark:text-emerald-400">{rv.completos}</strong> ·
+                    les falta uno: <strong className="text-amber-600 dark:text-amber-400">{rv.faltantes.length}</strong> ({rv.faltantes.filter(f => f.regimen === 'SUBSIDIADO').length} sin Subsidiado, {rv.faltantes.filter(f => f.regimen === 'CONTRIBUTIVO').length} sin Contributivo)
+                  </p>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Cada régimen es un registro aparte con sus propias metas. Las metas del régimen que falta se recuperan de <strong>sus</strong> actas
+                    (programado ÷ meses del período); si no tiene actas quedan en 0 para digitarlas. Nunca se copian del otro régimen.
+                  </p>
+                </div>
+                <button onClick={() => setShowRegimenes(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"><X className="h-5 w-5 text-slate-500" /></button>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 px-5 py-2 border-b border-slate-100 dark:border-slate-800">
+                <input value={regFiltro} onChange={e => setRegFiltro(e.target.value)} placeholder="Filtrar por prestador, NIT o contrato…"
+                  className="flex-1 min-w-[220px] text-xs px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 outline-none" />
+                {isAdmin && validas.length > 0 && (
+                  <button onClick={() => crearRegimenesFaltantes(marcadas)} disabled={marcadas.length === 0}
+                    className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white disabled:opacity-40">
+                    {marcadas.length === 1 ? 'Crear el registro marcado' : `Crear los ${marcadas.length} registros marcados`}
+                  </button>
+                )}
+              </div>
+              <div className="flex-1 overflow-y-auto custom-scroll p-4 space-y-4">
+                {escritos.length > 0 && (
+                  <div className="rounded-xl border border-sky-200 dark:border-sky-500/30 bg-sky-50 dark:bg-sky-500/10 p-3">
+                    <p className="text-xs font-semibold text-sky-800 dark:text-sky-300 mb-1.5">Mismo contrato escrito distinto entre registros (déjelo idéntico para que cada régimen tome sus metas):</p>
+                    <div className="space-y-1.5">
+                      {escritos.map(e => {
+                        const variantes: string[] = Array.from(new Set<string>(e.registros.map(p => limpiarContrato(p.contrato))));
+                        const enRad = variantes.find(v => (radData?.contratos || []).some((c: any) => normContrato(c.contrato) === normContrato(v)));
+                        return (
+                          <div key={e.registros.map(p => p.id).join('-')} className="text-[11px] text-slate-700 dark:text-slate-200 flex flex-wrap items-center gap-1.5">
+                            <span className="font-medium">{e.nombre}</span>
+                            {e.registros.map(p => <span key={p.id} className="font-mono px-1.5 py-0.5 rounded bg-white dark:bg-slate-900 border border-sky-200 dark:border-sky-500/30">{p.contrato} {regChip(regimenDe(p))}</span>)}
+                            {isAdmin && variantes.map(v => (
+                              <button key={v} onClick={() => unificarContrato(e.registros, v)}
+                                className="px-1.5 py-0.5 rounded bg-white dark:bg-slate-800 border border-sky-400 font-mono font-semibold text-sky-700 dark:text-sky-300 hover:bg-sky-100">
+                                Usar {v}{v === enRad ? ' ✓ radicación' : ''}
+                              </button>
+                            ))}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                {dups.length > 0 && (
+                  <div className="rounded-xl border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 p-3">
+                    <p className="text-xs font-semibold text-red-800 dark:text-red-300 mb-1.5">Registros repetidos: el mismo contrato y régimen está dos veces. Deje uno (sus actas pasan solas al que queda).</p>
+                    <div className="space-y-1.5">
+                      {dups.map(d => (
+                        <div key={d.registros.map(p => p.id).join('-')} className="text-[11px] text-slate-700 dark:text-slate-200 flex flex-wrap items-center gap-1.5">
+                          <span className="font-medium">{d.nombre}</span>{regChip(d.regimen)}
+                          {d.registros.map(p => (
+                            <span key={p.id} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white dark:bg-slate-900 border border-red-200 dark:border-red-500/30">
+                              <span className="font-mono">{p.contrato}</span>
+                              <span className="text-slate-400">· creado {fechaDeId(p.id)} · {(p.metas || []).filter(m => m.monthlyGoal > 0).length} metas · {actasDeReg(p)} actas</span>
+                              {isAdmin && <button onClick={() => handleDeletePrestador(p.id)} className="ml-0.5 text-red-500 hover:text-red-700" title="Eliminar este registro"><Trash2 className="h-3 w-3" /></button>}
+                            </span>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <table className="w-full text-xs">
+                  <thead className="text-slate-500 dark:text-slate-400 text-left sticky top-0 bg-white dark:bg-slate-900 z-10">
+                    <tr>
+                      <th className="py-1.5 pr-2 w-6">
+                        {isAdmin && validas.length > 0 && (
+                          <input type="checkbox" checked={todas} title="Marcar o desmarcar todos"
+                            ref={el => { if (el) el.indeterminate = marcadas.length > 0 && !todas; }}
+                            onChange={() => setRegSel(todas ? new Set() : new Set(validas.map(f => f.clave)))} />
+                        )}
+                      </th>
+                      <th className="py-1.5 pr-2">Prestador / contrato</th>
+                      <th className="py-1.5 pr-2">Tiene</th>
+                      <th className="py-1.5 pr-2">Falta</th>
+                      <th className="py-1.5 pr-2">Metas para el régimen que falta</th>
+                      <th className="py-1.5 pr-2">Radicación de ese régimen</th>
+                      <th className="py-1.5"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {filas.map(f => {
+                      const problema = problemaFaltante(f);
+                      const rad = radDe(f);
+                      return (
+                        <tr key={f.clave} className="align-top text-slate-600 dark:text-slate-300">
+                          <td className="py-1.5 pr-2">
+                            {isAdmin && !problema && <input type="checkbox" checked={sel.has(f.clave)} onChange={() => toggle(f.clave)} />}
+                          </td>
+                          <td className="py-1.5 pr-2">
+                            <div className="font-medium text-slate-700 dark:text-slate-200">{f.nombre}</div>
+                            <div className="font-mono text-[10px] text-slate-400">{f.contrato || 'sin contrato'} · NIT {f.nit}{f.base?.tipoContrato ? ` · ${f.base.tipoContrato}` : ''}</div>
+                          </td>
+                          <td className="py-1.5 pr-2">{regChip(f.regimen === 'CONTRIBUTIVO' ? 'SUBSIDIADO' : 'CONTRIBUTIVO')}</td>
+                          <td className="py-1.5 pr-2">{regChip(f.regimen, true)}</td>
+                          <td className="py-1.5 pr-2">
+                            {problema
+                              ? <span className="text-red-600 dark:text-red-400">{problema}</span>
+                              : f.propuesta.fuente
+                                ? <span className="text-emerald-700 dark:text-emerald-400">desde {f.propuesta.fuente}{f.propuesta.aviso && <span className="block text-amber-700 dark:text-amber-400">⚠ {f.propuesta.aviso}</span>}</span>
+                                : <span className="text-amber-700 dark:text-amber-400">{f.propuesta.aviso || 'Sin actas de este régimen: en 0 para digitar'}</span>}
+                          </td>
+                          <td className="py-1.5 pr-2">
+                            {rad ? <span className={rad.n ? 'text-slate-700 dark:text-slate-200' : 'text-slate-400'}>{rad.texto}</span> : <span className="text-slate-400">—</span>}
+                          </td>
+                          <td className="py-1.5 text-right whitespace-nowrap">
+                            {isAdmin && (problema
+                              ? (f.base && <button onClick={() => abrirEditarPrestador(f.base!)} className="px-2 py-0.5 rounded border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800">Editar registro</button>)
+                              : <button onClick={() => abrirCrearRegimen(f)} className="px-2 py-0.5 rounded bg-amber-500 hover:bg-amber-600 text-white font-medium">Crear {f.regimen === 'CONTRIBUTIVO' ? 'Contributivo' : 'Subsidiado'}</button>)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                {filas.length === 0 && (
+                  <p className="text-sm text-emerald-600 dark:text-emerald-400 text-center py-6">
+                    {q ? 'Sin resultados para el filtro.' : '✓ Todos los contratos tienen sus dos regímenes.'}
+                  </p>
+                )}
+                {soloA.length > 0 && (
+                  <div className="rounded-xl border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 p-3">
+                    <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 mb-1.5">Contratos con actas pero sin ningún registro en la app:</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {soloA.map(f => (
+                        <span key={f.clave} className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-500/30 text-slate-700 dark:text-slate-200">
+                          <span className="font-mono">{f.contrato}</span> {regChip(f.regimen)} · {f.nombre} · {f.actas.length} acta{f.actas.length !== 1 ? 's' : ''}
+                          {isAdmin && <button onClick={() => abrirCrearRegimen(f)} className="ml-1 px-1.5 rounded bg-amber-500 text-white">Crear</button>}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {sinC.length > 0 && (
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Registros sin número de contrato (no se pueden emparejar; edítelos):</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {sinC.map(p => (
+                        <span key={p.id} className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                          {p.nombre} · NIT {p.nit} {regChip(regimenDe(p))}
+                          {isAdmin && <button onClick={() => abrirEditarPrestador(p)} className="ml-1 text-indigo-600 dark:text-indigo-400" title="Editar"><Pencil className="h-3 w-3" /></button>}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -6547,6 +7094,12 @@ echo "* * * * * root /usr/local/bin/metrics.sh; sleep 30; /usr/local/bin/metrics
                     Registros en la app: <strong>{validacion.filas.length}</strong> · con observaciones: <strong>{conProblemas}</strong> ·
                     contratos radicados sin registro en la app: <strong>{validacion.faltantes.length}</strong> · datos de radicación: {radLastFetch || '—'}
                   </p>
+                  {revisionRegimenes.faltantes.length > 0 && (
+                    <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+                      {revisionRegimenes.faltantes.length} contrato{revisionRegimenes.faltantes.length !== 1 ? 's' : ''} de la app sin sus dos regímenes ·{' '}
+                      <button onClick={() => { setShowValidacion(false); setShowRegimenes(true); }} className="underline font-semibold">Revisar y crear</button>
+                    </p>
+                  )}
                   <p className="text-[11px] text-slate-400 mt-1">
                     Meses = mes de <strong>atención</strong> (la factura de cada mes trae las atenciones del mes anterior).
                     ✓ radicado · 0 radicado en cero · · sin radicar. Trimestre: verde = tiene acta, azul = listo para evaluar, gris = incompleto.
@@ -6706,7 +7259,7 @@ echo "* * * * * root /usr/local/bin/metrics.sh; sleep 30; /usr/local/bin/metrics
 
       {/* --- Prestador Form Modal --- */}
       {showPrestForm && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
+        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col border border-slate-200 dark:border-slate-800">
             <div className="flex justify-between items-center p-6 border-b border-slate-200 dark:border-slate-800">
               <h2 className="text-xl font-bold flex items-center gap-2 text-slate-800 dark:text-white">
@@ -6718,6 +7271,13 @@ echo "* * * * * root /usr/local/bin/metrics.sh; sleep 30; /usr/local/bin/metrics
               </button>
             </div>
             <div className="flex-1 overflow-y-auto custom-scroll p-6 space-y-5">
+              {prestFormNota && !editPrest && (
+                <div className={`text-xs rounded-lg px-3 py-2 border ${prestFormNota.tipo === 'aviso'
+                  ? 'bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30 text-amber-800 dark:text-amber-300'
+                  : 'bg-sky-50 dark:bg-sky-500/10 border-sky-200 dark:border-sky-500/30 text-sky-800 dark:text-sky-300'}`}>
+                  <strong>Régimen que le faltaba al contrato.</strong> {prestFormNota.texto}
+                </div>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {([
                   { key: 'nombre',       label: 'Nombre del Prestador',       placeholder: 'Hospital San José...',       full: true },

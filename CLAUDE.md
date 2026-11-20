@@ -375,7 +375,8 @@ El entorno cloud **Default** no permite salir a `radicacion.vercel.app` ni a `ev
 ### Deduplicación de actas (`deduplicarActas`) — v2.15 → v2.27
 Función de módulo en App.tsx. Corre en carga inicial, sync y poll; si elimina algo, guarda en PocketBase al instante.
 1. **Por `id` exacto.**
-2. **Misma acta regenerada:** `prestadorId + numero + meses del período` (antes sin período: dos actas de trimestres distintos con el mismo número —p. ej. tras una renumeración— se borraban entre sí).
+2. **Misma acta regenerada:** `prestadorId + régimen + numero + meses del período` (antes sin período: dos actas de trimestres distintos con el mismo número —p. ej. tras una renumeración— se borraban entre sí).
+   - **v2.33 — el régimen es obligatorio aquí.** El número de acta es igual en ambos regímenes (`contrato-1` = 1T…) y, antes de v2.23 (chips de radicación con el mismo registro para RS y RC) o mientras faltó el registro de un régimen, el acta S y la C del mismo trimestre quedaban con el **mismo `prestadorId`**: este paso borraba la de menor %. Reproducido en navegador (Armando Pabón: el acta S de marzo desaparecía; San Rafael: la C de marzo). Las que se perdieron así pueden estar en "Ver limpieza" del navegador que tenga el respaldo (salen "sin equivalente" → **Recuperar**).
 3. **Mismo contrato + régimen + meses evaluados:** clave `normContrato(contrato) || prestadorId` + régimen + `mesesDePeriodo(periodoEvaluado)`. Entiende cualquier formato: "Marzo 2026" = "1T 2026"; "Abril 2026, Mayo 2026, Junio 2026" = "Abril, Mayo y Junio 2026" = "2T 2026".
    - Queda **la real antes que la histórica** (`esActaHistorica`: `_placeholder` o número `HIST-…`), y entre reales **la de mayor %**.
 - **Ya no renumera** (antes el "paso 4" cerraba huecos y cambiaba números ya impresos, en contra del sufijo fijo por trimestre `-1`=1T, `-2`=2T…).
@@ -394,8 +395,8 @@ Función de módulo en App.tsx. Corre en carga inicial, sync y poll; si elimina 
 - Causa del bloqueo en blanco (19/11/2026): las HIST no traen `fechaActa` ni `empresa`; el orden del Consolidado hacía `b.fechaActa.localeCompare(...)` y React dejaba toda la app en blanco. Reproducido en navegador con 80 actas.
 - `components/ErrorBoundary.tsx` envuelve Reportes: si algo falla al dibujar, muestra el error y "Reintentar" en esa sección en vez de dejar toda la app en blanco. El proyecto **no tiene `@types/react`**: en componentes de clase declarar `props`/`setState` (`declare props: Props`).
 
-### Validación al generar acta (`handleGenerarActa`) — v2.15
-Si ya existe un acta para el mismo `contrato + regimen + periodoEvaluado`, muestra alerta:
+### Validación al generar acta (`handleGenerarActa`) — v2.15 → v2.33
+Si ya existe un acta para el mismo `contrato + regimen + periodoEvaluado`, muestra alerta (v2.33: mismo contrato por `firmaContrato` —no otra acta del mismo NIT con otro contrato— y mismo período escrito igual **o** con los mismos meses, "Marzo 2026" = "1T 2026"; por NIT solo si el acta no tiene contrato). `handleSaveInlineActa` también exige el mismo régimen para proponer reemplazar un acta.
 > ⚠️ Ya se cuenta con una evaluación para: Contrato / Prestador / Período / Acta (N%)
 > ¿Desea reemplazar?
 
@@ -433,6 +434,28 @@ Clave secundaria: `clavePrestador(p)` = **NIT + contrato + régimen**, comparand
 Ver sección **Deduplicación de actas** arriba.
 
 ---
+
+## Cada contrato con sus dos regímenes (v2.33)
+Regla del usuario: **todo contrato debe tener un registro SUBSIDIADO y uno CONTRIBUTIVO**, cada uno con sus propias metas (nunca copiadas del otro régimen).
+
+### Funciones (módulo, App.tsx)
+- `firmaContrato(c)` = letras + números del contrato (`ASB|44035-2026-25`): `ASB-44035-2026-025` = `ASB 44035-2026-25`; prefijos distintos (ASB / ASE / EB / MDC) son contratos distintos.
+- `revisarRegimenes(prestadores, actas)` agrupa los registros por `normNit + firma` y devuelve `faltantes` (contrato con un solo régimen), `soloActas` (actas reales de un contrato sin ningún registro), `escritosDistinto`, `duplicados` (mismo contrato y régimen dos veces), `sinContrato`, `porClave` y `claveDe(nit, contrato, régimen)`.
+  - Una variante con un número de más al final se toma como el mismo contrato si el NIT tiene el número sin sufijo: `ASB-44378-2026-29-2` (número de acta digitado como contrato) = `ASB-44378-2026-29`; `44090-086-AS_4` = `44090-086-AS`. Salen en "escrito distinto" con **"Usar …"** (`unificarContrato`).
+- `metasDesdeActas(actasDelRegimen, tipoBase, metasOtro)`: acta real más reciente (último mes del período) → `monthlyGoal = round(programado ÷ meses del período)`. Avisa si no divide exacto o si salen **iguales a las del otro régimen** (acta generada con las metas equivocadas, bug anterior a v2.23). PAI: metas en 0 (el acta guarda el total de biológicos). Tipo de contrato: el del registro existente, o el que contenga todos los servicios del acta.
+- `repartirActasGrupo(grupo, actas)`: cada acta en el registro de **su** contrato y régimen (`porDestino`); las que no tienen registro de su régimen quedan en `huerfanas`. Lo usan el panel Prestadores del Dashboard y la pestaña Prestadores.
+
+### Interfaz
+- Pestaña **Mantenimiento → Prestadores**: botón **"Validar regímenes (N)"** y aviso ámbar "N contratos sin sus dos regímenes" → ventana **"Cada contrato con sus dos regímenes"**: escritos distinto (Usar …), registros repetidos (con fecha de creación, metas y actas, botón eliminar), tabla de faltantes con casilla, metas propuestas (de qué acta salen), radicación del régimen faltante (meses con datos, índice `radIndiceMeses`) y **"Crear {régimen}"**; **"Crear los N registros marcados"** crea todos de una vez (confirmación con cuántos llevan metas de actas y cuántos quedan en 0). Bloqueados hasta corregir: sin número de contrato o NIT mal digitado (`problemaFaltante`).
+- En cada cajón de NIT: insignia **"⚠ falta S/C"**, cada acta en su registro (antes el registro C mostraba también las actas S por NIT + contrato), fila punteada **"falta este régimen"** con sus actas y **"Crear Subsidiado/Contributivo"**, insignia **"⚠ sin metas"** cuando todas las metas están en 0. Las tarjetas de acta ya no son un componente definido dentro del render (`ActaMiniCard` → `miniCard()`; con eso `tsc` queda en 0 errores).
+- Panel Prestadores del Dashboard: mismas filas "falta este régimen" / "sin registro en la app" con **"+ Crear {régimen}"** y la insignia "falta S/C".
+- `abrirCrearRegimen(f)` precarga el formulario (mismo contrato normalizado, NIT, datos del registro existente o del acta, tipo, metas propuestas) y muestra la nota `prestFormNota` arriba del formulario. El formulario va en `z-[80]` (encima de las ventanas de validación).
+- La oferta "¿Agregar régimen …?" tras guardar ahora revisa **por contrato** (antes por NIT: un NIT con otro contrato en ese régimen la ocultaba) y usa las metas de las actas del régimen si las hay.
+- "Validar prestadores" (radicación) enlaza a esta ventana.
+
+### Datos reales (20/11/2026, solo lectura)
+146 registros (77 S, 69 C; sin bajas desde el 12/11 → ya no se borran registros), 421 actas (323 reales, 98 históricas). 117 contratos (NIT + contrato): **22 con los dos regímenes, 95 con uno** (40 sin Subsidiado, 55 sin Contributivo); 45 tienen actas del régimen faltante con metas recuperables; 42 tienen radicaciones con datos en el régimen faltante. Varios registros sin contrato, dos con el contrato escrito en el NIT y uno de prueba ("perpetuo"). **PocketBase no tiene respaldos** (`/api/backups` vacío): conviene activarlos en el panel de PocketBase.
+- ASB-44035-2026-25 (San Rafael de Albania): el Subsidiado se borró con el bug anterior a v2.30 y el usuario lo volvió a crear el 20/11 08:19; sus actas S (1T, 2T) quedaron en él. RS y RC tienen radicado jul–sep: el 3T está listo en ambos regímenes.
 
 ## Lista de Prestadores — Cajones colapsables (v2.11+)
 *Pestaña Prestadores (gestión completa)*
@@ -530,6 +553,7 @@ Objetivo: que el mismo contrato quede escrito **idéntico** en ambos regímenes 
 
 | Versión | Tag git | Descripción |
 |---|---|---|
+| **2.33** | `v2.33` | Cada contrato con sus dos regímenes: "Validar regímenes" lista los que tienen uno solo y crea el que falta (uno a uno o todos), con metas recuperadas de sus propias actas; unificar contratos escritos distinto y ver repetidos. Cada acta en el registro de su régimen. Fix: la limpieza de actas borraba el acta S o C del mismo trimestre cuando ambas estaban ligadas al mismo registro. |
 | **2.32** | `v2.32` | Reportes ya no se quedan en blanco: excluyen las actas históricas (sin servicios ni fecha), completan campos faltantes y quedan protegidos con un ErrorBoundary. |
 | **2.31** | `v2.31` | La fusión de prestadores compara NIT + contrato + régimen tal cual (sin normalizar) para no unir solos duplicados escritos distinto. Auditoría real de regímenes documentada. |
 | **2.30** | `v2.30` | Causa raíz: la fusión de prestadores usaba NIT + contrato sin régimen y borraba uno de los dos regímenes del mismo contrato; ahora incluye el régimen. Actas pasadas al contrato de su régimen (automático) y fila "sin registro en la app" con "+ Crear contrato". |
@@ -582,5 +606,6 @@ git tag v2.15 && git -c http.proxy="" -c https.proxy="" push \
 | "Nuevo Prestador" | Cabecera de la lista | ASISTENCIAL en 0 |
 | Reset tras guardar | `handleSavePrestador` (~línea 770) | ASISTENCIAL en 0 |
 | "+ Contrato" | Header del grupo NIT | ASISTENCIAL en 0 (corregido v2.4); contrato vacío con sugerencias "Usar …" (v2.26) |
-| "Sí, crear {régimen}" | Oferta tras guardar un prestador | Metas en 0 (v2.24), mismo N° de contrato precargado (v2.26) |
+| "Sí, crear {régimen}" | Oferta tras guardar un prestador | Metas de las actas de ese régimen o en 0 (v2.33), mismo N° de contrato precargado (v2.26) |
+| "Crear {régimen}" / "+ Crear …" | Ventana "Cada contrato con sus dos regímenes", filas "falta este régimen" (Prestadores y Dashboard) | `abrirCrearRegimen`: metas desde sus actas o en 0, nota arriba del formulario (v2.33) |
 | **Editar (lápiz)** | Fila de contrato | Carga datos existentes — correcto |
