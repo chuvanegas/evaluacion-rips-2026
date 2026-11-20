@@ -9,6 +9,7 @@ import {
   Calendar, ClipboardList, Search, ChevronUp, ChevronDown
 } from 'lucide-react';
 import { Acta, Prestador } from '../types';
+import { esActaHistorica } from '../utils/logic';
 
 interface Props { actas: Acta[]; prestadores: Prestador[]; }
 
@@ -93,7 +94,23 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-export default function ReportesTab({ actas, prestadores }: Props) {
+export default function ReportesTab({ actas: actasEntrada, prestadores }: Props) {
+  // Las actas históricas HIST-… marcan períodos evaluados fuera de la app (sin servicios ni fecha):
+  // no son evaluaciones, así que no entran a los reportes (contarían como 0%). Al resto se le
+  // completan los campos que falten para que un acta incompleta no deje la pantalla en blanco.
+  const historicas = useMemo(() => actasEntrada.filter(esActaHistorica).length, [actasEntrada]);
+  const actas: Acta[] = useMemo(() => actasEntrada.filter(a => !esActaHistorica(a)).map(a => {
+    const p = prestadores.find(x => x.id === a.prestadorId);
+    return {
+      ...a,
+      servicios: Array.isArray(a.servicios) ? a.servicios : [],
+      numero: a.numero || '',
+      empresa: a.empresa || (a as any).prestadorNombre || p?.nombre || '',
+      contrato: a.contrato || p?.contrato || '',
+      periodoEvaluado: a.periodoEvaluado || '',
+      fechaActa: a.fechaActa || a.createdAt || String((a as any).fechaCreacion || '').slice(0, 10),
+    };
+  }), [actasEntrada, prestadores]);
   type RT = 'consolidado' | 'ranking' | 'prestador' | 'periodo' | 'especialidades';
   const [tab, setTab] = useState<RT>('consolidado');
 
@@ -367,6 +384,11 @@ export default function ReportesTab({ actas, prestadores }: Props) {
             <div className="glass-panel rounded-xl px-4 py-2 text-center min-w-[90px]">
               <p className="text-xs text-slate-500 uppercase font-semibold">Total Actas</p>
               <p className="text-2xl font-bold text-slate-800 dark:text-white">{stats.total}</p>
+              {historicas > 0 && (
+                <p className="text-[10px] text-slate-400" title="Actas HIST-… de la hoja de seguimiento (evaluadas fuera de la app, sin servicios)">
+                  + {historicas} históricas no incluidas
+                </p>
+              )}
             </div>
             <div className="glass-panel rounded-xl px-4 py-2 text-center min-w-[90px]">
               <p className="text-xs text-slate-500 uppercase font-semibold">% Promedio</p>

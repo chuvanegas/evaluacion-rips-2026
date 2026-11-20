@@ -388,6 +388,12 @@ Función de módulo en App.tsx. Corre en carga inicial, sync y poll; si elimina 
 - El script se ejecutó **dos veces** (26/10/2026 20:41 y 20:47) con formatos de período distintos ("1T 2026" y "Marzo 2026"), y el contrato quedó ligado al registro Subsidiado aunque el acta fuera Contributivo → actas repetidas al 0% (ej. SUMINFARMA MDC-44001-2026-15: 9 actas → 4 tras v2.27).
 - **v2.27:** el endpoint responde `410` (desactivado). En las listas se muestran como **"Histórico"** (sin %), con insignia **S/C** cuando su régimen difiere del contrato; en los cajones de Mantenimiento cada acta va al panel de **su** régimen.
 
+### Reportes (`components/ReportesTab.tsx`) — v2.32
+- **No incluyen las actas históricas HIST-…** (`esActaHistorica`, ahora exportada desde `utils/logic.ts`): no tienen servicios y contarían como 0%. El indicador "Total Actas" muestra "+ N históricas no incluidas".
+- Al resto se le completan los campos que falten antes de calcular: `empresa` (o `prestadorNombre`, o nombre del registro), `fechaActa` (o `createdAt`, o `fechaCreacion`), `contrato`, `periodoEvaluado`, `numero`, `servicios`.
+- Causa del bloqueo en blanco (19/11/2026): las HIST no traen `fechaActa` ni `empresa`; el orden del Consolidado hacía `b.fechaActa.localeCompare(...)` y React dejaba toda la app en blanco. Reproducido en navegador con 80 actas.
+- `components/ErrorBoundary.tsx` envuelve Reportes: si algo falla al dibujar, muestra el error y "Reintentar" en esa sección en vez de dejar toda la app en blanco. El proyecto **no tiene `@types/react`**: en componentes de clase declarar `props`/`setState` (`declare props: Props`).
+
 ### Validación al generar acta (`handleGenerarActa`) — v2.15
 Si ya existe un acta para el mismo `contrato + regimen + periodoEvaluado`, muestra alerta:
 > ⚠️ Ya se cuenta con una evaluación para: Contrato / Prestador / Período / Acta (N%)
@@ -524,6 +530,7 @@ Objetivo: que el mismo contrato quede escrito **idéntico** en ambos regímenes 
 
 | Versión | Tag git | Descripción |
 |---|---|---|
+| **2.32** | `v2.32` | Reportes ya no se quedan en blanco: excluyen las actas históricas (sin servicios ni fecha), completan campos faltantes y quedan protegidos con un ErrorBoundary. |
 | **2.31** | `v2.31` | La fusión de prestadores compara NIT + contrato + régimen tal cual (sin normalizar) para no unir solos duplicados escritos distinto. Auditoría real de regímenes documentada. |
 | **2.30** | `v2.30` | Causa raíz: la fusión de prestadores usaba NIT + contrato sin régimen y borraba uno de los dos regímenes del mismo contrato; ahora incluye el régimen. Actas pasadas al contrato de su régimen (automático) y fila "sin registro en la app" con "+ Crear contrato". |
 | **2.29** | `v2.29` | "Validar prestadores": cada registro de la app frente a radicación mes a mes (meses de atención), con contratos faltantes, mal escritos o sin radicaciones. Confirmado con datos reales que `periodo_mes` es mes de factura (atención + 1). |

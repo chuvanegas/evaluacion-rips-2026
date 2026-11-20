@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import {
   normalizeId, parseDateFromLine, TIPOS_SERVICIOS_DEFAULT, TIPOS_ASISTENCIAL, TIPOS_ESPECIALIDADES, TIPOS_CAPITA_AMPLIADA, TIPOS_PAI, CUPS_TIPO_MAP,
-  edadDetallada, grupoEtarioDesdeFN
+  edadDetallada, grupoEtarioDesdeFN, esActaHistorica
 } from './utils/logic';
 import {
   ServiceTypeMeta, RipsRecord, UserRecord, MaestroCupItem,
@@ -22,6 +22,7 @@ import { StorageService } from './services/storageService';
 import { CloudStorage } from './services/supabaseClient';
 import ActaModal from './components/ActaModal';
 import ReportesTab from './components/ReportesTab';
+import ErrorBoundary from './components/ErrorBoundary';
 
 const MESES_NOMBRES_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
@@ -79,9 +80,6 @@ const simContrato = (x: string, y: string) => {
 const clavePrestador = (p: any) =>
   `${String(p?.nit ?? '')}|${String(p?.contrato ?? '')}|${String(p?.regimen || 'SUBSIDIADO').toUpperCase()}`;
 
-// Actas "HIST-…" creadas por api/seed-actas.js: marcan períodos evaluados fuera de la app (sin servicios)
-const esActaHistorica = (a: any) =>
-  a?._placeholder === true || a?._placeholder === 'true' || /^HIST-/i.test(String(a?.numero || ''));
 
 // Clave "mismo contrato + régimen + meses evaluados" (dedup y auditoría de limpieza)
 const clavePeriodoActa = (a: any) =>
@@ -6895,7 +6893,7 @@ echo "* * * * * root /usr/local/bin/metrics.sh; sleep 30; /usr/local/bin/metrics
       {/* ===== REPORTES TAB ===== */}
       {activeTab === 'reportes' && (
         <div className="animate-in fade-in duration-300">
-          <ReportesTab actas={actas} prestadores={prestadores} />
+          <ErrorBoundary nombre="Reportes"><ReportesTab actas={actas} prestadores={prestadores} /></ErrorBoundary>
         </div>
       )}
 

@@ -50,6 +50,10 @@ export function grupoEtarioDesdeFN(fn: string): string {
   return "VEJEZ (60+)";
 }
 
+// Actas "HIST-…" creadas por api/seed-actas.js: marcan períodos evaluados fuera de la app (sin servicios)
+export const esActaHistorica = (a: any): boolean =>
+  a?._placeholder === true || a?._placeholder === 'true' || /^HIST-/i.test(String(a?.numero || ''));
+
 export function normalizeId(v: string | null | undefined): string {
   if (v === null || v === undefined) return "";
   let x = String(v).trim();
