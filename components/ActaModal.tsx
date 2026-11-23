@@ -105,6 +105,8 @@ export function ActaPreview({ acta, liveTypeCount }: { acta: Acta; liveTypeCount
       style={{ maxWidth: 800, fontFamily: 'Arial, sans-serif', fontSize: 10 }}
     >
       {/* ══════════════ PAGE 1 ══════════════ */}
+      {/* acta-hoja: al imprimir lleva el margen de la hoja (index.html), igual en cualquier navegador */}
+      <div className="acta-hoja">
       <div className="border-2 border-gray-700">
 
         {/* ── TITLE BAR: Logo | PROCESO + Título | Código/Versión ── */}
@@ -268,11 +270,13 @@ export function ActaPreview({ acta, liveTypeCount }: { acta: Acta; liveTypeCount
         </div>
 
       </div>{/* end page 1 */}
+      </div>{/* end acta-hoja 1 */}
 
       {/* ══════════════ PAGE BREAK ══════════════ */}
       <div className="print-page-break" />
 
       {/* ══════════════ PAGE 2 ══════════════ */}
+      <div className="acta-hoja">
       <div className="border-2 border-gray-700 mt-6 print:mt-0">
 
         {/* Page 2 header */}
@@ -336,6 +340,7 @@ export function ActaPreview({ acta, liveTypeCount }: { acta: Acta; liveTypeCount
         </div>
 
       </div>{/* end page 2 border */}
+      </div>{/* end acta-hoja 2 */}
     </div>
   );
 }

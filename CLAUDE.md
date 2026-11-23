@@ -198,6 +198,12 @@ Se excluyen líneas donde `nombreMed` coincide con `/OXIGENO|OXIGEN|GAS\s+MED|OX
 - CSS en `index.html`: `@media print { #root { display: none } #acta-print-portal { display: block } }`
 - El logo `logo-dusakawi.jpg` debe estar en `public/`
 
+### Márgenes iguales en cualquier navegador (v2.34)
+- Problema (23/11/2026): en un PC con Windows y Chrome el acta salía pegada al borde izquierdo y superior y cortada a la derecha; en el Mac (Brave) salía con márgenes. Causa: ese Chrome tenía **"Márgenes: Ninguno"** y papel A4, y el acta tenía ancho fijo (`maxWidth: 800px` > 794 px del A4) y no traía márgenes propios. Reproducido con el motor de impresión de Chrome (A4 sin márgenes: 0 mm y corte a la derecha).
+- Arreglo: `@page { margin: 0 }` y cada página del acta va dentro de `.acta-hoja` (ActaModal: un envoltorio por página) con **10 mm de relleno** al imprimir y `box-decoration-break: clone` (si una página se pasa a otra hoja, la nueva también lleva márgenes). En impresión el acta toma el ancho del papel (`max-width: none`) y la gráfica (`.recharts-wrapper`/`.recharts-surface`) se encoge si no cabe. Fondo blanco forzado y colores exactos.
+- Resultado medido (Playwright `page.pdf` + `pdftoppm`): 10 mm a cada lado en todas las hojas con Carta o A4 y márgenes "Predeterminado" o "Ninguno"; con observaciones muy largas la tercera hoja también conserva los 10 mm.
+- En pantalla no cambia nada (`.acta-hoja` solo tiene estilos de impresión).
+
 ---
 
 ## Auditoría de urgencias, duplicados y renuencias en el acta (v2.18)
@@ -563,6 +569,7 @@ Objetivo: que el mismo contrato quede escrito **idéntico** en ambos regímenes 
 
 | Versión | Tag git | Descripción |
 |---|---|---|
+| **2.34** | `v2.34` | Impresión del acta con márgenes de 10 mm propios en cada hoja: sale igual en Windows o Mac, Chrome, Edge o Brave, en Carta o A4, aunque el navegador tenga "Márgenes: Ninguno"; el acta se ajusta al ancho del papel. |
 | **2.33** | `v2.33` | Cada contrato con sus dos regímenes: "Validar regímenes" lista los que tienen uno solo y crea el que falta (uno a uno o todos), con metas recuperadas de sus propias actas; unificar contratos escritos distinto y ver repetidos. Cada acta en el registro de su régimen. Fix: la limpieza de actas borraba el acta S o C del mismo trimestre cuando ambas estaban ligadas al mismo registro. |
 | **2.32** | `v2.32` | Reportes ya no se quedan en blanco: excluyen las actas históricas (sin servicios ni fecha), completan campos faltantes y quedan protegidos con un ErrorBoundary. |
 | **2.31** | `v2.31` | La fusión de prestadores compara NIT + contrato + régimen tal cual (sin normalizar) para no unir solos duplicados escritos distinto. Auditoría real de regímenes documentada. |

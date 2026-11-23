@@ -57,11 +57,26 @@
         scrollbar-color: var(--scroll-thumb) var(--scroll-bg);
       }
 
-      /* ── Print: show only acta-print-portal, hide the app ── */
+      /* ── Impresión del acta: solo el portal, con sus propios márgenes ──
+         La hoja del navegador va sin margen (@page) y cada página del acta (.acta-hoja) lleva
+         10 mm de margen por dentro, así sale igual en Windows o Mac, Chrome, Edge o Brave,
+         aunque la opción "Márgenes" del cuadro de impresión esté en "Ninguno" o el papel sea
+         Carta u Oficio/A4. El acta toma el ancho del papel y la gráfica se encoge si no cabe. */
+      @page { margin: 0; }
       @media print {
+        html, body { margin: 0 !important; padding: 0 !important; min-height: 0 !important; background: #fff !important; }
         #root { display: none !important; }
         #acta-print-portal { display: block !important; }
-        .print-page-break { page-break-after: always; }
+        #acta-print-portal #acta-preview-content { max-width: none !important; width: auto !important; margin: 0 !important; box-shadow: none !important; }
+        #acta-print-portal .acta-hoja {
+          padding: 10mm; box-sizing: border-box;
+          -webkit-box-decoration-break: clone; box-decoration-break: clone;
+        }
+        #acta-print-portal .acta-hoja > div { margin-top: 0 !important; }
+        #acta-print-portal .recharts-wrapper,
+        #acta-print-portal .recharts-surface { max-width: 100% !important; height: auto !important; }
+        .print-page-break { page-break-after: always; break-after: page; height: 0; }
+        #acta-print-portal, #acta-print-portal * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       }
       #acta-print-portal { display: none; }
     </style>
